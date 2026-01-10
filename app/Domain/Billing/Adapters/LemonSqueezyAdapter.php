@@ -1,0 +1,441 @@
+<?php
+
+namespace App\Domain\Billing\Adapters;
+
+use App\Domain\Billing\Models\BillingCustomer;
+use App\Domain\Billing\Models\Discount;
+use App\Domain\Billing\Models\Invoice;
+use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Models\WebhookEvent;
+use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Billing\Services\DiscountService;
+use App\Domain\Organization\Models\Team;
+use App\Models\User;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Str;
+use RuntimeException;
+
+class LemonSqueezyAdapter implements BillingProviderAdapter
+{
+    public function provider(): string
+    {
+        return 'lemonsqueezy';
+    }
+
+    public function parseWebhook(Request $request): array
+    {
+        if (!app()->environment(['local', 'testing'])) {
+            throw new RuntimeException('Lemon Squeezy webhook verification is not configured.');
+        }
+
+        $payload = json_decode($request->getContent(), true) ?? [];
+        $eventId = (string) ($payload['meta']['webhook_id'] ?? $payload['id'] ?? '');
+
+        return [
+            'id' => $eventId !== '' ? $eventId : (string) ($payload['meta']['event_name'] ?? Str::uuid()),
+            'type' => $payload['meta']['event_name'] ?? null,
+            'payload' => $payload,
+        ];
+    }
+
+    public function processEvent(WebhookEvent $event): void
+    {
+        $payload = $event->payload ?? [];
+        $type = data_get($payload, 'meta.event_name') ?? $payload['event_type'] ?? $payload['type'] ?? $event->type;
+        $attributes = data_get($payload, 'data.attributes', []);
+
+        if (!$type || !$attributes) {
+            return;
+        }
+
+        if (str_contains($type, 'subscription')) {
+            $this->syncSubscription($payload, $attributes, $type);
+        }
+
+        if (str_contains($type, 'order') || str_contains($type, 'payment')) {
+            $this->syncOrder($payload, $attributes, $type);
+        }
+    }
+
+    public function syncSeatQuantity(Team $team, int $quantity): void
+    {
+        $subscription = Subscription::query()
+            ->where('team_id', $team->id)
+            ->where('provider', $this->provider())
+            ->whereIn('status', ['active', 'trialing'])
+            ->latest('id')
+            ->first();
+
+        if (!$subscription) {
+            return;
+        }
+
+        $apiKey = config('services.lemonsqueezy.api_key');
+
+        if (!$apiKey) {
+            throw new RuntimeException('Lemon Squeezy API key is not configured.');
+        }
+
+        $response = Http::withToken($apiKey)
+            ->withHeaders([
+                'Accept' => 'application/vnd.api+json',
+                'Content-Type' => 'application/vnd.api+json',
+            ])
+            ->withBody(json_encode([
+                'data' => [
+                    'type' => 'subscriptions',
+                    'id' => (string) $subscription->provider_id,
+                    'attributes' => [
+                        'quantity' => max($quantity, 1),
+                    ],
+                ],
+            ]), 'application/vnd.api+json')
+            ->patch("https://api.lemonsqueezy.com/v1/subscriptions/{$subscription->provider_id}");
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Lemon Squeezy seat sync failed: ' . $response->body());
+        }
+    }
+
+    public function createCheckout(
+        Team $team,
+        User $user,
+        string $planKey,
+        string $priceKey,
+        int $quantity,
+        string $successUrl,
+        string $cancelUrl,
+        ?Discount $discount = null
+    ): string {
+        $apiKey = config('services.lemonsqueezy.api_key');
+        $storeId = config('services.lemonsqueezy.store_id');
+
+        if (!$apiKey || !$storeId) {
+            throw new RuntimeException('Lemon Squeezy API key or store id is not configured.');
+        }
+
+        $planService = app(BillingPlanService::class);
+        $variantId = $planService->providerPriceId($this->provider(), $planKey, $priceKey);
+
+        if (!$variantId) {
+            throw new RuntimeException("Lemon Squeezy variant id is missing for plan [{$planKey}] and price [{$priceKey}].");
+        }
+
+        $payload = [
+            'data' => [
+                'type' => 'checkouts',
+                'attributes' => [
+                    'checkout_data' => [
+                        'email' => $user->email,
+                        'custom' => [
+                            'team_id' => (string) $team->id,
+                            'user_id' => (string) $user->id,
+                            'plan_key' => $planKey,
+                            'price_key' => $priceKey,
+                        ],
+                        'variant_quantities' => [
+                            [
+                                'variant_id' => (int) $variantId,
+                                'quantity' => max($quantity, 1),
+                            ],
+                        ],
+                    ],
+                    'product_options' => [
+                        'redirect_url' => $successUrl,
+                    ],
+                ],
+                'relationships' => [
+                    'store' => [
+                        'data' => [
+                            'type' => 'stores',
+                            'id' => (string) $storeId,
+                        ],
+                    ],
+                    'variant' => [
+                        'data' => [
+                            'type' => 'variants',
+                            'id' => (string) $variantId,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        if ($discount) {
+            $payload['data']['attributes']['checkout_data']['discount_code'] = $discount->code;
+            $payload['data']['attributes']['checkout_data']['custom']['discount_id'] = (string) $discount->id;
+            $payload['data']['attributes']['checkout_data']['custom']['discount_code'] = $discount->code;
+
+            if ($discount->provider_id) {
+                $payload['data']['attributes']['discount_id'] = $discount->provider_id;
+            }
+        }
+
+        $response = $this->postCheckout($apiKey, $payload);
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Lemon Squeezy checkout failed: ' . $response->body());
+        }
+
+        $url = data_get($response->json(), 'data.attributes.url');
+
+        if (!$url) {
+            throw new RuntimeException('Lemon Squeezy checkout URL was not returned.');
+        }
+
+        return $url;
+    }
+
+    private function syncSubscription(array $payload, array $attributes, string $eventType): void
+    {
+        $subscriptionId = data_get($payload, 'data.id') ?? data_get($attributes, 'subscription_id');
+        $teamId = $this->resolveTeamId($payload, $attributes);
+
+        if (!$subscriptionId || !$teamId) {
+            return;
+        }
+
+        $planKey = $this->resolvePlanKey($payload, $attributes) ?? 'unknown';
+        $status = (string) (data_get($attributes, 'status') ?? 'active');
+        $quantity = (int) (data_get($attributes, 'quantity') ?? 1);
+
+        Subscription::query()->updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $subscriptionId,
+            ],
+            [
+                'team_id' => $teamId,
+                'plan_key' => $planKey,
+                'status' => $status,
+                'quantity' => max($quantity, 1),
+                'trial_ends_at' => $this->timestampToDateTime(data_get($attributes, 'trial_ends_at')),
+                'renews_at' => $this->timestampToDateTime(data_get($attributes, 'renews_at')),
+                'ends_at' => $this->timestampToDateTime(data_get($attributes, 'ends_at')),
+                'canceled_at' => $this->timestampToDateTime(data_get($attributes, 'cancelled_at')),
+                'metadata' => Arr::only($attributes, ['status', 'quantity', 'urls', 'price_id', 'variant_id']),
+            ]
+        );
+
+        $this->syncBillingCustomer($teamId, data_get($attributes, 'customer_id'), data_get($attributes, 'user_email'));
+
+        $this->recordDiscountRedemption(
+            $payload,
+            $attributes,
+            $teamId,
+            $planKey,
+            data_get($payload, 'meta.custom_data.price_key')
+        );
+    }
+
+    private function syncOrder(array $payload, array $attributes, string $eventType): void
+    {
+        $orderId = data_get($payload, 'data.id') ?? data_get($attributes, 'order_id');
+        $teamId = $this->resolveTeamId($payload, $attributes);
+
+        if (!$orderId || !$teamId) {
+            return;
+        }
+
+        $status = (string) (data_get($attributes, 'status') ?? 'paid');
+        $amount = (int) (data_get($attributes, 'total') ?? data_get($attributes, 'subtotal') ?? 0);
+        $currency = strtoupper((string) (data_get($attributes, 'currency') ?? 'USD'));
+
+        $order = Order::query()->updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $orderId,
+            ],
+            [
+                'team_id' => $teamId,
+                'plan_key' => $this->resolvePlanKey($payload, $attributes),
+                'status' => $status,
+                'amount' => $amount,
+                'currency' => $currency,
+                'paid_at' => now(),
+                'metadata' => Arr::only($attributes, ['status', 'total', 'currency', 'price_id', 'discount_code']),
+            ]
+        );
+
+        $this->syncInvoiceFromOrder($payload, $attributes, $teamId, $order, $status, $amount, $currency);
+
+        $this->recordDiscountRedemption(
+            $payload,
+            $attributes,
+            $teamId,
+            $order->plan_key,
+            data_get($payload, 'meta.custom_data.price_key')
+        );
+    }
+
+    private function resolveTeamId(array $payload, array $attributes): ?int
+    {
+        $teamId = data_get($payload, 'meta.custom_data.team_id')
+            ?? data_get($payload, 'meta.custom.team_id')
+            ?? data_get($attributes, 'team_id');
+
+        return $teamId ? (int) $teamId : null;
+    }
+
+    private function resolvePlanKey(array $payload, array $attributes): ?string
+    {
+        $planKey = data_get($payload, 'meta.custom_data.plan_key')
+            ?? data_get($payload, 'meta.custom.plan_key')
+            ?? data_get($attributes, 'plan_key');
+
+        if ($planKey) {
+            return (string) $planKey;
+        }
+
+        $priceId = data_get($attributes, 'price_id');
+
+        if (!$priceId) {
+            return null;
+        }
+
+        return app(BillingPlanService::class)
+            ->resolvePlanKeyByProviderId($this->provider(), $priceId);
+    }
+
+    private function syncBillingCustomer(int $teamId, ?string $providerId, ?string $email): void
+    {
+        $customer = BillingCustomer::query()
+            ->where('team_id', $teamId)
+            ->where('provider', $this->provider())
+            ->first();
+
+        $payload = [
+            'team_id' => $teamId,
+            'provider' => $this->provider(),
+            'provider_id' => $providerId,
+            'email' => $email,
+        ];
+
+        if ($customer) {
+            $customer->update(array_filter($payload, fn($value) => $value !== null));
+            return;
+        }
+
+        BillingCustomer::query()->create($payload);
+    }
+
+    private function postCheckout(string $apiKey, array $payload): \Illuminate\Http\Client\Response
+    {
+        return Http::withToken($apiKey)
+            ->withHeaders([
+                'Accept' => 'application/vnd.api+json',
+                'Content-Type' => 'application/vnd.api+json',
+            ])
+            ->withBody(json_encode($payload), 'application/vnd.api+json')
+            ->post('https://api.lemonsqueezy.com/v1/checkouts');
+    }
+
+    private function syncInvoiceFromOrder(
+        array $payload,
+        array $attributes,
+        int $teamId,
+        Order $order,
+        string $status,
+        int $amount,
+        string $currency
+    ): void {
+        $normalizedStatus = strtolower($status);
+        $paid = in_array($normalizedStatus, ['paid', 'completed', 'settled'], true);
+        $urls = data_get($attributes, 'urls', []);
+
+        Invoice::query()->updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $order->provider_id,
+            ],
+            [
+                'team_id' => $teamId,
+                'order_id' => $order->id,
+                'status' => $normalizedStatus,
+                'amount_due' => $amount,
+                'amount_paid' => $paid ? $amount : 0,
+                'currency' => $currency,
+                'issued_at' => $this->timestampToDateTime(data_get($attributes, 'created_at')),
+                'paid_at' => $paid ? now() : null,
+                'hosted_invoice_url' => $urls['invoice_url'] ?? $urls['receipt'] ?? null,
+                'invoice_pdf' => $urls['invoice_pdf'] ?? $urls['receipt'] ?? null,
+                'metadata' => Arr::only($attributes, ['status', 'total', 'currency', 'price_id', 'discount_code', 'urls']),
+            ]
+        );
+    }
+
+    private function recordDiscountRedemption(
+        array $payload,
+        array $attributes,
+        int $teamId,
+        ?string $planKey,
+        ?string $priceKey
+    ): void {
+        $customData = data_get($payload, 'meta.custom_data', [])
+            ?: data_get($payload, 'meta.custom', []);
+        $discountId = $customData['discount_id'] ?? data_get($attributes, 'discount_id');
+        $discountCode = $customData['discount_code'] ?? data_get($attributes, 'discount_code');
+
+        if (!$discountId && !$discountCode) {
+            return;
+        }
+
+        $discount = null;
+
+        if ($discountId) {
+            $discount = Discount::query()->find($discountId);
+        } elseif ($discountCode) {
+            $discount = Discount::query()
+                ->where('provider', $this->provider())
+                ->where('code', strtoupper((string) $discountCode))
+                ->first();
+        }
+
+        if (!$discount) {
+            return;
+        }
+
+        $team = Team::find($teamId);
+
+        if (!$team) {
+            return;
+        }
+
+        $userId = $customData['user_id'] ?? null;
+        $user = $userId ? User::find($userId) : null;
+        $providerId = (string) (data_get($attributes, 'order_id') ?? data_get($payload, 'data.id') ?? '');
+
+        if (!$providerId) {
+            return;
+        }
+
+        app(DiscountService::class)->recordRedemption(
+            $discount,
+            $team,
+            $user,
+            $this->provider(),
+            $providerId,
+            $planKey,
+            $priceKey,
+            [
+                'source' => 'lemonsqueezy_webhook',
+            ]
+        );
+    }
+
+    private function timestampToDateTime(?string $timestamp): ?\Illuminate\Support\Carbon
+    {
+        if (!$timestamp) {
+            return null;
+        }
+
+        if (is_numeric($timestamp)) {
+            return now()->setTimestamp((int) $timestamp);
+        }
+
+        return \Illuminate\Support\Carbon::parse($timestamp);
+    }
+}
