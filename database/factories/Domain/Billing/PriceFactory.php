@@ -2,8 +2,8 @@
 
 namespace Database\Factories\Domain\Billing;
 
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\Product;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,7 +16,7 @@ class PriceFactory extends Factory
     public function definition(): array
     {
         return [
-            'plan_id' => Plan::factory(),
+            'product_id' => Product::factory(),
             'key' => fake()->unique()->slug(2),
             'provider' => fake()->randomElement(['stripe', 'lemonsqueezy', 'paddle']),
             'provider_id' => 'price_' . fake()->uuid(),

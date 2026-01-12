@@ -6,6 +6,8 @@ use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
@@ -27,17 +29,34 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
     public function parseWebhook(Request $request): array
     {
+        $payload = $request->getContent();
+        $signature = $request->header('X-Signature');
+        $secret = config('services.lemonsqueezy.webhook_secret');
+
+        // Verify signature in production
         if (!app()->environment(['local', 'testing'])) {
-            throw new RuntimeException('Lemon Squeezy webhook verification is not configured.');
+            if (!$secret) {
+                throw new RuntimeException('Lemon Squeezy webhook secret is not configured.');
+            }
+
+            if (!$signature) {
+                throw new RuntimeException('Lemon Squeezy webhook signature header is missing.');
+            }
+
+            $expectedSignature = hash_hmac('sha256', $payload, $secret);
+
+            if (!hash_equals($expectedSignature, $signature)) {
+                throw new RuntimeException('Invalid Lemon Squeezy webhook signature.');
+            }
         }
 
-        $payload = json_decode($request->getContent(), true) ?? [];
-        $eventId = (string) ($payload['meta']['webhook_id'] ?? $payload['id'] ?? '');
+        $data = json_decode($payload, true) ?? [];
+        $eventId = (string) ($data['meta']['webhook_id'] ?? $data['id'] ?? '');
 
         return [
-            'id' => $eventId !== '' ? $eventId : (string) ($payload['meta']['event_name'] ?? Str::uuid()),
-            'type' => $payload['meta']['event_name'] ?? null,
-            'payload' => $payload,
+            'id' => $eventId !== '' ? $eventId : (string) ($data['meta']['event_name'] ?? Str::uuid()),
+            'type' => $data['meta']['event_name'] ?? null,
+            'payload' => $data,
         ];
     }
 
@@ -51,13 +70,95 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             return;
         }
 
+        // Product sync
+        if (str_contains($type, 'product')) {
+            $this->syncProduct($payload, $attributes, $type);
+        }
+
+        // Variant (price) sync
+        if (str_contains($type, 'variant')) {
+            $this->syncVariant($payload, $attributes, $type);
+        }
+
+        // Subscription handling
         if (str_contains($type, 'subscription')) {
             $this->syncSubscription($payload, $attributes, $type);
         }
 
+        // Order/payment handling
         if (str_contains($type, 'order') || str_contains($type, 'payment')) {
             $this->syncOrder($payload, $attributes, $type);
         }
+    }
+
+    private function syncProduct(array $payload, array $attributes, string $eventType): void
+    {
+        $productId = data_get($payload, 'data.id');
+        $name = $attributes['name'] ?? null;
+
+        if (!$productId) {
+            return;
+        }
+
+        $customData = $attributes['custom_data'] ?? [];
+        $key = $customData['plan_key'] ?? $customData['product_key'] ?? Str::slug("ls-{$productId}");
+
+        Product::updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $productId,
+            ],
+            [
+                'key' => $key,
+                'name' => $name ?? 'LemonSqueezy Product',
+                'description' => $attributes['description'] ?? null,
+                'is_active' => ($attributes['status'] ?? 'published') === 'published',
+                'synced_at' => now(),
+            ]
+        );
+    }
+
+    private function syncVariant(array $payload, array $attributes, string $eventType): void
+    {
+        $variantId = data_get($payload, 'data.id');
+        $productId = data_get($payload, 'data.relationships.product.data.id');
+
+        if (!$variantId) {
+            return;
+        }
+
+        $product = Product::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $productId)
+            ->first();
+
+        if (!$product) {
+            return;
+        }
+
+        $customData = $attributes['custom_data'] ?? [];
+        $isSubscription = $attributes['is_subscription'] ?? false;
+        $interval = $isSubscription ? ($attributes['interval'] ?? 'month') : 'once';
+        $intervalCount = (int) ($attributes['interval_count'] ?? 1);
+        $key = $customData['price_key'] ?? ($interval === 'once' ? 'one_time' : ($intervalCount === 1 ? "{$interval}ly" : "every-{$intervalCount}-{$interval}"));
+
+        Price::updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $variantId,
+            ],
+            [
+                'product_id' => $product->id,
+                'key' => $key,
+                'label' => $attributes['name'] ?? ucfirst($key),
+                'interval' => $interval,
+                'interval_count' => $intervalCount,
+                'currency' => 'USD',
+                'amount' => (int) ($attributes['price'] ?? 0),
+                'type' => 'flat',
+                'is_active' => ($attributes['status'] ?? 'published') === 'published',
+            ]
+        );
     }
 
     public function syncSeatQuantity(Team $team, int $quantity): void

@@ -30,12 +30,6 @@ Artisan::command('billing:import-catalog {provider=stripe} {--apply} {--update}'
         $summary['products']['skip'] ?? 0
     ));
     $this->line(sprintf(
-        'Plans: %d create, %d update, %d skip',
-        $summary['plans']['create'] ?? 0,
-        $summary['plans']['update'] ?? 0,
-        $summary['plans']['skip'] ?? 0
-    ));
-    $this->line(sprintf(
         'Prices: %d create, %d update, %d skip, %d skipped',
         $summary['prices']['create'] ?? 0,
         $summary['prices']['update'] ?? 0,

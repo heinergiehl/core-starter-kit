@@ -1,5 +1,18 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+@php
+    use App\Domain\Settings\Models\BrandSetting;
+    
+    $activeTemplate = config('template.active', 'default');
+    
+    // Try to get the authenticated user's current team's template
+    if (auth()->check() && auth()->user()->current_team_id) {
+        $brandSetting = BrandSetting::where('team_id', auth()->user()->current_team_id)->first();
+        if ($brandSetting && $brandSetting->template) {
+            $activeTemplate = $brandSetting->template;
+        }
+    }
+@endphp
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,10 +54,22 @@
         <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ route('sitemap') }}">
 
         @php
-            $brandFonts = config('saas.branding.fonts', []);
-            $fontSans = $brandFonts['sans'] ?? 'Instrument Sans';
-            $fontDisplay = $brandFonts['display'] ?? 'Instrument Serif';
+            $activeTemplate = config('template.active', 'default');
+            $templateConfig = config("template.templates.{$activeTemplate}", []);
+            $templateFonts = $templateConfig['fonts'] ?? [];
+            $fontSans = $templateFonts['sans'] ?? config('saas.branding.fonts.sans', 'Plus Jakarta Sans');
+            $fontDisplay = $templateFonts['display'] ?? config('saas.branding.fonts.display', 'Outfit');
+            
+            // Build Google Fonts URL based on template
+            $fontFamilies = collect([$fontSans, $fontDisplay])
+                ->unique()
+                ->map(fn($f) => str_replace(' ', '+', $f) . ':wght@300;400;500;600;700')
+                ->implode('&family=');
         @endphp
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family={{ $fontFamilies }}&display=swap" rel="stylesheet">
 
         <style>
             :root {

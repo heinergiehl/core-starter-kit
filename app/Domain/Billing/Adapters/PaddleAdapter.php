@@ -6,6 +6,8 @@ use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
@@ -27,17 +29,60 @@ class PaddleAdapter implements BillingProviderAdapter
 
     public function parseWebhook(Request $request): array
     {
+        $payload = $request->getContent();
+        $signature = $request->header('Paddle-Signature');
+        $secret = config('services.paddle.webhook_secret');
+
+        // Verify signature in production
         if (!app()->environment(['local', 'testing'])) {
-            throw new RuntimeException('Paddle webhook verification is not configured.');
+            if (!$secret) {
+                throw new RuntimeException('Paddle webhook secret is not configured.');
+            }
+
+            if (!$signature) {
+                throw new RuntimeException('Paddle webhook signature header is missing.');
+            }
+
+            if (!$this->verifyPaddleSignature($payload, $signature, $secret)) {
+                throw new RuntimeException('Invalid Paddle webhook signature.');
+            }
         }
 
-        $payload = json_decode($request->getContent(), true) ?? [];
+        $data = json_decode($payload, true) ?? [];
 
         return [
-            'id' => (string) ($payload['id'] ?? $payload['event_id'] ?? Str::uuid()),
-            'type' => $payload['event_type'] ?? $payload['type'] ?? null,
-            'payload' => $payload,
+            'id' => (string) ($data['event_id'] ?? $data['id'] ?? Str::uuid()),
+            'type' => $data['event_type'] ?? $data['type'] ?? null,
+            'payload' => $data,
         ];
+    }
+
+    /**
+     * Verify Paddle webhook signature using HMAC-SHA256.
+     */
+    private function verifyPaddleSignature(string $payload, string $signature, string $secret): bool
+    {
+        // Paddle v2 signature format: ts=timestamp;h1=hash
+        $parts = [];
+        foreach (explode(';', $signature) as $part) {
+            [$key, $value] = explode('=', $part, 2) + [null, null];
+            if ($key && $value) {
+                $parts[$key] = $value;
+            }
+        }
+
+        $timestamp = $parts['ts'] ?? null;
+        $hash = $parts['h1'] ?? null;
+
+        if (!$timestamp || !$hash) {
+            return false;
+        }
+
+        // Build signed payload: timestamp:payload
+        $signedPayload = $timestamp . ':' . $payload;
+        $expectedHash = hash_hmac('sha256', $signedPayload, $secret);
+
+        return hash_equals($expectedHash, $hash);
     }
 
     public function processEvent(WebhookEvent $event): void
@@ -50,13 +95,97 @@ class PaddleAdapter implements BillingProviderAdapter
             return;
         }
 
+        // Product sync
+        if (str_contains($type, 'product') && config('saas.billing.sync_catalog_via_webhooks', true)) {
+            $this->syncProduct($data, $type);
+        }
+
+        // Price sync
+        if (str_contains($type, 'price') && config('saas.billing.sync_catalog_via_webhooks', true)) {
+            $this->syncPrice($data, $type);
+        }
+
+        // Subscription handling
         if (str_contains($type, 'subscription')) {
             $this->syncSubscription($data, $type);
         }
 
+        // Transaction/payment handling
         if (str_contains($type, 'transaction') || str_contains($type, 'payment')) {
             $this->syncOrder($data, $type);
         }
+    }
+
+    private function syncProduct(array $data, string $eventType): void
+    {
+        $productId = data_get($data, 'id');
+        $name = data_get($data, 'name');
+
+        if (!$productId) {
+            return;
+        }
+
+        $customData = data_get($data, 'custom_data', []);
+        $key = $customData['plan_key'] ?? $customData['product_key'] ?? Str::slug("paddle-{$productId}");
+
+        Product::updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $productId,
+            ],
+            [
+                'key' => $key,
+                'name' => $name ?? 'Paddle Product',
+                'description' => data_get($data, 'description'),
+                'is_active' => data_get($data, 'status', 'active') === 'active',
+                'synced_at' => now(),
+            ]
+        );
+    }
+
+    private function syncPrice(array $data, string $eventType): void
+    {
+        $priceId = data_get($data, 'id');
+        $productId = data_get($data, 'product_id');
+
+        if (!$priceId) {
+            return;
+        }
+
+        $product = Product::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $productId)
+            ->first();
+
+        if (!$product) {
+            return;
+        }
+
+        $customData = data_get($data, 'custom_data', []);
+        $billingCycle = data_get($data, 'billing_cycle', []);
+        $unitPrice = data_get($data, 'unit_price', []);
+
+        $interval = $billingCycle['interval'] ?? 'once';
+        $intervalCount = (int) ($billingCycle['frequency'] ?? 1);
+        $key = $customData['price_key'] ?? ($interval === 'once' ? 'one_time' : ($intervalCount === 1 ? "{$interval}ly" : "every-{$intervalCount}-{$interval}"));
+
+        Price::updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $priceId,
+            ],
+            [
+                'product_id' => $product->id,
+                'key' => $key,
+                'label' => data_get($data, 'description', ucfirst($key)),
+                'interval' => $interval,
+                'interval_count' => $intervalCount,
+                'currency' => strtoupper($unitPrice['currency_code'] ?? 'USD'),
+                'amount' => (int) ($unitPrice['amount'] ?? 0),
+                'type' => 'flat',
+                'is_active' => data_get($data, 'status', 'active') === 'active',
+            ]
+        );
     }
 
     public function syncSeatQuantity(Team $team, int $quantity): void

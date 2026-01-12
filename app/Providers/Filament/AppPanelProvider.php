@@ -33,7 +33,7 @@ class AppPanelProvider extends PanelProvider
             ->font(config('saas.branding.fonts.sans', 'Instrument Sans'))
             ->serifFont(config('saas.branding.fonts.display', 'Instrument Serif'))
             ->colors([
-                'primary' => Color::Teal,
+                'primary' => config('saas.branding.colors.primary') ?? Color::Teal,
             ])
             ->brandName(config('saas.branding.app_name', config('app.name')))
             ->brandLogo(config('saas.branding.logo_path') ? asset(config('saas.branding.logo_path')) : null)

@@ -15,6 +15,7 @@ class BrandSetting extends Model
         'team_id',
         'app_name',
         'logo_path',
+        'template',
         'color_primary',
         'color_secondary',
         'color_accent',

@@ -16,7 +16,7 @@ class Price extends Model
     }
 
     protected $fillable = [
-        'plan_id',
+        'product_id',
         'key',
         'provider',
         'provider_id',
@@ -40,8 +40,9 @@ class Price extends Model
         'trial_interval_count' => 'int',
     ];
 
-    public function plan(): BelongsTo
+    public function product(): BelongsTo
     {
-        return $this->belongsTo(Plan::class);
+        return $this->belongsTo(Product::class);
     }
 }
+

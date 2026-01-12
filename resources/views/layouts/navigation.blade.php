@@ -19,7 +19,7 @@
                         {{ __('Dashboard') }}
                     </x-nav-link>
                     
-                    <x-nav-link :href="url('/app')" :active="request()->is('app*')" class="text-ink/60 hover:text-ink font-medium text-primary">
+                    <x-nav-link :href="url('/app')" :active="request()->is('app*')">
                         {{ __('Open App') }}
                     </x-nav-link>
                     

@@ -6,7 +6,6 @@ use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;
 use App\Domain\Billing\Models\Discount;
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Organization\Enums\TeamRole;
@@ -106,15 +105,6 @@ MD,
 
     private function seedBillingCatalog(): void
     {
-        $product = Product::updateOrCreate(
-            ['key' => 'core'],
-            [
-                'name' => 'Core Platform',
-                'description' => 'Primary SaaS product catalog for testing.',
-                'is_active' => true,
-            ]
-        );
-
         $planDefinitions = [
             'starter' => [
                 'name' => 'Starter',
@@ -175,13 +165,12 @@ MD,
             ],
         ];
 
-        $plans = [];
+        $products = [];
 
         foreach ($planDefinitions as $key => $definition) {
-            $plans[$key] = Plan::updateOrCreate(
+            $products[$key] = Product::updateOrCreate(
                 ['key' => $key],
                 [
-                    'product_id' => $product->id,
                     'name' => $definition['name'],
                     'summary' => $definition['summary'],
                     'description' => $definition['description'],
@@ -207,9 +196,9 @@ MD,
         $providers = ['stripe', 'paddle', 'lemonsqueezy'];
 
         foreach ($priceDefinitions as $definition) {
-            $plan = $plans[$definition['plan']] ?? null;
+            $product = $products[$definition['plan']] ?? null;
 
-            if (!$plan) {
+            if (!$product) {
                 continue;
             }
 
@@ -218,7 +207,7 @@ MD,
 
                 Price::updateOrCreate(
                     [
-                        'plan_id' => $plan->id,
+                        'product_id' => $product->id,
                         'provider' => $provider,
                         'provider_id' => $providerId,
                     ],

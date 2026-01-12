@@ -4,7 +4,6 @@ namespace App\Domain\Billing\Adapters\Stripe\Handlers;
 
 use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\WebhookEvent;
@@ -63,10 +62,10 @@ class StripePriceHandler implements StripeWebhookHandler
             return null;
         }
 
-        // Find or create the plan for this product
-        $plan = $this->resolveOrCreatePlan($productId);
+        // Find or create the product for this price
+        $product = $this->resolveOrCreateProduct($productId);
 
-        if (!$plan) {
+        if (!$product) {
             return null;
         }
 
@@ -80,7 +79,7 @@ class StripePriceHandler implements StripeWebhookHandler
                 'provider_id' => $priceId,
             ],
             [
-                'plan_id' => $plan->id,
+                'product_id' => $product->id,
                 'key' => $key,
                 'label' => $this->generatePriceLabel($object),
                 'interval' => $recurring['interval'] ?? 'one_time',
@@ -114,25 +113,15 @@ class StripePriceHandler implements StripeWebhookHandler
     }
 
     /**
-     * Resolve the plan for a Stripe product, creating if needed.
+     * Resolve the product for a Stripe product id, creating if needed.
      */
-    private function resolveOrCreatePlan(?string $productId): ?Plan
+    private function resolveOrCreateProduct(?string $productId): ?Product
     {
         if (!$productId) {
             return null;
         }
 
-        // First, try to find a plan linked to this product
-        $plan = Plan::query()
-            ->where('provider', $this->provider())
-            ->where('provider_id', $productId)
-            ->first();
-
-        if ($plan) {
-            return $plan;
-        }
-
-        // Try to find a product and create a plan for it
+        // Try to find a product and create one if needed
         $product = Product::query()
             ->where('provider', $this->provider())
             ->where('provider_id', $productId)
@@ -147,18 +136,7 @@ class StripePriceHandler implements StripeWebhookHandler
             return null;
         }
 
-        // Create a default plan linked to this product
-        return Plan::create([
-            'product_id' => $product->id,
-            'key' => $product->key,
-            'name' => $product->name,
-            'description' => $product->description,
-            'type' => 'subscription',
-            'is_active' => $product->is_active,
-            'provider' => $this->provider(),
-            'provider_id' => $productId,
-            'synced_at' => now(),
-        ]);
+        return $product;
     }
 
     /**

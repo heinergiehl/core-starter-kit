@@ -22,7 +22,7 @@
             @foreach($enabledProviders as $provider)
                 <a
                     href="{{ route('social.redirect', $provider) }}"
-                    class="flex items-center justify-center rounded-xl border border-ink/10 bg-white px-4 py-2 text-sm font-semibold text-ink/80 transition hover:border-primary/30 hover:text-ink"
+                    class="flex items-center justify-center rounded-xl border border-ink/10 bg-surface px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-primary/30 hover:bg-ink/5"
                 >
                     {{ __('Continue with :provider', ['provider' => $labels[$provider] ?? ucfirst($provider)]) }}
                 </a>

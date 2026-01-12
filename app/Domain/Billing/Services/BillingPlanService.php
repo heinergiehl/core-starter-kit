@@ -2,8 +2,8 @@
 
 namespace App\Domain\Billing\Services;
 
-use App\Domain\Billing\Models\Plan as CatalogPlan;
 use App\Domain\Billing\Models\Price as CatalogPrice;
+use App\Domain\Billing\Models\Product as CatalogProduct;
 use RuntimeException;
 
 class BillingPlanService
@@ -99,7 +99,7 @@ class BillingPlanService
         if ($this->useDatabaseCatalog()) {
             $providerId = CatalogPrice::query()
                 ->where('provider', strtolower($provider))
-                ->whereHas('plan', fn ($query) => $query->where('key', $planKey))
+                ->whereHas('product', fn ($query) => $query->where('key', $planKey))
                 ->where(function ($query) use ($priceKey): void {
                     $query->where('key', $priceKey)
                         ->orWhere('interval', $priceKey);
@@ -124,10 +124,10 @@ class BillingPlanService
             $planKey = CatalogPrice::query()
                 ->where('provider', $provider)
                 ->where('provider_id', $providerPriceId)
-                ->whereHas('plan')
-                ->with('plan')
+                ->whereHas('product')
+                ->with('product')
                 ->first()
-                ?->plan
+                ?->product
                 ?->key;
 
             if ($planKey) {
@@ -156,7 +156,7 @@ class BillingPlanService
             return false;
         }
 
-        return CatalogPlan::query()->exists();
+        return CatalogProduct::query()->exists();
     }
 
     /**
@@ -184,12 +184,12 @@ class BillingPlanService
      */
     private function plansFromDatabase(): array
     {
-        return CatalogPlan::query()
+        return CatalogProduct::query()
             ->with(['prices'])
             ->where('is_active', true)
             ->orderBy('id')
             ->get()
-            ->map(fn (CatalogPlan $plan): array => $this->normalizeDatabasePlan($plan))
+            ->map(fn (CatalogProduct $plan): array => $this->normalizeDatabasePlan($plan))
             ->values()
             ->all();
     }
@@ -199,7 +199,7 @@ class BillingPlanService
      */
     private function planFromDatabase(string $planKey): ?array
     {
-        $plan = CatalogPlan::query()
+        $plan = CatalogProduct::query()
             ->with(['prices'])
             ->where('key', $planKey)
             ->first();
@@ -234,7 +234,7 @@ class BillingPlanService
     /**
      * @return array<string, mixed>
      */
-    private function normalizeDatabasePlan(CatalogPlan $plan): array
+    private function normalizeDatabasePlan(CatalogProduct $plan): array
     {
         $prices = [];
 

@@ -13,6 +13,7 @@ use App\Http\Controllers\Content\RssController;
 use App\Http\Controllers\Content\SitemapController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Feedback\RoadmapController;
+use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\Organization\TeamInvitationController;
 use App\Http\Controllers\Organization\TeamController;
@@ -91,8 +92,12 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
+
+// Impersonation (admin only)
+Route::middleware('auth')->group(function () {
+    Route::get('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
+    Route::post('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
 });
 
 require __DIR__.'/auth.php';

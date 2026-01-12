@@ -89,6 +89,16 @@ class UserResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
+                Tables\Actions\Action::make('impersonate')
+                    ->label('Impersonate')
+                    ->icon('heroicon-o-identification')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalHeading('Impersonate User')
+                    ->modalDescription(fn (User $record) => "You are about to log in as {$record->name}. You can return to your account anytime.")
+                    ->modalSubmitActionLabel('Start Impersonating')
+                    ->url(fn (User $record) => route('impersonate.start', $record))
+                    ->visible(fn (User $record) => !$record->is_admin && auth()->id() !== $record->id),
                 EditAction::make(),
                 DeleteAction::make(),
             ]);

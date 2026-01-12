@@ -2,7 +2,6 @@
 
 namespace App\Domain\Billing\Imports;
 
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use Illuminate\Support\Facades\DB;
@@ -35,7 +34,6 @@ class CatalogImportService
 
         $summary = [
             'products' => ['create' => 0, 'update' => 0, 'skip' => 0],
-            'plans' => ['create' => 0, 'update' => 0, 'skip' => 0],
             'prices' => ['create' => 0, 'update' => 0, 'skip' => 0, 'skipped' => 0],
         ];
 
@@ -45,10 +43,16 @@ class CatalogImportService
             foreach ($items as $item) {
                 $productPayload = $item['product'] ?? [];
                 $planPayload = $item['plan'] ?? [];
+                if (!empty($planPayload)) {
+                    $productPayload = array_merge($productPayload, $planPayload);
+                    if (!empty($planPayload['key'])) {
+                        $productPayload['key'] = $planPayload['key'];
+                    }
+                }
                 $pricePayloads = $item['prices'] ?? [];
 
-                if (empty($productPayload['key']) || empty($planPayload['key'])) {
-                    $summary['plans']['skip']++;
+                if (empty($productPayload['key'])) {
+                    $summary['products']['skip']++;
                     continue;
                 }
 
@@ -74,23 +78,6 @@ class CatalogImportService
                     $productCache[$productPayload['key']] = $product;
                 }
 
-                $plan = Plan::query()
-                    ->where('key', $planPayload['key'])
-                    ->first();
-
-                $planPayload['product_id'] = $product?->id ?? $plan?->product_id;
-
-                $planAction = $this->resolveAction($plan, $planPayload, $updateExisting);
-                $summary['plans'][$planAction]++;
-
-                if ($apply) {
-                    if ($planAction === 'create') {
-                        $plan = Plan::create($planPayload);
-                    } elseif ($planAction === 'update' && $plan) {
-                        $plan->update($this->filterUpdatablePayload($planPayload));
-                    }
-                }
-
                 foreach ($pricePayloads as $pricePayload) {
                     if (empty($pricePayload['provider_id']) || !array_key_exists('amount', $pricePayload) || $pricePayload['amount'] === null) {
                         $summary['prices']['skipped']++;
@@ -102,7 +89,7 @@ class CatalogImportService
                         ->where('provider_id', $pricePayload['provider_id'])
                         ->first();
 
-                    $pricePayload['plan_id'] = $plan?->id ?? $price?->plan_id;
+                    $pricePayload['product_id'] = $product?->id ?? $price?->product_id;
 
                     $priceAction = $this->resolveAction($price, $pricePayload, $updateExisting);
                     $summary['prices'][$priceAction]++;
@@ -136,6 +123,8 @@ class CatalogImportService
 
         return match ($provider) {
             'stripe' => app(StripeCatalogImportAdapter::class),
+            'paddle' => app(PaddleCatalogImportAdapter::class),
+            'lemonsqueezy' => app(LemonSqueezyCatalogImportAdapter::class),
             default => throw new RuntimeException("Catalog import provider [{$provider}] is not supported."),
         };
     }

@@ -5,29 +5,32 @@
         </h2>
     </x-slot>
 
+    {{-- Livewire Toast Notifications --}}
+    <x-livewire-toasts />
+
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
             <div class="glass-panel p-4 sm:p-8 rounded-[32px]">
                 <div class="max-w-xl">
-                    @include('profile.partials.update-profile-information-form')
+                    <livewire:profile.update-profile-information />
                 </div>
             </div>
 
             <div class="glass-panel p-4 sm:p-8 rounded-[32px]">
                 <div class="max-w-xl">
-                    @include('profile.partials.update-password-form')
+                    <livewire:profile.update-password />
                 </div>
             </div>
 
             <div class="glass-panel p-4 sm:p-8 rounded-[32px]">
                 <div class="max-w-xl">
-                    @include('profile.partials.two-factor-form')
+                    <livewire:profile.two-factor-authentication />
                 </div>
             </div>
 
             <div class="glass-panel p-4 sm:p-8 rounded-[32px]">
                 <div class="max-w-xl">
-                    @include('profile.partials.delete-user-form')
+                    <livewire:profile.delete-account />
                 </div>
             </div>
         </div>

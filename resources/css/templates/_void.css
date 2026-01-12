@@ -1,0 +1,255 @@
+/* ==========================================================================
+   VOID TEMPLATE - Premium Cyberpunk / Dark Neon
+   Designer: Senior-level aesthetic with unique character
+   ========================================================================== */
+
+/* ============================================
+   TOKEN LAYER - Design Tokens
+   ============================================ */
+html[data-template="void"] {
+    /* Core palette - electric neon on abyss black */
+    --color-primary: 6 182 212;
+    /* Electric cyan */
+    --color-secondary: 217 70 239;
+    /* Hot fuchsia */
+    --color-accent: 251 113 133;
+    /* Neon coral */
+    --color-bg: 2 6 23;
+    /* Deep space black */
+    --color-fg: 226 232 240;
+    /* Cool gray */
+    --color-surface-highlight: 15 23 42;
+
+    /* Typography - Terminal meets future */
+    --font-sans: 'JetBrains Mono', 'SF Mono', ui-monospace, monospace;
+    --font-display: 'Orbitron', 'Rajdhani', system-ui, sans-serif;
+
+    /* Shape language - sharp, angular, aggressive */
+    --radius-card: 2px;
+    --radius-pill: 2px;
+    --radius-btn: 2px;
+
+    /* Void-specific effects */
+    --glow-primary: 0 0 40px rgba(6, 182, 212, 0.4);
+    --glow-secondary: 0 0 40px rgba(217, 70, 239, 0.3);
+    --scanline-opacity: 0.02;
+}
+
+html[data-template="void"].dark {
+    --color-bg: 0 0 0;
+    --color-fg: 248 250 252;
+    --color-surface-highlight: 8 12 28;
+}
+
+/* ============================================
+   AMBIENT EFFECTS - Signature look
+   ============================================ */
+
+/* Scanline overlay - subtle CRT effect */
+html[data-template="void"]::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg,
+            transparent 0px,
+            transparent 2px,
+            rgba(6, 182, 212, var(--scanline-opacity)) 2px,
+            rgba(6, 182, 212, var(--scanline-opacity)) 4px);
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* Glitch flicker animation */
+@keyframes void-flicker {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    92% {
+        opacity: 1;
+    }
+
+    93% {
+        opacity: 0.8;
+    }
+
+    94% {
+        opacity: 1;
+    }
+
+    95% {
+        opacity: 0.9;
+    }
+
+    96% {
+        opacity: 1;
+    }
+}
+
+/* ============================================
+   GLASS PANELS - Neon-bordered containers
+   ============================================ */
+html[data-template="void"] .glass-panel {
+    background: rgba(2, 6, 23, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+    box-shadow:
+        0 0 30px rgba(6, 182, 212, 0.08),
+        inset 0 1px 0 rgba(6, 182, 212, 0.1),
+        inset 0 0 40px rgba(6, 182, 212, 0.02);
+    border-radius: var(--radius-card);
+}
+
+html[data-template="void"] .glass-panel:hover {
+    border-color: rgba(6, 182, 212, 0.5);
+    box-shadow:
+        0 0 50px rgba(6, 182, 212, 0.15),
+        inset 0 1px 0 rgba(6, 182, 212, 0.15),
+        inset 0 0 60px rgba(6, 182, 212, 0.03);
+}
+
+/* ============================================
+   BUTTONS - Electric with glow pulse
+   ============================================ */
+html[data-template="void"] .btn-primary {
+    background: linear-gradient(135deg, #06B6D4 0%, #0EA5E9 50%, #D946EF 100%);
+    border: none;
+    border-radius: var(--radius-btn);
+    box-shadow:
+        var(--glow-primary),
+        0 4px 15px rgba(6, 182, 212, 0.3);
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html[data-template="void"] .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow:
+        0 0 60px rgba(6, 182, 212, 0.5),
+        0 8px 25px rgba(6, 182, 212, 0.4);
+}
+
+html[data-template="void"] .btn-secondary {
+    background: transparent;
+    border: 1px solid rgba(6, 182, 212, 0.4);
+    color: #22D3EE;
+    border-radius: var(--radius-btn);
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.3s ease;
+}
+
+html[data-template="void"] .btn-secondary:hover {
+    background: rgba(6, 182, 212, 0.1);
+    border-color: rgba(6, 182, 212, 0.7);
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+/* ============================================
+   TEXT STYLES - Neon gradients
+   ============================================ */
+html[data-template="void"] .text-gradient {
+    background: linear-gradient(90deg,
+            #22D3EE 0%,
+            #06B6D4 25%,
+            #E879F9 50%,
+            #D946EF 75%,
+            #FB7185 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: void-gradient-shift 8s ease infinite;
+}
+
+@keyframes void-gradient-shift {
+
+    0%,
+    100% {
+        background-position: 0% center;
+    }
+
+    50% {
+        background-position: 100% center;
+    }
+}
+
+/* ============================================
+   HERO SECTION - Multi-layered glow
+   ============================================ */
+html[data-template="void"] .bg-hero-glow {
+    background:
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(6, 182, 212, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse 60% 40% at 80% 80%, rgba(217, 70, 239, 0.12) 0%, transparent 40%),
+        radial-gradient(ellipse 40% 30% at 20% 60%, rgba(251, 113, 133, 0.08) 0%, transparent 30%),
+        rgb(var(--color-bg));
+}
+
+/* ============================================
+   CARDS - Sharp with neon accent line
+   ============================================ */
+html[data-template="void"] .card-inner {
+    background: rgba(2, 6, 23, 0.7);
+    border: 1px solid rgba(6, 182, 212, 0.2);
+    border-radius: var(--radius-card);
+    position: relative;
+    overflow: hidden;
+}
+
+html[data-template="void"] .card-inner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #06B6D4, #D946EF, #FB7185);
+}
+
+/* ============================================
+   FORM INPUTS - Terminal style
+   ============================================ */
+html[data-template="void"] input[type="text"],
+html[data-template="void"] input[type="email"],
+html[data-template="void"] input[type="password"],
+html[data-template="void"] textarea {
+    background: rgba(2, 6, 23, 0.8);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    color: #A5F3FC;
+    border-radius: var(--radius-btn);
+    font-family: var(--font-sans);
+    caret-color: #22D3EE;
+}
+
+html[data-template="void"] input::placeholder,
+html[data-template="void"] textarea::placeholder {
+    color: rgba(6, 182, 212, 0.4);
+}
+
+html[data-template="void"] input:focus,
+html[data-template="void"] textarea:focus {
+    border-color: #22D3EE;
+    box-shadow:
+        0 0 0 3px rgba(6, 182, 212, 0.15),
+        0 0 20px rgba(6, 182, 212, 0.2);
+    outline: none;
+}
+
+/* ============================================
+   SHAPE OVERRIDES - Everything sharp
+   ============================================ */
+html[data-template="void"] .rounded-full,
+html[data-template="void"] .rounded-3xl,
+html[data-template="void"] .rounded-2xl,
+html[data-template="void"] .rounded-xl,
+html[data-template="void"] .rounded-lg,
+html[data-template="void"] [class*="rounded-["] {
+    border-radius: var(--radius-card);
+}

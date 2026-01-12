@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Organization\Enums\TeamRole;
 use App\Domain\Settings\Models\BrandSetting;
+use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -54,6 +55,26 @@ class BrandSettings extends Page implements HasForms
                             ->helperText('Recommended: 512px square, PNG or SVG.'),
                     ])
                     ->columns(2),
+                Section::make('Theme Template')
+                    ->description('Choose a visual style for your customer-facing pages.')
+                    ->schema([
+                        Forms\Components\Select::make('template')
+                            ->label('Template')
+                            ->options([
+                                'default' => '🔮 Default — Modern glassmorphism',
+                                'void' => '⚡ Void — Cyberpunk neon',
+                                'aurora' => '🌌 Aurora — Northern lights',
+                                'prism' => '🔶 Prism — Brutalist geometry',
+                                'velvet' => '👑 Velvet — Luxury editorial',
+                                'frost' => '❄️ Frost — Arctic glass',
+                                'ember' => '🔥 Ember — Warm fire glow',
+                                'ocean' => '🌊 Ocean — Deep sea depths',
+                            ])
+                            ->default('default')
+                            ->native(false)
+                            ->searchable()
+                            ->columnSpanFull(),
+                    ]),
                 Section::make('Colors')
                     ->schema([
                         Forms\Components\ColorPicker::make('color_primary')

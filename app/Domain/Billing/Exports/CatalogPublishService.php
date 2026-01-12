@@ -2,8 +2,10 @@
 
 namespace App\Domain\Billing\Exports;
 
-use App\Domain\Billing\Models\Plan;
+use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Exports\StripeCatalogPublishAdapter;
+use App\Domain\Billing\Exports\PaddleCatalogPublishAdapter;
+use App\Domain\Billing\Exports\LemonSqueezyCatalogPublishAdapter;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -47,48 +49,63 @@ class CatalogPublishService
         $warnings = [];
 
         $runner = function () use ($provider, $adapter, $apply, $updateExisting, &$summary, &$warnings): void {
-            $plans = Plan::query()
-                ->with([
-                    'product',
-                    'prices' => fn ($query) => $query->where('provider', $provider),
-                ])
+            $products = Product::query()
+                ->with(['prices'])
                 ->orderBy('id')
                 ->get();
 
-            foreach ($plans as $plan) {
-                $product = $plan->product;
-                if (!$product) {
-                    $warnings[] = "Plan [{$plan->key}] is missing a product record.";
-                    $summary['products']['skip']++;
-                    continue;
-                }
-
-                $productResult = $adapter->ensureProduct($product, $plan, $apply, $updateExisting);
+            foreach ($products as $product) {
+                $productResult = $adapter->ensureProduct($product, $apply, $updateExisting);
                 $productAction = $productResult['action'] ?? 'skip';
                 if (isset($summary['products'][$productAction])) {
                     $summary['products'][$productAction]++;
                 }
 
                 $providerProductId = $productResult['id'] ?? null;
-                if (!$providerProductId) {
-                    $warnings[] = "Plan [{$plan->key}] could not resolve a {$provider} product id.";
+                
+                // Update Product with provider info when created
+                if ($apply && $providerProductId && $productAction === 'create') {
+                    $product->update([
+                        'provider' => $provider,
+                        'provider_id' => $providerProductId,
+                    ]);
+                }
+
+                // For preview mode: still show prices that would be created
+                // For apply mode: need actual product ID
+                if (!$providerProductId && $apply) {
+                    $warnings[] = "Product [{$product->key}] could not resolve a {$provider} product id.";
+                    continue;
+                }
+                
+                // Preview mode - use placeholder for price counting
+                if (!$providerProductId && !$apply) {
+                    $providerProductId = 'preview_placeholder';
+                }
+
+                // Get prices that either match this provider OR have no provider set yet
+                $productPrices = $product->prices->filter(function ($price) use ($provider) {
+                    return !$price->provider || $price->provider === $provider;
+                });
+
+                if ($productPrices->isEmpty()) {
+                    $warnings[] = "Product [{$product->key}] has no prices to publish.";
                     continue;
                 }
 
-                if ($plan->prices->isEmpty()) {
-                    $warnings[] = "Plan [{$plan->key}] has no {$provider} prices.";
-                    continue;
-                }
-
-                foreach ($plan->prices as $price) {
-                    $priceResult = $adapter->ensurePrice($plan, $price, $providerProductId, $apply, $updateExisting);
+                foreach ($productPrices as $price) {
+                    $priceResult = $adapter->ensurePrice($product, $price, $providerProductId, $apply, $updateExisting);
                     $priceAction = $priceResult['action'] ?? 'skip';
                     if (isset($summary['prices'][$priceAction])) {
                         $summary['prices'][$priceAction]++;
                     }
 
-                    if ($apply && !empty($priceResult['id']) && $price->provider_id !== $priceResult['id']) {
-                        $price->update(['provider_id' => $priceResult['id']]);
+                    // Update price with provider info when created
+                    if ($apply && !empty($priceResult['id'])) {
+                        $price->update([
+                            'provider' => $provider,
+                            'provider_id' => $priceResult['id'],
+                        ]);
                     }
                 }
             }
@@ -110,7 +127,10 @@ class CatalogPublishService
     {
         return match ($provider) {
             'stripe' => app(StripeCatalogPublishAdapter::class),
+            'paddle' => app(PaddleCatalogPublishAdapter::class),
+            'lemonsqueezy' => app(LemonSqueezyCatalogPublishAdapter::class),
             default => throw new RuntimeException("Catalog publish provider [{$provider}] is not supported."),
         };
     }
 }
+

@@ -1,5 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
+/* Template CSS - Must be imported at top for Vite/PostCSS to process */
+@import 'templates/_void.css';
+@import 'templates/_aurora.css';
+@import 'templates/_prism.css';
+@import 'templates/_velvet.css';
+@import 'templates/_frost.css';
+@import 'templates/_ember.css';
+@import 'templates/_ocean.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -41,38 +50,38 @@
         --color-surface-highlight: 30 41 59;
         /* Slate-800 */
     }
+}
 
-    html {
-        scroll-behavior: smooth;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
+html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
 
-    body {
-        background-color: rgb(var(--color-bg));
-        color: rgb(var(--color-fg));
-        font-family: var(--font-sans);
-        overflow-x: hidden;
-        transition: background-color 0.3s ease, color 0.3s ease;
-    }
+body {
+    background-color: rgb(var(--color-bg));
+    color: rgb(var(--color-fg));
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
+}
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
 
-    ::-webkit-scrollbar-track {
-        background: transparent;
-    }
+::-webkit-scrollbar-track {
+    background: transparent;
+}
 
-    ::-webkit-scrollbar-thumb {
-        background: rgb(var(--color-surface-highlight));
-        border-radius: 4px;
-    }
+::-webkit-scrollbar-thumb {
+    background: rgb(var(--color-surface-highlight));
+    border-radius: 4px;
+}
 
-    ::-webkit-scrollbar-thumb:hover {
-        background: rgb(var(--color-primary));
-    }
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(var(--color-primary));
 }
 
 @layer components {

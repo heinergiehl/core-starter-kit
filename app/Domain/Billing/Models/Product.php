@@ -19,6 +19,13 @@ class Product extends Model
         'key',
         'name',
         'description',
+        'summary',
+        'type',
+        'seat_based',
+        'max_seats',
+        'is_featured',
+        'features',
+        'entitlements',
         'is_active',
         'provider',
         'provider_id',
@@ -27,11 +34,16 @@ class Product extends Model
 
     protected $casts = [
         'is_active' => 'bool',
+        'seat_based' => 'bool',
+        'is_featured' => 'bool',
+        'max_seats' => 'int',
+        'features' => 'array',
+        'entitlements' => 'array',
         'synced_at' => 'datetime',
     ];
 
-    public function plans(): HasMany
+    public function prices(): HasMany
     {
-        return $this->hasMany(Plan::class);
+        return $this->hasMany(Price::class);
     }
 }

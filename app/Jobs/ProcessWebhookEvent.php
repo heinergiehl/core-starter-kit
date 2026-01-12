@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingProviderManager;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -28,13 +29,15 @@ class ProcessWebhookEvent implements ShouldQueue
         }
 
         try {
-            $manager->adapter($event->provider)->processEvent($event);
+            DB::transaction(function () use ($manager, $event) {
+                $manager->adapter($event->provider)->processEvent($event);
 
-            $event->update([
-                'status' => 'processed',
-                'processed_at' => now(),
-                'error_message' => null,
-            ]);
+                $event->update([
+                    'status' => 'processed',
+                    'processed_at' => now(),
+                    'error_message' => null,
+                ]);
+            });
         } catch (Throwable $exception) {
             $event->update([
                 'status' => 'failed',
@@ -45,3 +48,4 @@ class ProcessWebhookEvent implements ShouldQueue
         }
     }
 }
+

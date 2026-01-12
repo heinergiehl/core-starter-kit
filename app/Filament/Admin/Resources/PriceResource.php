@@ -6,6 +6,7 @@ use App\Domain\Billing\Models\Price;
 use App\Filament\Admin\Resources\PriceResource\Pages\CreatePrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\EditPrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\ListPrices;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -14,7 +15,6 @@ use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
-use Filament\Tables\Actions\Action;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Artisan;
 
@@ -36,8 +36,8 @@ class PriceResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\Select::make('plan_id')
-                    ->relationship('plan', 'name')
+                Forms\Components\Select::make('product_id')
+                    ->relationship('product', 'name')
                     ->required()
                     ->searchable()
                     ->preload(),
@@ -100,8 +100,8 @@ class PriceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('plan.name')
-                    ->label('Plan')
+                Tables\Columns\TextColumn::make('product.name')
+                    ->label('Product')
                     ->sortable()
                     ->searchable(),
                 Tables\Columns\TextColumn::make('key')
@@ -147,7 +147,7 @@ class PriceResource extends Resource
                             ->send();
                     }),
             ])
-            ->defaultSort('plan_id')
+            ->defaultSort('product_id')
             ->actions([
                 EditAction::make(),
                 DeleteAction::make(),

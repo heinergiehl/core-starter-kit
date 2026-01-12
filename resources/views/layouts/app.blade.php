@@ -1,5 +1,18 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+@php
+    use App\Domain\Settings\Models\BrandSetting;
+    
+    $activeTemplate = config('template.active', 'default');
+    
+    // Try to get the authenticated user's current team's template
+    if (auth()->check() && auth()->user()->current_team_id) {
+        $brandSetting = BrandSetting::where('team_id', auth()->user()->current_team_id)->first();
+        if ($brandSetting && $brandSetting->template) {
+            $activeTemplate = $brandSetting->template;
+        }
+    }
+@endphp
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -42,8 +55,12 @@
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @livewireStyles
     </head>
     <body class="font-sans antialiased bg-surface text-ink">
+        {{-- Impersonation Banner (shows when admin is impersonating a user) --}}
+        <x-impersonation-banner />
+        
         <div class="min-h-screen bg-surface">
             @include('layouts.navigation')
             
@@ -76,5 +93,6 @@
                 {{ $slot }}
             </main>
         </div>
+        @livewireScripts
     </body>
 </html>

@@ -1,0 +1,196 @@
+/* ==========================================================================
+   PRISM TEMPLATE - Bold Brutalist Geometry
+   Designer: High contrast, hard edges, intentionally raw
+   ========================================================================== */
+
+/* ============================================
+   TOKEN LAYER - Design Tokens
+   ============================================ */
+html[data-template="prism"] {
+    /* Core palette - bold primary colors */
+    --color-primary: 245 158 11;
+    /* Amber */
+    --color-secondary: 239 68 68;
+    /* Red */
+    --color-accent: 0 0 0;
+    /* Pure black */
+    --color-bg: 255 251 235;
+    /* Warm cream */
+    --color-fg: 28 25 23;
+    /* Stone black */
+    --color-surface-highlight: 254 243 199;
+
+    /* Typography - Bold industrial */
+    --font-sans: 'Space Grotesk', 'Work Sans', system-ui, sans-serif;
+    --font-display: 'Bebas Neue', 'Oswald', Impact, sans-serif;
+
+    /* Shape language - brutally square */
+    --radius-card: 0;
+    --radius-pill: 0;
+    --radius-btn: 0;
+
+    /* Prism-specific effects */
+    --shadow-hard: 6px 6px 0 rgba(0, 0, 0, 1);
+    --shadow-harder: 8px 8px 0 rgba(0, 0, 0, 1);
+}
+
+html[data-template="prism"].dark {
+    --color-bg: 28 25 23;
+    --color-fg: 255 251 235;
+    --color-surface-highlight: 68 64 60;
+    --shadow-hard: 6px 6px 0 rgba(255, 251, 235, 0.3);
+    --shadow-harder: 8px 8px 0 rgba(255, 251, 235, 0.3);
+}
+
+/* ============================================
+   AMBIENT EFFECTS - Grid pattern
+   ============================================ */
+html[data-template="prism"]::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 0, 0, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ============================================
+   GLASS PANELS - Hard shadow containers
+   ============================================ */
+html[data-template="prism"] .glass-panel {
+    background: rgb(var(--color-bg));
+    backdrop-filter: none;
+    border: 3px solid rgb(var(--color-fg));
+    box-shadow: var(--shadow-hard);
+    border-radius: 0;
+}
+
+html[data-template="prism"] .glass-panel:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: var(--shadow-harder);
+}
+
+/* ============================================
+   BUTTONS - Bold with hard shadows
+   ============================================ */
+html[data-template="prism"] .btn-primary {
+    background: #F59E0B;
+    border: 3px solid #000;
+    border-radius: 0;
+    box-shadow: 4px 4px 0 #000;
+    font-family: var(--font-display);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #000;
+    transition: all 0.15s ease;
+}
+
+html[data-template="prism"] .btn-primary:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 6px 6px 0 #000;
+}
+
+html[data-template="prism"] .btn-primary:active {
+    transform: translate(2px, 2px);
+    box-shadow: 2px 2px 0 #000;
+}
+
+html[data-template="prism"] .btn-secondary {
+    background: transparent;
+    border: 3px solid #000;
+    color: #000;
+    border-radius: 0;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    box-shadow: 3px 3px 0 #000;
+}
+
+html[data-template="prism"] .btn-secondary:hover {
+    background: #000;
+    color: #FFFBEB;
+}
+
+/* ============================================
+   TEXT STYLES - Stark contrast
+   ============================================ */
+html[data-template="prism"] .text-gradient {
+    background: linear-gradient(90deg, #F59E0B 0%, #EF4444 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-family: var(--font-display);
+}
+
+/* Underline accent */
+html[data-template="prism"] h1::after,
+html[data-template="prism"] .hero-title::after {
+    content: '';
+    display: block;
+    width: 80px;
+    height: 6px;
+    background: #F59E0B;
+    margin-top: 16px;
+}
+
+/* ============================================
+   HERO SECTION - Bold color blocks
+   ============================================ */
+html[data-template="prism"] .bg-hero-glow {
+    background:
+        linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, transparent 50%),
+        linear-gradient(225deg, rgba(239, 68, 68, 0.08) 0%, transparent 50%),
+        rgb(var(--color-bg));
+}
+
+/* ============================================
+   CARDS - Brutalist boxes
+   ============================================ */
+html[data-template="prism"] .card-inner {
+    background: rgb(var(--color-bg));
+    border: 2px solid rgb(var(--color-fg));
+    border-radius: 0;
+    box-shadow: 4px 4px 0 rgb(var(--color-fg));
+}
+
+html[data-template="prism"] .card-inner:hover {
+    box-shadow: 6px 6px 0 rgb(var(--color-fg));
+    transform: translate(-2px, -2px);
+}
+
+/* ============================================
+   FORM INPUTS - Industrial style
+   ============================================ */
+html[data-template="prism"] input[type="text"],
+html[data-template="prism"] input[type="email"],
+html[data-template="prism"] input[type="password"],
+html[data-template="prism"] textarea {
+    background: rgb(var(--color-bg));
+    border: 2px solid rgb(var(--color-fg));
+    color: rgb(var(--color-fg));
+    border-radius: 0;
+    font-family: var(--font-sans);
+}
+
+html[data-template="prism"] input:focus,
+html[data-template="prism"] textarea:focus {
+    border-color: #F59E0B;
+    box-shadow: 3px 3px 0 #F59E0B;
+    outline: none;
+}
+
+/* ============================================
+   SHAPE OVERRIDES - Everything square
+   ============================================ */
+html[data-template="prism"] .rounded-full,
+html[data-template="prism"] .rounded-3xl,
+html[data-template="prism"] .rounded-2xl,
+html[data-template="prism"] .rounded-xl,
+html[data-template="prism"] .rounded-lg,
+html[data-template="prism"] [class*="rounded-["] {
+    border-radius: 0;
+}

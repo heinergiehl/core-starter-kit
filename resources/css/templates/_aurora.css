@@ -1,0 +1,228 @@
+/* ==========================================================================
+   AURORA TEMPLATE - Ethereal Northern Lights
+   Designer: Dreamy, organic, flowing energy
+   ========================================================================== */
+
+/* ============================================
+   TOKEN LAYER - Design Tokens
+   ============================================ */
+html[data-template="aurora"] {
+    /* Core palette - aurora borealis */
+    --color-primary: 16 185 129;
+    /* Emerald glow */
+    --color-secondary: 6 182 212;
+    /* Cyan shimmer */
+    --color-accent: 139 92 246;
+    /* Violet flash */
+    --color-bg: 2 44 34;
+    /* Deep forest night */
+    --color-fg: 236 253 245;
+    /* Mint cream */
+    --color-surface-highlight: 6 78 59;
+
+    /* Typography - Elegant & flowing */
+    --font-sans: 'Inter', 'DM Sans', system-ui, sans-serif;
+    --font-display: 'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif;
+
+    /* Shape language - soft, organic curves */
+    --radius-card: 24px;
+    --radius-pill: 9999px;
+    --radius-btn: 14px;
+}
+
+html[data-template="aurora"].dark {
+    --color-bg: 2 26 20;
+    --color-fg: 240 253 244;
+    --color-surface-highlight: 4 47 36;
+}
+
+/* ============================================
+   AMBIENT EFFECTS - Dancing lights
+   ============================================ */
+
+/* Subtle grain texture */
+html[data-template="aurora"]::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    opacity: 0.03;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+@keyframes aurora-wave {
+
+    0%,
+    100% {
+        transform: translateY(0) scale(1);
+        opacity: 0.6;
+    }
+
+    50% {
+        transform: translateY(-20px) scale(1.05);
+        opacity: 0.8;
+    }
+}
+
+/* ============================================
+   GLASS PANELS - Frosted with aurora glow
+   ============================================ */
+html[data-template="aurora"] .glass-panel {
+    background: rgba(6, 78, 59, 0.4);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 0 80px rgba(16, 185, 129, 0.05);
+    border-radius: var(--radius-card);
+}
+
+html[data-template="aurora"] .glass-panel:hover {
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow:
+        0 12px 48px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08),
+        0 0 120px rgba(16, 185, 129, 0.08);
+}
+
+/* ============================================
+   BUTTONS - Flowing gradient with soft glow
+   ============================================ */
+html[data-template="aurora"] .btn-primary {
+    background: linear-gradient(135deg,
+            rgba(16, 185, 129, 0.9) 0%,
+            rgba(6, 182, 212, 0.9) 50%,
+            rgba(139, 92, 246, 0.9) 100%);
+    background-size: 200% 200%;
+    border: none;
+    border-radius: var(--radius-btn);
+    box-shadow:
+        0 4px 20px rgba(16, 185, 129, 0.3),
+        0 0 40px rgba(16, 185, 129, 0.1);
+    font-weight: 500;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: aurora-btn-flow 6s ease infinite;
+}
+
+@keyframes aurora-btn-flow {
+
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+html[data-template="aurora"] .btn-primary:hover {
+    transform: translateY(-3px);
+    box-shadow:
+        0 8px 30px rgba(16, 185, 129, 0.4),
+        0 0 60px rgba(16, 185, 129, 0.15);
+}
+
+html[data-template="aurora"] .btn-secondary {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #34D399;
+    border-radius: var(--radius-btn);
+    backdrop-filter: blur(8px);
+    transition: all 0.3s ease;
+}
+
+html[data-template="aurora"] .btn-secondary:hover {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* ============================================
+   TEXT STYLES - Flowing gradients
+   ============================================ */
+html[data-template="aurora"] .text-gradient {
+    background: linear-gradient(135deg,
+            #34D399 0%,
+            #22D3EE 40%,
+            #A78BFA 70%,
+            #F472B6 100%);
+    background-size: 300% 300%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    animation: aurora-text-flow 10s ease infinite;
+}
+
+@keyframes aurora-text-flow {
+
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+
+    25% {
+        background-position: 50% 100%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    75% {
+        background-position: 50% 0%;
+    }
+}
+
+/* ============================================
+   HERO SECTION - Layered aurora effect
+   ============================================ */
+html[data-template="aurora"] .bg-hero-glow {
+    background:
+        radial-gradient(ellipse 100% 60% at 50% 0%, rgba(16, 185, 129, 0.2) 0%, transparent 50%),
+        radial-gradient(ellipse 80% 40% at 30% 20%, rgba(6, 182, 212, 0.15) 0%, transparent 40%),
+        radial-gradient(ellipse 60% 50% at 70% 30%, rgba(139, 92, 246, 0.12) 0%, transparent 35%),
+        radial-gradient(ellipse 40% 30% at 50% 70%, rgba(244, 114, 182, 0.08) 0%, transparent 30%),
+        rgb(var(--color-bg));
+}
+
+/* ============================================
+   CARDS - Organic with soft shadow
+   ============================================ */
+html[data-template="aurora"] .card-inner {
+    background: rgba(6, 78, 59, 0.5);
+    border: 1px solid rgba(16, 185, 129, 0.1);
+    border-radius: var(--radius-card);
+    box-shadow:
+        0 4px 24px rgba(0, 0, 0, 0.2),
+        0 0 60px rgba(16, 185, 129, 0.03);
+}
+
+/* ============================================
+   FORM INPUTS - Soft focus glow
+   ============================================ */
+html[data-template="aurora"] input[type="text"],
+html[data-template="aurora"] input[type="email"],
+html[data-template="aurora"] input[type="password"],
+html[data-template="aurora"] textarea {
+    background: rgba(6, 78, 59, 0.6);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    color: #D1FAE5;
+    border-radius: var(--radius-btn);
+}
+
+html[data-template="aurora"] input::placeholder,
+html[data-template="aurora"] textarea::placeholder {
+    color: rgba(16, 185, 129, 0.4);
+}
+
+html[data-template="aurora"] input:focus,
+html[data-template="aurora"] textarea:focus {
+    border-color: rgba(16, 185, 129, 0.5);
+    box-shadow:
+        0 0 0 4px rgba(16, 185, 129, 0.1),
+        0 0 30px rgba(16, 185, 129, 0.1);
+    outline: none;
+}

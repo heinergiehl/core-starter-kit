@@ -2,7 +2,7 @@
 
 namespace App\Domain\Billing\Services;
 
-use App\Domain\Billing\Models\Plan;
+use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Subscription;
 use Illuminate\Support\Collection;
@@ -55,7 +55,7 @@ class SaasStatsService
         }
 
         // Get plans with their prices
-        $plans = Plan::query()
+        $products = Product::query()
             ->whereIn('key', $planKeys)
             ->with('prices')
             ->get()
@@ -64,14 +64,14 @@ class SaasStatsService
         $mrr = 0;
 
         foreach ($activeSubscriptions as $subscription) {
-            $plan = $plans->get($subscription->plan_key);
+            $product = $products->get($subscription->plan_key);
             
-            if (!$plan) {
+            if (!$product) {
                 continue;
             }
 
-            // Get the first active price for this plan
-            $price = $plan->prices->where('is_active', true)->first();
+            // Get the first active price for this product
+            $price = $product->prices->where('is_active', true)->first();
             
             if (!$price) {
                 continue;

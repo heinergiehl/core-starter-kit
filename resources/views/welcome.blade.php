@@ -1,5 +1,18 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+@php
+    use App\Domain\Settings\Models\BrandSetting;
+    
+    $activeTemplate = config('template.active', 'default');
+    
+    // Try to get the authenticated user's current team's template
+    if (auth()->check() && auth()->user()->current_team_id) {
+        $brandSetting = BrandSetting::where('team_id', auth()->user()->current_team_id)->first();
+        if ($brandSetting && $brandSetting->template) {
+            $activeTemplate = $brandSetting->template;
+        }
+    }
+@endphp
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -40,14 +53,13 @@
                         </div>
                         
                         <h1 class="mx-auto max-w-4xl font-display text-5xl font-bold leading-[1.1] tracking-tight text-ink sm:text-7xl">
-                            The boilerplate for <br>
-                            <span class="text-gradient hover:scale-[1.02] transition-transform duration-300 inline-block">high-ambition SaaS</span>
+                            {{ __('app.hero_title') }} <br>
+                            <span class="text-gradient hover:scale-[1.02] transition-transform duration-300 inline-block">{{ __('app.hero_title_highlight') }}</span>
                         </h1>
                         
                         <p class="mx-auto mt-6 max-w-2xl text-lg text-ink/60 leading-relaxed">
-                            Stop wasting weeks on billing, auth, and teams. 
-                            Start with a "Senior Dev" quality foundation. 
-                            <span class="text-ink font-medium">Domain-driven, event-sourced, upgrade-ready.</span>
+                            {{ __('app.hero_description') }}
+                            <span class="text-ink font-medium">{{ __('app.hero_tagline') }}</span>
                         </p>
 
                         <div class="mt-10 flex flex-col sm:flex-row items-center gap-4">
@@ -61,7 +73,7 @@
 
                         <!-- Social Proof / Trusted By -->
                         <div class="mt-16 pt-8 border-t border-ink/5 w-full max-w-5xl mx-auto">
-                            <p class="text-xs font-medium uppercase tracking-widest text-ink/30 mb-6">Built with modern standards</p>
+                            <p class="text-xs font-medium uppercase tracking-widest text-ink/30 mb-6">{{ __('app.built_with') }}</p>
                             <div class="flex flex-wrap justify-center gap-x-12 gap-y-8 opacity-50 grayscale transition-all duration-500 hover:grayscale-0 hover:opacity-100">
                                 <span class="text-xl font-bold flex items-center gap-2 text-ink"><div class="w-6 h-6 bg-ink/10 rounded-md"></div> Laravel 11</span>
                                 <span class="text-xl font-bold flex items-center gap-2 text-ink"><div class="w-6 h-6 bg-ink/10 rounded-md"></div> Filament 3</span>

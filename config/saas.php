@@ -4,6 +4,7 @@ return [
     'billing' => [
         'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
         'default_provider' => env('BILLING_DEFAULT_PROVIDER', 'stripe'),
+        'sync_catalog_via_webhooks' => env('BILLING_SYNC_CATALOG_VIA_WEBHOOKS', true),
         'catalog' => env('BILLING_CATALOG', 'config'),
         'discounts' => [
             'providers' => ['stripe', 'paddle', 'lemonsqueezy'],

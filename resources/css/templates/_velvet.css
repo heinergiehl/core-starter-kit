@@ -1,0 +1,268 @@
+/* ==========================================================================
+   VELVET TEMPLATE - Luxury Editorial Gold
+   Designer: Refined elegance, editorial quality, prestigious
+   ========================================================================== */
+
+/* ============================================
+   TOKEN LAYER - Design Tokens
+   ============================================ */
+html[data-template="velvet"] {
+    /* Core palette - gold on deep charcoal */
+    --color-primary: 212 175 55;
+    /* Rich gold */
+    --color-secondary: 28 25 23;
+    /* Charcoal black */
+    --color-accent: 120 113 108;
+    /* Warm stone */
+    --color-bg: 28 25 23;
+    /* Charcoal black */
+    --color-fg: 250 250 249;
+    /* Warm white */
+    --color-surface-highlight: 41 37 36;
+
+    /* Typography - Editorial & luxurious */
+    --font-sans: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+    --font-display: 'Cinzel', 'Bodoni Moda', serif;
+
+    /* Shape language - refined, elegant */
+    --radius-card: 4px;
+    --radius-pill: 4px;
+    --radius-btn: 4px;
+
+    /* Velvet-specific */
+    --gold-gradient: linear-gradient(135deg, #D4AF37 0%, #F5E6A3 40%, #D4AF37 60%, #AA8C2C 100%);
+    --gold-shimmer: linear-gradient(90deg, transparent 0%, rgba(212, 175, 55, 0.3) 50%, transparent 100%);
+}
+
+html[data-template="velvet"].dark {
+    --color-bg: 15 13 12;
+    --color-fg: 255 253 250;
+    --color-surface-highlight: 28 25 23;
+}
+
+/* ============================================
+   AMBIENT EFFECTS - Subtle texture
+   ============================================ */
+html[data-template="velvet"]::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+        radial-gradient(ellipse at top right, rgba(212, 175, 55, 0.03) 0%, transparent 50%),
+        radial-gradient(ellipse at bottom left, rgba(212, 175, 55, 0.02) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* Gold shimmer animation */
+@keyframes velvet-shimmer {
+    0% {
+        background-position: -200% center;
+    }
+
+    100% {
+        background-position: 200% center;
+    }
+}
+
+/* ============================================
+   GLASS PANELS - Subtle luxury
+   ============================================ */
+html[data-template="velvet"] .glass-panel {
+    background: rgba(28, 25, 23, 0.95);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(212, 175, 55, 0.15);
+    box-shadow:
+        0 4px 24px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(212, 175, 55, 0.05);
+    border-radius: var(--radius-card);
+}
+
+html[data-template="velvet"] .glass-panel:hover {
+    border-color: rgba(212, 175, 55, 0.3);
+    box-shadow:
+        0 8px 32px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(212, 175, 55, 0.08);
+}
+
+/* ============================================
+   BUTTONS - Understated gold
+   ============================================ */
+html[data-template="velvet"] .btn-primary {
+    background: var(--gold-gradient);
+    background-size: 200% auto;
+    border: none;
+    border-radius: var(--radius-btn);
+    box-shadow:
+        0 4px 16px rgba(212, 175, 55, 0.25),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    font-family: var(--font-display);
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #1C1917;
+    transition: all 0.4s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Shimmer effect on hover */
+html[data-template="velvet"] .btn-primary::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gold-shimmer);
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+html[data-template="velvet"] .btn-primary:hover::after {
+    opacity: 1;
+    animation: velvet-shimmer 1.5s ease infinite;
+}
+
+html[data-template="velvet"] .btn-primary:hover {
+    box-shadow:
+        0 6px 24px rgba(212, 175, 55, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+html[data-template="velvet"] .btn-secondary {
+    background: transparent;
+    border: 1px solid rgba(212, 175, 55, 0.5);
+    color: #D4AF37;
+    border-radius: var(--radius-btn);
+    font-family: var(--font-display);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+}
+
+html[data-template="velvet"] .btn-secondary:hover {
+    background: rgba(212, 175, 55, 0.1);
+    border-color: rgba(212, 175, 55, 0.8);
+}
+
+/* ============================================
+   TEXT STYLES - Rich gold
+   ============================================ */
+html[data-template="velvet"] .text-gradient {
+    background: var(--gold-gradient);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-family: var(--font-display);
+    animation: velvet-gold-shift 4s ease infinite;
+}
+
+@keyframes velvet-gold-shift {
+
+    0%,
+    100% {
+        background-position: 0% center;
+    }
+
+    50% {
+        background-position: 100% center;
+    }
+}
+
+/* Decorative line beneath headings */
+html[data-template="velvet"] h1::after {
+    content: '◆';
+    display: block;
+    text-align: center;
+    margin-top: 16px;
+    color: #D4AF37;
+    font-size: 12px;
+    letter-spacing: 24px;
+}
+
+/* ============================================
+   HERO SECTION - Dark luxury glow
+   ============================================ */
+html[data-template="velvet"] .bg-hero-glow {
+    background:
+        radial-gradient(ellipse 60% 40% at 50% 0%, rgba(212, 175, 55, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 40% 30% at 80% 100%, rgba(212, 175, 55, 0.04) 0%, transparent 40%),
+        rgb(var(--color-bg));
+}
+
+/* ============================================
+   CARDS - Editorial frames
+   ============================================ */
+html[data-template="velvet"] .card-inner {
+    background: rgba(41, 37, 36, 0.8);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+    border-radius: var(--radius-card);
+    position: relative;
+}
+
+/* Corner accents */
+html[data-template="velvet"] .card-inner::before,
+html[data-template="velvet"] .card-inner::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(212, 175, 55, 0.3);
+}
+
+html[data-template="velvet"] .card-inner::before {
+    top: -1px;
+    left: -1px;
+    border-right: none;
+    border-bottom: none;
+}
+
+html[data-template="velvet"] .card-inner::after {
+    bottom: -1px;
+    right: -1px;
+    border-left: none;
+    border-top: none;
+}
+
+/* ============================================
+   FORM INPUTS - Understated elegance
+   ============================================ */
+html[data-template="velvet"] input[type="text"],
+html[data-template="velvet"] input[type="email"],
+html[data-template="velvet"] input[type="password"],
+html[data-template="velvet"] textarea {
+    background: rgba(28, 25, 23, 0.8);
+    border: 1px solid rgba(212, 175, 55, 0.2);
+    border-radius: 0;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    color: #FAFAF9;
+    font-family: var(--font-sans);
+    padding-left: 0;
+}
+
+html[data-template="velvet"] input::placeholder,
+html[data-template="velvet"] textarea::placeholder {
+    color: rgba(212, 175, 55, 0.3);
+    font-style: italic;
+}
+
+html[data-template="velvet"] input:focus,
+html[data-template="velvet"] textarea:focus {
+    border-bottom-color: #D4AF37;
+    box-shadow: 0 2px 0 #D4AF37;
+    outline: none;
+}
+
+/* ============================================
+   SPECIAL ELEMENTS
+   ============================================ */
+/* Dividers */
+html[data-template="velvet"] hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.3), transparent);
+}

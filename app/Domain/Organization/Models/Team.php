@@ -4,12 +4,14 @@ namespace App\Domain\Organization\Models;
 
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Organization\Enums\TeamRole;
+use App\Domain\Settings\Models\BrandSetting;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Team extends Model
 {
@@ -47,6 +49,11 @@ class Team extends Model
     public function subscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class);
+    }
+
+    public function brandSetting(): HasOne
+    {
+        return $this->hasOne(BrandSetting::class);
     }
 
     /**

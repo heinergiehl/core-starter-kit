@@ -2,7 +2,6 @@
 
 namespace App\Domain\Billing\Exports;
 
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use Illuminate\Support\Str;
@@ -13,7 +12,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
 {
     private StripeClient $client;
     /** @var array<string, object> */
-    private array $productsByPlanKey = [];
+    private array $productsByKey = [];
     /** @var array<string, object> */
     private array $pricesByLookupKey = [];
 
@@ -31,14 +30,17 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         $this->client = new StripeClient($secret);
-        $this->productsByPlanKey = [];
+        $this->productsByKey = [];
         $this->pricesByLookupKey = [];
 
         foreach ($this->client->products->all(['limit' => 100])->autoPagingIterator() as $product) {
-            $planKey = $this->metadataValue($product->metadata ?? [], 'plan_key');
+            $metadata = $this->toMetadataArray($product->metadata);
+            // Check for product_key first, then fall back to plan_key for backward compatibility
+            $productKey = $this->metadataValue($metadata, 'product_key') 
+                ?? $this->metadataValue($metadata, 'plan_key');
 
-            if ($planKey) {
-                $this->productsByPlanKey[$planKey] = $product;
+            if ($productKey) {
+                $this->productsByKey[$productKey] = $product;
             }
         }
 
@@ -47,26 +49,28 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
                 $this->pricesByLookupKey[(string) $price->lookup_key] = $price;
             }
 
-            $planKey = $this->metadataValue($price->metadata ?? [], 'plan_key');
-            $priceKey = $this->metadataValue($price->metadata ?? [], 'price_key');
+            $metadata = $this->toMetadataArray($price->metadata);
+            $productKey = $this->metadataValue($metadata, 'product_key') 
+                ?? $this->metadataValue($metadata, 'plan_key');
+            $priceKey = $this->metadataValue($metadata, 'price_key');
 
-            if ($planKey && $priceKey) {
-                $this->pricesByLookupKey[$this->lookupKey($planKey, $priceKey)] = $price;
+            if ($productKey && $priceKey) {
+                $this->pricesByLookupKey[$this->lookupKey($productKey, $priceKey)] = $price;
             }
         }
     }
 
-    public function ensureProduct(Product $product, Plan $plan, bool $apply, bool $updateExisting): array
+    public function ensureProduct(Product $product, bool $apply, bool $updateExisting): array
     {
-        $planKey = (string) $plan->key;
-        $existing = $this->productsByPlanKey[$planKey] ?? null;
-        $payload = $this->productPayload($product, $plan);
+        $productKey = (string) $product->key;
+        $existing = $this->productsByKey[$productKey] ?? null;
+        $payload = $this->productPayload($product);
 
         if ($existing) {
             if ($updateExisting) {
                 if ($apply) {
                     $existing = $this->client->products->update((string) $existing->id, $payload);
-                    $this->productsByPlanKey[$planKey] = $existing;
+                    $this->productsByKey[$productKey] = $existing;
                 }
 
                 return ['action' => 'update', 'id' => (string) $existing->id];
@@ -80,12 +84,12 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         $created = $this->client->products->create($payload);
-        $this->productsByPlanKey[$planKey] = $created;
+        $this->productsByKey[$productKey] = $created;
 
         return ['action' => 'create', 'id' => (string) $created->id];
     }
 
-    public function ensurePrice(Plan $plan, Price $price, string $providerProductId, bool $apply, bool $updateExisting): array
+    public function ensurePrice(Product $product, Price $price, string $providerProductId, bool $apply, bool $updateExisting): array
     {
         $priceKey = (string) ($price->key ?: $price->interval);
 
@@ -97,7 +101,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'skip', 'id' => (string) $price->provider_id];
         }
 
-        $lookupKey = $this->lookupKey($plan->key, $priceKey);
+        $lookupKey = $this->lookupKey($product->key, $priceKey);
         $matched = $this->pricesByLookupKey[$lookupKey] ?? null;
 
         if ($matched) {
@@ -108,34 +112,33 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'create', 'id' => null];
         }
 
-        $payload = $this->pricePayload($plan, $price, $providerProductId, $lookupKey);
+        $payload = $this->pricePayload($product, $price, $providerProductId, $lookupKey);
         $created = $this->client->prices->create($payload);
         $this->pricesByLookupKey[$lookupKey] = $created;
 
         return ['action' => 'create', 'id' => (string) $created->id];
     }
 
-    private function lookupKey(string $planKey, string $priceKey): string
+    private function lookupKey(string $productKey, string $priceKey): string
     {
-        return Str::slug("{$planKey}-{$priceKey}", '-');
+        return Str::slug("{$productKey}-{$priceKey}", '-');
     }
 
-    private function productPayload(Product $product, Plan $plan): array
+    private function productPayload(Product $product): array
     {
-        $description = $plan->summary ?: $plan->description ?: $product->description;
+        $description = $product->summary ?: $product->description;
 
         return [
-            'name' => (string) $plan->name,
+            'name' => (string) $product->name,
             'description' => $description ? (string) $description : null,
-            'active' => (bool) $plan->is_active,
+            'active' => (bool) $product->is_active,
             'metadata' => array_filter([
-                'plan_key' => (string) $plan->key,
                 'product_key' => (string) $product->key,
             ], fn ($value) => $value !== ''),
         ];
     }
 
-    private function pricePayload(Plan $plan, Price $price, string $providerProductId, string $lookupKey): array
+    private function pricePayload(Product $product, Price $price, string $providerProductId, string $lookupKey): array
     {
         $interval = strtolower((string) $price->interval);
         $intervalCount = (int) ($price->interval_count ?: 1);
@@ -147,9 +150,8 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             'lookup_key' => $lookupKey,
             'nickname' => $price->label ?: ucfirst($price->key ?: $price->interval ?: 'price'),
             'metadata' => array_filter([
-                'plan_key' => (string) $plan->key,
+                'product_key' => (string) $product->key,
                 'price_key' => (string) ($price->key ?: $price->interval),
-                'product_key' => (string) ($plan->product?->key ?? ''),
             ], fn ($value) => $value !== ''),
         ];
 
@@ -166,6 +168,23 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
     private function isRecurringInterval(string $interval): bool
     {
         return in_array($interval, ['day', 'week', 'month', 'year'], true);
+    }
+
+    private function toMetadataArray(mixed $metadata): array
+    {
+        if (is_array($metadata)) {
+            return $metadata;
+        }
+
+        if (is_object($metadata) && method_exists($metadata, 'toArray')) {
+            return $metadata->toArray();
+        }
+
+        if ($metadata instanceof \ArrayAccess || $metadata instanceof \Traversable) {
+            return iterator_to_array($metadata);
+        }
+
+        return [];
     }
 
     private function metadataValue(array $metadata, string $key): ?string

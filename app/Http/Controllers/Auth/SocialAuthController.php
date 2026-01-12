@@ -55,7 +55,7 @@ class SocialAuthController extends Controller
                 $user = User::create([
                     'name' => $socialUser->getName() ?: Str::before($email, '@'),
                     'email' => $email,
-                    'password' => Str::random(40),
+                    'password' => null, // OAuth-only users have no password
                 ]);
                 $user->forceFill(['email_verified_at' => now()])->save();
 
