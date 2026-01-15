@@ -1,16 +1,9 @@
 <!DOCTYPE html>
 @php
-    use App\Domain\Settings\Models\BrandSetting;
+    use App\Domain\Settings\Services\BrandingService;
     
-    $activeTemplate = config('template.active', 'default');
-    
-    // Try to get the authenticated user's current team's template
-    if (auth()->check() && auth()->user()->current_team_id) {
-        $brandSetting = BrandSetting::where('team_id', auth()->user()->current_team_id)->first();
-        if ($brandSetting && $brandSetting->template) {
-            $activeTemplate = $brandSetting->template;
-        }
-    }
+    $branding = app(BrandingService::class);
+    $activeTemplate = $branding->templateForGuest();
 @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
     <head>
@@ -54,7 +47,6 @@
         <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ route('sitemap') }}">
 
         @php
-            $activeTemplate = config('template.active', 'default');
             $templateConfig = config("template.templates.{$activeTemplate}", []);
             $templateFonts = $templateConfig['fonts'] ?? [];
             $fontSans = $templateFonts['sans'] ?? config('saas.branding.fonts.sans', 'Plus Jakarta Sans');
@@ -78,18 +70,7 @@
             }
         </style>
 
-        @if(isset($themeTokens))
-            <style>
-                :root {
-                    --color-primary: {{ $themeTokens['primary'] ?? '14 116 144' }};
-                    --color-secondary: {{ $themeTokens['secondary'] ?? '245 158 11' }};
-                    --color-accent: {{ $themeTokens['accent'] ?? '239 68 68' }};
-                    --color-bg: {{ $themeTokens['bg'] ?? '250 250 249' }};
-                    --color-fg: {{ $themeTokens['fg'] ?? '15 23 42' }};
-                }
-            </style>
-        @endif
-
+        
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="bg-surface text-ink">

@@ -2,7 +2,9 @@
 
 namespace App\Domain\Billing\Exports;
 
+use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Models\ProductProviderMapping;
 use App\Domain\Billing\Exports\StripeCatalogPublishAdapter;
 use App\Domain\Billing\Exports\PaddleCatalogPublishAdapter;
 use App\Domain\Billing\Exports\LemonSqueezyCatalogPublishAdapter;
@@ -14,23 +16,23 @@ class CatalogPublishService
     /**
      * @return array{summary: array<string, array<string, int>>, warnings: array<int, string>}
      */
-    public function preview(string $provider, bool $updateExisting = false): array
+    public function preview(string $provider, bool $updateExisting = false, ?array $productIds = null): array
     {
-        return $this->sync($provider, false, $updateExisting);
+        return $this->sync($provider, false, $updateExisting, $productIds);
     }
 
     /**
      * @return array{summary: array<string, array<string, int>>, warnings: array<int, string>}
      */
-    public function apply(string $provider, bool $updateExisting = false): array
+    public function apply(string $provider, bool $updateExisting = false, ?array $productIds = null): array
     {
-        return $this->sync($provider, true, $updateExisting);
+        return $this->sync($provider, true, $updateExisting, $productIds);
     }
 
     /**
      * @return array{summary: array<string, array<string, int>>, warnings: array<int, string>}
      */
-    private function sync(string $provider, bool $apply, bool $updateExisting): array
+    private function sync(string $provider, bool $apply, bool $updateExisting, ?array $productIds): array
     {
         $provider = strtolower($provider);
         $enabled = array_map('strtolower', config('saas.billing.providers', []));
@@ -48,9 +50,10 @@ class CatalogPublishService
         ];
         $warnings = [];
 
-        $runner = function () use ($provider, $adapter, $apply, $updateExisting, &$summary, &$warnings): void {
+        $runner = function () use ($provider, $adapter, $apply, $updateExisting, $productIds, &$summary, &$warnings): void {
             $products = Product::query()
-                ->with(['prices'])
+                ->with(['prices.mappings', 'providerMappings'])
+                ->when($productIds, fn ($query) => $query->whereIn('id', $productIds))
                 ->orderBy('id')
                 ->get();
 
@@ -61,14 +64,16 @@ class CatalogPublishService
                     $summary['products'][$productAction]++;
                 }
 
-                $providerProductId = $productResult['id'] ?? null;
-                
-                // Update Product with provider info when created
-                if ($apply && $providerProductId && $productAction === 'create') {
-                    $product->update([
-                        'provider' => $provider,
-                        'provider_id' => $providerProductId,
-                    ]);
+                $providerProductId = $productResult['id']
+                    ?? $product->providerMappings
+                        ->firstWhere('provider', $provider)
+                        ?->provider_id;
+
+                if ($apply && $providerProductId) {
+                    ProductProviderMapping::updateOrCreate(
+                        ['product_id' => $product->id, 'provider' => $provider],
+                        ['provider_id' => $providerProductId]
+                    );
                 }
 
                 // For preview mode: still show prices that would be created
@@ -83,10 +88,7 @@ class CatalogPublishService
                     $providerProductId = 'preview_placeholder';
                 }
 
-                // Get prices that either match this provider OR have no provider set yet
-                $productPrices = $product->prices->filter(function ($price) use ($provider) {
-                    return !$price->provider || $price->provider === $provider;
-                });
+                $productPrices = $product->prices;
 
                 if ($productPrices->isEmpty()) {
                     $warnings[] = "Product [{$product->key}] has no prices to publish.";
@@ -100,12 +102,11 @@ class CatalogPublishService
                         $summary['prices'][$priceAction]++;
                     }
 
-                    // Update price with provider info when created
                     if ($apply && !empty($priceResult['id'])) {
-                        $price->update([
-                            'provider' => $provider,
-                            'provider_id' => $priceResult['id'],
-                        ]);
+                        PriceProviderMapping::updateOrCreate(
+                            ['price_id' => $price->id, 'provider' => $provider],
+                            ['provider_id' => $priceResult['id']]
+                        );
                     }
                 }
             }
@@ -133,4 +134,3 @@ class CatalogPublishService
         };
     }
 }
-

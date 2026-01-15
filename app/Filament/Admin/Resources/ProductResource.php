@@ -3,12 +3,16 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Exports\CatalogPublishService;
 use App\Filament\Admin\Resources\ProductResource\Pages\CreateProduct;
 use App\Filament\Admin\Resources\ProductResource\Pages\EditProduct;
 use App\Filament\Admin\Resources\ProductResource\Pages\ListProducts;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -66,7 +70,7 @@ class ProductResource extends Resource
                     ->label('Featured'),
                 Forms\Components\Toggle::make('is_active')
                     ->label('Active')
-                    ->default(true),
+                    ->default(false),
                 Forms\Components\Textarea::make('features')
                     ->label('Features (one per line)')
                     ->rows(5)
@@ -142,8 +146,16 @@ class ProductResource extends Resource
                     ->label('Import from Providers')
                     ->icon('heroicon-o-arrow-path')
                     ->color('gray')
-                    ->action(function () {
-                        Artisan::call('billing:sync-products');
+                    ->form([
+                        Forms\Components\Toggle::make('include_deleted')
+                            ->label('Include deleted (override local deletions)')
+                            ->default(false),
+                    ])
+                    ->action(function (array $data) {
+                        $includeDeleted = (bool) ($data['include_deleted'] ?? false);
+                        Artisan::call('billing:sync-products', [
+                            '--force' => $includeDeleted,
+                        ]);
                         Notification::make()
                             ->title('Sync complete')
                             ->body('Products and prices have been synced from all providers.')
@@ -185,6 +197,44 @@ class ProductResource extends Resource
             ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
+            ])
+            ->bulkActions([
+                \Filament\Actions\BulkActionGroup::make([
+                    BulkAction::make('publishSelected')
+                        ->label('Publish selected')
+                        ->icon('heroicon-o-cloud-arrow-up')
+                        ->color('primary')
+                        ->form([
+                            Forms\Components\Select::make('provider')
+                                ->options(self::providerOptions())
+                                ->required(),
+                            Forms\Components\Toggle::make('update')
+                                ->label('Update existing')
+                                ->default(false),
+                        ])
+                        ->requiresConfirmation()
+                        ->action(function ($records, array $data): void {
+                            $provider = (string) ($data['provider'] ?? '');
+                            if ($provider === '') {
+                                return;
+                            }
+
+                            $productIds = $records->pluck('id')->all();
+                            app(CatalogPublishService::class)->apply(
+                                $provider,
+                                (bool) ($data['update'] ?? false),
+                                $productIds
+                            );
+
+                            Notification::make()
+                                ->title('Publish complete')
+                                ->body("Published selected products to {$provider}.")
+                                ->success()
+                                ->send();
+                        }),
+                    \Filament\Actions\DeleteBulkAction::make()
+                        ->chunkSelectedRecords(250),
+                ]),
             ]);
     }
 

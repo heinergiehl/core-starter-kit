@@ -7,8 +7,10 @@ use App\Filament\Admin\Resources\PriceResource\Pages\CreatePrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\EditPrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\ListPrices;
 use Filament\Actions\Action;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Notifications\Notification;
@@ -47,13 +49,14 @@ class PriceResource extends Resource
                     ->helperText('Use keys like monthly, yearly, lifetime.'),
                 Forms\Components\TextInput::make('label')
                     ->maxLength(100),
-                Forms\Components\Select::make('provider')
-                    ->options(self::providerOptions())
-                    ->required(),
-                Forms\Components\TextInput::make('provider_id')
-                    ->label('Provider ID')
-                    ->helperText('Optional until you publish the catalog to a provider.')
-                    ->maxLength(191),
+                // Provider selection removed for agnostic pricing
+                // Forms\Components\Select::make('provider')
+                //     ->options(self::providerOptions())
+                //     ->required(),
+                // Forms\Components\TextInput::make('provider_id')
+                //     ->label('Provider ID')
+                //     ->helperText('Optional until you publish the catalog to a provider.')
+                //     ->maxLength(191),
                 Forms\Components\TextInput::make('interval')
                     ->label('Interval')
                     ->maxLength(32)
@@ -91,7 +94,7 @@ class PriceResource extends Resource
                     ->minValue(1),
                 Forms\Components\Toggle::make('is_active')
                     ->label('Active')
-                    ->default(true),
+                    ->default(false),
             ])
             ->columns(2);
     }
@@ -107,15 +110,15 @@ class PriceResource extends Resource
                 Tables\Columns\TextColumn::make('key')
                     ->badge()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('provider')
-                    ->badge()
-                    ->color(fn (?string $state): string => match ($state) {
-                        'stripe' => 'primary',
-                        'lemonsqueezy' => 'warning',
-                        'paddle' => 'success',
-                        default => 'gray',
-                    })
-                    ->sortable(),
+                // Tables\Columns\TextColumn::make('provider')
+                //     ->badge()
+                //     ->color(fn (?string $state): string => match ($state) {
+                //         'stripe' => 'primary',
+                //         'lemonsqueezy' => 'warning',
+                //         'paddle' => 'success',
+                //         default => 'gray',
+                //     })
+                //     ->sortable(),
                 Tables\Columns\TextColumn::make('interval')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('amount')
@@ -151,6 +154,11 @@ class PriceResource extends Resource
             ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 

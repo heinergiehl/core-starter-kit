@@ -3,6 +3,7 @@
 namespace App\Domain\Billing\Adapters;
 
 use App\Domain\Billing\Models\BillingCustomer;
+use App\Domain\Billing\Models\CheckoutIntent;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
@@ -10,13 +11,18 @@ use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Domain\Billing\Models\ProductProviderMapping;
+use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Organization\Models\Team;
 use App\Models\User;
+use App\Notifications\CheckoutClaimNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -105,6 +111,18 @@ class PaddleAdapter implements BillingProviderAdapter
             $this->syncPrice($data, $type);
         }
 
+        $checkoutIntentId = $this->resolveCheckoutIntentId($data);
+        $teamId = $this->resolveTeamId($data);
+
+        if (
+            $checkoutIntentId
+            && !$teamId
+            && (str_contains($type, 'subscription') || str_contains($type, 'transaction') || str_contains($type, 'payment'))
+        ) {
+            $this->recordCheckoutIntentEvent($checkoutIntentId, $type, $data);
+            return;
+        }
+
         // Subscription handling
         if (str_contains($type, 'subscription')) {
             $this->syncSubscription($data, $type);
@@ -128,19 +146,56 @@ class PaddleAdapter implements BillingProviderAdapter
         $customData = data_get($data, 'custom_data', []);
         $key = $customData['plan_key'] ?? $customData['product_key'] ?? Str::slug("paddle-{$productId}");
 
-        Product::updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => (string) $productId,
-            ],
-            [
-                'key' => $key,
-                'name' => $name ?? 'Paddle Product',
-                'description' => data_get($data, 'description'),
-                'is_active' => data_get($data, 'status', 'active') === 'active',
-                'synced_at' => now(),
-            ]
-        );
+        $mapping = ProductProviderMapping::where('provider', 'paddle')
+             ->where('provider_id', (string) $productId)
+             ->first();
+
+        if ($mapping && !$mapping->product && !config('saas.billing.allow_import_deleted', false)) {
+            return;
+        }
+
+        $status = data_get($data, 'status', 'active');
+        if (!$mapping && $status !== 'active') {
+            return;
+        }
+
+        $productData = [
+            'name' => $name ?? 'Paddle Product',
+            'description' => data_get($data, 'description'),
+            'is_active' => $status === 'active',
+            'synced_at' => now(), // Still useful for knowing when we last saw it
+        ];
+
+        if ($mapping) {
+            $product = $mapping->product;
+            
+            // Ensure key consistency if we want (optional, but good practice)
+            // For now, just update metadata
+            $product->update($productData);
+        } else {
+             $key = $customData['plan_key'] ?? $customData['product_key'] ?? Str::slug("paddle-{$productId}");
+             // Ensure unique key globally
+             // We can use a simpler check here or just rely on manual fix if conflict? 
+             // Ideally we should use the same ensureUnique logic as Sync, but that is private in Command.
+             // For now, let's assume if key exists, we try to find it.
+             
+             // Check if key exists
+             $existingProduct = Product::where('key', $key)->first();
+             if ($existingProduct) {
+                 // Key taken. Is it THIS product (just missing mapping)?
+                 // Be careful linking automatically. safer to suffix.
+                 $key = $key . '-' . Str::random(4);
+             }
+             
+             $productData['key'] = $key;
+             $product = Product::create($productData);
+
+             ProductProviderMapping::create([
+                 'product_id' => $product->id,
+                 'provider' => 'paddle',
+                 'provider_id' => (string) $productId,
+             ]);
+        }
     }
 
     private function syncPrice(array $data, string $eventType): void
@@ -153,8 +208,10 @@ class PaddleAdapter implements BillingProviderAdapter
         }
 
         $product = Product::query()
-            ->where('provider', $this->provider())
-            ->where('provider_id', $productId)
+            ->whereHas('providerMappings', function ($q) use ($productId) {
+                $q->where('provider', 'paddle')
+                  ->where('provider_id', $productId);
+            })
             ->first();
 
         if (!$product) {
@@ -169,23 +226,43 @@ class PaddleAdapter implements BillingProviderAdapter
         $intervalCount = (int) ($billingCycle['frequency'] ?? 1);
         $key = $customData['price_key'] ?? ($interval === 'once' ? 'one_time' : ($intervalCount === 1 ? "{$interval}ly" : "every-{$intervalCount}-{$interval}"));
 
-        Price::updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => (string) $priceId,
-            ],
-            [
-                'product_id' => $product->id,
-                'key' => $key,
-                'label' => data_get($data, 'description', ucfirst($key)),
-                'interval' => $interval,
-                'interval_count' => $intervalCount,
-                'currency' => strtoupper($unitPrice['currency_code'] ?? 'USD'),
-                'amount' => (int) ($unitPrice['amount'] ?? 0),
-                'type' => 'flat',
-                'is_active' => data_get($data, 'status', 'active') === 'active',
-            ]
-        );
+        $mapping = PriceProviderMapping::where('provider', $this->provider())
+            ->where('provider_id', (string) $priceId)
+            ->first();
+
+        if ($mapping && !$mapping->price && !config('saas.billing.allow_import_deleted', false)) {
+            return;
+        }
+
+        $status = data_get($data, 'status', 'active');
+        if (!$mapping && $status !== 'active') {
+            return;
+        }
+
+        $priceData = [
+            'product_id' => $product->id,
+            'key' => $key,
+            'label' => data_get($data, 'description', ucfirst($key)),
+            'interval' => $interval,
+            'interval_count' => $intervalCount,
+            'currency' => strtoupper($unitPrice['currency_code'] ?? 'USD'),
+            'amount' => (int) ($unitPrice['amount'] ?? 0),
+            'type' => 'flat',
+            'is_active' => $status === 'active',
+        ];
+
+        if ($mapping) {
+            $mapping->price->update($priceData);
+            return;
+        }
+
+        $price = Price::create($priceData);
+
+        PriceProviderMapping::create([
+            'price_id' => $price->id,
+            'provider' => $this->provider(),
+            'provider_id' => (string) $priceId,
+        ]);
     }
 
     public function syncSeatQuantity(Team $team, int $quantity): void
@@ -239,18 +316,109 @@ class PaddleAdapter implements BillingProviderAdapter
         string $cancelUrl,
         ?Discount $discount = null
     ): string {
-        $apiKey = config('services.paddle.api_key');
+        $payload = $this->buildTransactionPayload(
+            $team,
+            $user,
+            $planKey,
+            $priceKey,
+            $quantity,
+            $successUrl,
+            $cancelUrl,
+            $discount,
+            []
+        );
 
-        if (!$apiKey) {
-            throw new RuntimeException('Paddle API key is not configured.');
+        $data = $this->createTransaction($payload);
+
+        $url = data_get($data, 'checkout.url')
+            ?? data_get($data, 'url')
+            ?? data_get($data, 'checkout_url');
+
+        if (!$url) {
+            throw new RuntimeException('Paddle checkout URL was not returned.');
         }
 
+        return $url;
+    }
+
+    public function createTransactionId(
+        ?Team $team,
+        ?User $user,
+        string $planKey,
+        string $priceKey,
+        int $quantity,
+        string $successUrl,
+        string $cancelUrl,
+        ?Discount $discount = null,
+        array $extraCustomData = [],
+        ?string $customerEmail = null
+    ): string {
+        $payload = $this->buildTransactionPayload(
+            $team,
+            $user,
+            $planKey,
+            $priceKey,
+            $quantity,
+            $successUrl,
+            $cancelUrl,
+            $discount,
+            $extraCustomData,
+            $customerEmail
+        );
+
+        $data = $this->createTransaction($payload);
+
+        $transactionId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
+
+        if (!$transactionId) {
+            throw new RuntimeException('Paddle transaction id was not returned.');
+        }
+
+        return (string) $transactionId;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildTransactionPayload(
+        ?Team $team,
+        ?User $user,
+        string $planKey,
+        string $priceKey,
+        int $quantity,
+        string $successUrl,
+        string $cancelUrl,
+        ?Discount $discount = null,
+        array $extraCustomData = [],
+        ?string $customerEmail = null
+    ): array {
         $planService = app(BillingPlanService::class);
         $priceId = $planService->providerPriceId($this->provider(), $planKey, $priceKey);
 
         if (!$priceId) {
             throw new RuntimeException("Paddle price id is missing for plan [{$planKey}] and price [{$priceKey}].");
         }
+
+        $customData = [
+            'team_id' => $team?->id,
+            'user_id' => $user?->id,
+            'plan_key' => $planKey,
+            'price_key' => $priceKey,
+        ];
+
+        if ($discount) {
+            $customData['discount_id'] = $discount->id;
+            $customData['discount_code'] = $discount->code;
+        }
+
+        if (!empty($extraCustomData)) {
+            $customData = array_merge($customData, $extraCustomData);
+        }
+
+        $customData = array_filter(
+            $customData,
+            static fn ($value) => $value !== null && $value !== ''
+        );
 
         $payload = [
             'items' => [
@@ -259,54 +427,100 @@ class PaddleAdapter implements BillingProviderAdapter
                     'quantity' => max($quantity, 1),
                 ],
             ],
-            'custom_data' => [
-                'team_id' => $team->id,
-                'user_id' => $user->id,
-                'plan_key' => $planKey,
-                'price_key' => $priceKey,
-            ],
+            'custom_data' => $customData,
             'checkout' => [
                 'success_url' => $successUrl,
                 'cancel_url' => $cancelUrl,
             ],
         ];
 
-        $customerId = BillingCustomer::query()
-            ->where('team_id', $team->id)
-            ->where('provider', $this->provider())
-            ->value('provider_id');
+        $customerId = null;
+        if ($team) {
+            $customerId = BillingCustomer::query()
+                ->where('team_id', $team->id)
+                ->where('provider', $this->provider())
+                ->value('provider_id');
+        }
 
         if ($customerId) {
             $payload['customer_id'] = $customerId;
         } else {
-            $payload['customer'] = [
-                'email' => $user->email,
-            ];
+            $email = $customerEmail ?: $user?->email;
+            if ($email) {
+                $payload['customer'] = [
+                    'email' => $email,
+                ];
+            }
         }
 
         if ($discount) {
             $payload['discount_id'] = $discount->provider_id;
-            $payload['custom_data']['discount_id'] = $discount->id;
-            $payload['custom_data']['discount_code'] = $discount->code;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function createTransaction(array $payload): array
+    {
+        $apiKey = config('services.paddle.api_key');
+
+        if (!$apiKey) {
+            throw new RuntimeException('Paddle API key is not configured.');
+        }
+
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+
+        $response = Http::withToken($apiKey)
+            ->acceptJson()
+            ->post("{$baseUrl}/transactions", $payload);
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Paddle transaction failed: '.$response->body());
+        }
+
+        return $response->json('data') ?? [];
+    }
+
+    public function createDiscount(Discount $discount): string
+    {
+        $apiKey = config('services.paddle.api_key');
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+
+        if (!$apiKey) {
+            throw new RuntimeException('Paddle API key is not configured.');
+        }
+
+        $payload = [
+            'description' => $discount->name ?? $discount->code,
+            'type' => $discount->type === 'percent' ? 'percentage' : 'flat',
+            'amount' => (string) $discount->amount,
+            'currency_code' => $discount->currency ?? 'USD',
+            'code' => $discount->code,
+        ];
+        
+        if ($discount->max_redemptions) {
+            $payload['usage_limit'] = $discount->max_redemptions;
+        }
+        
+        if ($discount->ends_at) {
+            $payload['expires_at'] = $discount->ends_at->toIso8601String();
         }
 
         $response = Http::withToken($apiKey)
             ->acceptJson()
-            ->post('https://api.paddle.com/transactions', $payload);
+            ->post("{$baseUrl}/discounts", $payload);
 
         if (!$response->successful()) {
-            throw new RuntimeException('Paddle checkout failed: '.$response->body());
+            throw new RuntimeException('Paddle discount creation failed: ' . $response->body());
         }
 
-        $url = data_get($response->json(), 'data.checkout.url')
-            ?? data_get($response->json(), 'data.url')
-            ?? data_get($response->json(), 'data.checkout_url');
-
-        if (!$url) {
-            throw new RuntimeException('Paddle checkout URL was not returned.');
-        }
-
-        return $url;
+        return $response->json('data.id');
     }
 
     private function syncSubscription(array $data, string $eventType): void
@@ -397,7 +611,22 @@ class PaddleAdapter implements BillingProviderAdapter
             ?? data_get($data, 'metadata.team_id')
             ?? data_get($data, 'team_id');
 
-        return $teamId ? (int) $teamId : null;
+        if (!$teamId) {
+            return null;
+        }
+
+        $teamId = (int) $teamId;
+
+        if (!Team::query()->whereKey($teamId)->exists()) {
+            Log::warning('Paddle webhook references missing team', [
+                'team_id' => $teamId,
+                'event_id' => data_get($data, 'id') ?? data_get($data, 'subscription_id') ?? data_get($data, 'transaction_id'),
+            ]);
+
+            return null;
+        }
+
+        return $teamId;
     }
 
     private function resolvePlanKey(array $data): ?string
@@ -452,24 +681,31 @@ class PaddleAdapter implements BillingProviderAdapter
 
     private function syncBillingCustomer(int $teamId, ?string $providerId, ?string $email): void
     {
-        $customer = BillingCustomer::query()
-            ->where('team_id', $teamId)
-            ->where('provider', $this->provider())
-            ->first();
+        $provider = $this->provider();
 
-        $payload = [
-            'team_id' => $teamId,
-            'provider' => $this->provider(),
-            'provider_id' => $providerId,
-            'email' => $email,
-        ];
-
-        if ($customer) {
-            $customer->update(array_filter($payload, fn ($value) => $value !== null));
+        if ($providerId) {
+            BillingCustomer::query()->updateOrCreate(
+                [
+                    'provider' => $provider,
+                    'provider_id' => $providerId,
+                ],
+                [
+                    'team_id' => $teamId,
+                    'email' => $email,
+                ]
+            );
             return;
         }
 
-        BillingCustomer::query()->create($payload);
+        BillingCustomer::query()->updateOrCreate(
+            [
+                'team_id' => $teamId,
+                'provider' => $provider,
+            ],
+            [
+                'email' => $email,
+            ]
+        );
     }
 
     private function syncInvoiceFromOrder(
@@ -557,6 +793,166 @@ class PaddleAdapter implements BillingProviderAdapter
         );
     }
 
+    private function resolveCheckoutIntentId(array $data): ?string
+    {
+        $intentId = data_get($data, 'custom_data.checkout_intent_id')
+            ?? data_get($data, 'metadata.checkout_intent_id');
+
+        return $intentId ? (string) $intentId : null;
+    }
+
+    private function recordCheckoutIntentEvent(string $intentId, string $type, array $data): void
+    {
+        $intent = CheckoutIntent::query()->find($intentId);
+
+        if (!$intent) {
+            return;
+        }
+
+        $payload = $intent->payload ?? [];
+        $entry = [
+            'type' => $type,
+            'data' => $data,
+        ];
+
+        $lowerType = strtolower($type);
+
+        if (str_contains($lowerType, 'subscription')) {
+            $payload['subscription'] = $entry;
+            $subscriptionId = data_get($data, 'id') ?? data_get($data, 'subscription_id');
+            if ($subscriptionId && !$intent->provider_subscription_id) {
+                $intent->provider_subscription_id = (string) $subscriptionId;
+            }
+        }
+
+        if (str_contains($lowerType, 'transaction') || str_contains($lowerType, 'payment')) {
+            $payload['transaction'] = $entry;
+            $transactionId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
+            if ($transactionId && !$intent->provider_transaction_id) {
+                $intent->provider_transaction_id = (string) $transactionId;
+            }
+        }
+
+        $email = data_get($data, 'customer_email')
+            ?? data_get($data, 'customer.email');
+
+        if ($email) {
+            $intent->email = $email;
+        }
+
+        $customerId = data_get($data, 'customer_id')
+            ?? data_get($data, 'customer.id');
+
+        if ($customerId) {
+            $intent->provider_customer_id = (string) $customerId;
+
+            if (!$intent->email) {
+                $existingEmail = BillingCustomer::query()
+                    ->where('provider', $this->provider())
+                    ->where('provider_id', (string) $customerId)
+                    ->value('email');
+
+                if ($existingEmail) {
+                    $intent->email = $existingEmail;
+                } else {
+                    $resolvedEmail = $this->fetchCustomerEmail((string) $customerId);
+                    if ($resolvedEmail) {
+                        $intent->email = $resolvedEmail;
+                    }
+                }
+            }
+        }
+
+        $status = strtolower((string) (data_get($data, 'status') ?? data_get($data, 'state') ?? ''));
+
+        if ($this->isPaidStatus($status) && $intent->status !== 'claimed') {
+            $intent->status = 'paid';
+        }
+
+        $intent->payload = $payload;
+        $intent->save();
+
+        if ($intent->status === 'paid' && $intent->email && !$intent->claim_sent_at) {
+            Notification::route('mail', $intent->email)
+                ->notify(new CheckoutClaimNotification($intent));
+
+            $intent->claim_sent_at = now();
+            $intent->save();
+        }
+    }
+
+    public function finalizeCheckoutIntent(CheckoutIntent $intent, Team $team, User $user): void
+    {
+        $payload = $intent->payload ?? [];
+
+        if (!empty($payload['subscription']['data'])) {
+            $data = $this->injectIntentCustomData($payload['subscription']['data'], $team, $user, $intent);
+            $type = (string) ($payload['subscription']['type'] ?? 'subscription');
+            $this->syncSubscription($data, $type);
+        }
+
+        if (!empty($payload['transaction']['data'])) {
+            $data = $this->injectIntentCustomData($payload['transaction']['data'], $team, $user, $intent);
+            $type = (string) ($payload['transaction']['type'] ?? 'transaction');
+            $this->syncOrder($data, $type);
+        }
+
+        if ($intent->provider_customer_id || $intent->email) {
+            $this->syncBillingCustomer($team->id, $intent->provider_customer_id, $intent->email);
+        }
+    }
+
+    private function injectIntentCustomData(array $data, Team $team, User $user, CheckoutIntent $intent): array
+    {
+        $customData = $data['custom_data'] ?? [];
+
+        $customData['team_id'] = $team->id;
+        $customData['user_id'] = $user->id;
+        $customData['plan_key'] = $intent->plan_key;
+        $customData['price_key'] = $intent->price_key;
+
+        if ($intent->discount_id) {
+            $customData['discount_id'] = $intent->discount_id;
+        }
+
+        if ($intent->discount_code) {
+            $customData['discount_code'] = $intent->discount_code;
+        }
+
+        $data['custom_data'] = $customData;
+
+        return $data;
+    }
+
+    private function isPaidStatus(string $status): bool
+    {
+        return in_array($status, ['paid', 'completed', 'complete', 'active', 'trialing'], true);
+    }
+
+    private function fetchCustomerEmail(string $customerId): ?string
+    {
+        $apiKey = config('services.paddle.api_key');
+
+        if (!$apiKey) {
+            return null;
+        }
+
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+
+        $response = Http::withToken($apiKey)
+            ->acceptJson()
+            ->get("{$baseUrl}/customers/{$customerId}");
+
+        if (!$response->successful()) {
+            return null;
+        }
+
+        $email = $response->json('data.email');
+
+        return $email ? (string) $email : null;
+    }
+
     private function timestampToDateTime(?string $timestamp): ?\Illuminate\Support\Carbon
     {
         if (!$timestamp) {
@@ -567,6 +963,65 @@ class PaddleAdapter implements BillingProviderAdapter
             return now()->setTimestamp((int) $timestamp);
         }
 
-        return \Carbon\Carbon::parse($timestamp);
+        return \Illuminate\Support\Carbon::parse($timestamp);
+    }
+    public function archiveProduct(string $providerId): void
+    {
+        $apiKey = config('services.paddle.api_key');
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+
+        if (!$apiKey) {
+            throw new RuntimeException('Paddle API key is missing.');
+        }
+
+        $url = "{$baseUrl}/products/{$providerId}";
+        \Illuminate\Support\Facades\Log::info("PaddleAdapter: Attempting Synchronous Archive on: {$url}");
+
+        $response = Http::withToken($apiKey)
+            ->acceptJson()
+            ->patch($url, [
+                'status' => 'archived',
+            ]);
+
+        if (!$response->successful()) {
+            $error = $response->json('error');
+            if (data_get($error, 'code') === 'entity_archived') {
+                \Illuminate\Support\Facades\Log::info("Paddle value already archived: Product {$providerId}");
+                return;
+            }
+
+            throw new RuntimeException('Paddle archive product failed: ' . $response->body());
+        }
+    }
+
+    public function archivePrice(string $providerId): void
+    {
+        $apiKey = config('services.paddle.api_key');
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
+
+        if (!$apiKey) {
+            throw new RuntimeException('Paddle API key is missing.');
+        }
+
+        $url = "{$baseUrl}/prices/{$providerId}";
+        \Illuminate\Support\Facades\Log::info("PaddleAdapter: Attempting Synchronous Archive on: {$url}");
+
+        $response = Http::withToken($apiKey)
+            ->acceptJson()
+            ->patch($url, [
+                'status' => 'archived',
+            ]);
+
+        if (!$response->successful()) {
+            $error = $response->json('error');
+            if (data_get($error, 'code') === 'entity_archived') {
+                \Illuminate\Support\Facades\Log::info("Paddle value already archived: Price {$providerId}");
+                return;
+            }
+
+            throw new RuntimeException('Paddle archive price failed: ' . $response->body());
+        }
     }
 }

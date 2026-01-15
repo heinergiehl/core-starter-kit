@@ -27,9 +27,6 @@ class Product extends Model
         'features',
         'entitlements',
         'is_active',
-        'provider',
-        'provider_id',
-        'synced_at',
     ];
 
     protected $casts = [
@@ -39,8 +36,12 @@ class Product extends Model
         'max_seats' => 'int',
         'features' => 'array',
         'entitlements' => 'array',
-        'synced_at' => 'datetime',
     ];
+
+    public function providerMappings(): HasMany
+    {
+        return $this->hasMany(ProductProviderMapping::class);
+    }
 
     public function prices(): HasMany
     {

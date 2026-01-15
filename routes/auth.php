@@ -29,6 +29,8 @@ Route::middleware('guest')->group(function () {
     // Login - Livewire handles the form
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
+    Route::post('login', [AuthenticatedSessionController::class, 'store'])
+        ->name('login.store');
 
     // Password Reset Request - Livewire handles the form
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])

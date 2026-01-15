@@ -7,7 +7,9 @@ use App\Domain\Organization\Enums\TeamRole;
 use App\Filament\App\Resources\TeamMemberResource\Pages\EditTeamMember;
 use App\Filament\App\Resources\TeamMemberResource\Pages\ListTeamMembers;
 use App\Jobs\SyncSeatQuantityJob;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -69,6 +71,17 @@ class TeamMemberResource extends Resource
                     ->after(function (TeamMembership $record): void {
                         SyncSeatQuantityJob::dispatch($record->team_id);
                     }),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make()
+                        ->after(function (): void {
+                            $teamId = auth()->user()?->current_team_id;
+                            if ($teamId) {
+                                SyncSeatQuantityJob::dispatch($teamId);
+                            }
+                        }),
+                ]),
             ]);
     }
 

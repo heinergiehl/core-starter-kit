@@ -48,10 +48,10 @@ class ManageBranding extends Page implements HasForms
                             ->disk('public')
                             ->directory('branding')
                             ->image()
-                            ->maxSize(1024)
+                            ->maxSize(4096)
                             ->formatStateUsing(fn (?string $state): ?string => $state ? Str::after($state, 'storage/') : null)
                             ->dehydrateStateUsing(fn (?string $state): ?string => $state ? "storage/{$state}" : null)
-                            ->helperText('Recommended: 512px square, PNG or SVG.'),
+                            ->helperText('Recommended: 512px square, PNG or JPG. Max 4MB.'),
                     ])
                     ->columns(2),
                 Section::make('Theme Template')
@@ -74,25 +74,8 @@ class ManageBranding extends Page implements HasForms
                             ->searchable()
                             ->columnSpanFull(),
                     ]),
-                Section::make('Colors')
-                    ->schema([
-                        Forms\Components\ColorPicker::make('color_primary')
-                            ->label('Primary')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_secondary')
-                            ->label('Secondary')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_accent')
-                            ->label('Accent')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_bg')
-                            ->label('Background')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_fg')
-                            ->label('Foreground')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                    ])
-                    ->columns(3),
+                // Colors section removed as per user request
+
                 Section::make('Invoice Defaults')
                     ->description('Default settings for invoices if not overridden by tenants.')
                     ->schema([
@@ -140,30 +123,5 @@ class ManageBranding extends Page implements HasForms
         ]);
     }
 
-    private function toHex(?string $value): ?string
-    {
-        if (!$value) {
-            return null;
-        }
 
-        $value = trim($value);
-
-        if (str_starts_with($value, '#')) {
-            return $value;
-        }
-
-        if (preg_match('/^\d+\s+\d+\s+\d+$/', $value)) {
-            [$r, $g, $b] = array_map('intval', preg_split('/\s+/', $value));
-
-            return sprintf('#%02x%02x%02x', $r, $g, $b);
-        }
-
-        if (preg_match('/^\d+,\s*\d+,\s*\d+$/', $value)) {
-            [$r, $g, $b] = array_map('intval', preg_split('/\s*,\s*/', $value));
-
-            return sprintf('#%02x%02x%02x', $r, $g, $b);
-        }
-
-        return null;
-    }
 }

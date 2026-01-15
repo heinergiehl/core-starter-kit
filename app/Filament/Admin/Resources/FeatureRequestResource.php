@@ -6,6 +6,8 @@ use App\Domain\Feedback\Models\FeatureRequest;
 use App\Filament\Admin\Resources\FeatureRequestResource\Pages\EditFeatureRequest;
 use App\Filament\Admin\Resources\FeatureRequestResource\Pages\ListFeatureRequests;
 use App\Filament\Admin\Resources\FeatureRequestResource\Pages\ViewFeatureRequest;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms;
@@ -85,6 +87,11 @@ class FeatureRequestResource extends Resource
             ->actions([
                 ViewAction::make(),
                 EditAction::make(),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 

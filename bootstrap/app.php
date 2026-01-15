@@ -30,10 +30,12 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'team' => \App\Http\Middleware\EnsureTeamIsSelected::class,
+            'subscribed' => \App\Http\Middleware\EnsureSubscription::class,
         ]);
 
         $middleware->web(append: [
             \App\Http\Middleware\SetLocale::class,
+            \App\Http\Middleware\ResolveTeamByDomain::class,
             \App\Http\Middleware\EnsureOnboardingComplete::class,
         ]);
     })

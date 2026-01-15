@@ -37,8 +37,9 @@
                     $statusColor = $statusColors[$subscription->status] ?? 'text-ink/60 bg-surface/10 border-ink/10';
                     // Pending cancellation = has canceled_at but still active status and ends_at in future
                     $isPendingCancellation = $subscription->canceled_at && $subscription->ends_at && $subscription->ends_at->isFuture();
-                    $canResume = $isPendingCancellation;
-                    $canCancel = !$isPendingCancellation && in_array($subscription->status, ['active', 'trialing']);
+                    $supportsLocalCancel = in_array($subscription->provider, ['stripe', 'lemonsqueezy'], true);
+                    $canResume = $supportsLocalCancel && $isPendingCancellation;
+                    $canCancel = $supportsLocalCancel && !$isPendingCancellation && in_array($subscription->status, ['active', 'trialing'], true);
                 @endphp
 
                 <!-- Current Plan Card -->
@@ -97,7 +98,7 @@
                     <!-- Actions -->
                     <div class="mt-8 flex flex-wrap items-center gap-4 pt-6 border-t border-ink/5">
                         <a href="{{ route('billing.portal') }}" class="btn-primary">
-                            {{ __('Manage Payment Method') }}
+                            {{ $subscription->provider === 'paddle' ? __('Manage Subscription') : __('Manage Payment Method') }}
                         </a>
 
                         @if ($canResume)
@@ -119,6 +120,12 @@
                             </button>
                         @endif
                     </div>
+
+                    @if (!$supportsLocalCancel && $subscription->provider === 'paddle')
+                        <div class="mt-6 rounded-xl border border-ink/10 bg-surface/40 px-4 py-3 text-sm text-ink/60">
+                            {{ __('Subscription changes are managed through the Paddle customer portal.') }}
+                        </div>
+                    @endif
 
                     @if ($isPendingCancellation && $subscription->ends_at)
                         <div class="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
@@ -148,6 +155,11 @@
                                     @if ($invoice->hosted_invoice_url)
                                         <a href="{{ $invoice->hosted_invoice_url }}" target="_blank" class="text-sm font-medium text-primary hover:text-primary/80">
                                             {{ __('View') }} &rarr;
+                                        </a>
+                                    @endif
+                                    @if ($invoice->id)
+                                        <a href="{{ route('invoices.download_invoice', $invoice) }}" class="ml-4 text-sm font-medium text-ink/60 hover:text-ink">
+                                            {{ __('Download PDF') }}
                                         </a>
                                     @endif
                                 </div>

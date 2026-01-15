@@ -42,10 +42,41 @@ trait ResolvesStripeData
             return null;
         }
 
-        return BillingCustomer::query()
+        // 1. Try local lookup
+        $teamId = BillingCustomer::query()
             ->where('provider', $this->provider())
             ->where('provider_id', $customerId)
             ->value('team_id');
+
+        if ($teamId) {
+            return $teamId;
+        }
+
+        // 2. Fallback: Fetch from Stripe to fix race conditions
+        // (If Invoice webhook arrives before Checkout webhook)
+        try {
+            $secret = config('services.stripe.secret');
+            if (!$secret) {
+                return null;
+            }
+
+            $stripe = new \Stripe\StripeClient($secret);
+            $customer = $stripe->customers->retrieve($customerId);
+
+            if ($customer && isset($customer->metadata['team_id'])) {
+                $teamId = (int) $customer->metadata['team_id'];
+                
+                // Self-heal: Create the mapping immediately
+                $this->syncBillingCustomer($teamId, $customerId, $customer->email);
+
+                return $teamId;
+            }
+        } catch (\Throwable $e) {
+            // Settle for null if API fails
+            report($e);
+        }
+
+        return null;
     }
 
     /**

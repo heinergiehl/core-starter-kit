@@ -123,14 +123,15 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         // Check for existing linkage by explicit ID
-        if (!empty($price->provider_id)) {
+        $mappedPriceId = $this->providerPriceId($price);
+        if ($mappedPriceId) {
             // Remove from unmapped if present to prevent other prices from claiming it
             // This is critical: if we don't remove it, a subsequent "unmapped" price might claim this "Default" variant
             // thinking it's free, leading to a unique constraint violation.
             if (isset($this->unmappedVariantsByProductId[$providerProductId])) {
                 $this->unmappedVariantsByProductId[$providerProductId] = array_values(array_filter(
                     $this->unmappedVariantsByProductId[$providerProductId],
-                    fn ($v) => (string) $v['id'] !== (string) $price->provider_id
+                    fn ($v) => (string) $v['id'] !== $mappedPriceId
                 ));
             }
 
@@ -142,7 +143,7 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
 
         // If not matched by key, check if we can claim an existing unmapped variant
         // (This typically happens for the "Default" variant created automatically by Lemon Squeezy)
-        if (!$matched && empty($price->provider_id)) {
+        if (!$matched && !$mappedPriceId) {
             $unmapped = $this->unmappedVariantsByProductId[$providerProductId] ?? [];
             if (!empty($unmapped)) {
                 // We'll take the first unmapped variant that matches our subscription/one-time type if possible
@@ -153,7 +154,7 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
             }
         }
 
-        $remoteId = $price->provider_id ?: ($matched['id'] ?? null);
+        $remoteId = $mappedPriceId ?: ($matched['id'] ?? null);
 
         if ($remoteId) {
             if ($updateExisting) {
@@ -304,5 +305,20 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
             ])
             ->withBody(json_encode($payload), 'application/vnd.api+json')
             ->patch("https://api.lemonsqueezy.com/v1{$endpoint}");
+    }
+
+    private function providerPriceId(Price $price): ?string
+    {
+        if ($price->relationLoaded('mappings')) {
+            $mapping = $price->mappings->firstWhere('provider', $this->provider());
+        } else {
+            $mapping = $price->mappings()->where('provider', $this->provider())->first();
+        }
+
+        if (!$mapping || !$mapping->provider_id) {
+            return null;
+        }
+
+        return (string) $mapping->provider_id;
     }
 }

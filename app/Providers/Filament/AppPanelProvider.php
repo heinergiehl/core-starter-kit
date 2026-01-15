@@ -14,6 +14,8 @@ use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
 use App\Http\Middleware\EnsureTeamIsSelected;
 use App\Http\Middleware\SetLocale;
+use App\Domain\Settings\Services\BrandingService;
+use Illuminate\Support\HtmlString;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -35,8 +37,34 @@ class AppPanelProvider extends PanelProvider
             ->colors([
                 'primary' => config('saas.branding.colors.primary') ?? Color::Teal,
             ])
-            ->brandName(config('saas.branding.app_name', config('app.name')))
-            ->brandLogo(config('saas.branding.logo_path') ? asset(config('saas.branding.logo_path')) : null)
+            ->brandName(fn (): string => app(BrandingService::class)->appNameFor(auth()->user()?->currentTeam))
+            ->brandLogoHeight('2rem')
+            ->brandLogo(function (): HtmlString {
+                $branding = app(BrandingService::class);
+                $team = auth()->user()?->currentTeam;
+                $name = $branding->appNameFor($team);
+                $logoPath = $branding->logoPathFor($team);
+                $logoUrl = $logoPath ? asset($logoPath) : null;
+
+                $nameEscaped = e($name);
+                $logoMarkup = '';
+
+                if ($logoUrl) {
+                    $logoMarkup = sprintf(
+                        '<img src="%s" alt="%s" style="width:28px;height:28px;border-radius:10px;object-fit:cover;display:block;" />',
+                        e($logoUrl),
+                        $nameEscaped
+                    );
+                }
+
+                $markup = sprintf(
+                    '<div style="display:flex;align-items:center;gap:8px;min-width:0;">%s<span style="font-size:0.875rem;font-weight:600;line-height:1;color:inherit;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">%s</span></div>',
+                    $logoMarkup,
+                    $nameEscaped
+                );
+
+                return new HtmlString($markup);
+            })
             ->discoverResources(in: app_path('Filament/App/Resources'), for: 'App\Filament\App\Resources')
             ->discoverPages(in: app_path('Filament/App/Pages'), for: 'App\Filament\App\Pages')
             ->pages([
@@ -62,6 +90,8 @@ class AppPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
                 EnsureTeamIsSelected::class,
+                \App\Http\Middleware\EnsureSubscription::class,
+                \App\Http\Middleware\ApplyTenantBranding::class,
             ]);
     }
 }

@@ -97,8 +97,9 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'skip', 'id' => null];
         }
 
-        if (!empty($price->provider_id)) {
-            return ['action' => 'skip', 'id' => (string) $price->provider_id];
+        $mappedPriceId = $this->providerPriceId($price);
+        if ($mappedPriceId) {
+            return ['action' => 'skip', 'id' => $mappedPriceId];
         }
 
         $lookupKey = $this->lookupKey($product->key, $priceKey);
@@ -196,5 +197,20 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         return (string) $value;
+    }
+
+    private function providerPriceId(Price $price): ?string
+    {
+        if ($price->relationLoaded('mappings')) {
+            $mapping = $price->mappings->firstWhere('provider', $this->provider());
+        } else {
+            $mapping = $price->mappings()->where('provider', $this->provider())->first();
+        }
+
+        if (!$mapping || !$mapping->provider_id) {
+            return null;
+        }
+
+        return (string) $mapping->provider_id;
     }
 }

@@ -3,7 +3,9 @@
 namespace App\Domain\Billing\Imports;
 
 use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Models\ProductProviderMapping;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -76,6 +78,28 @@ class CatalogImportService
 
                 if ($product) {
                     $productCache[$productPayload['key']] = $product;
+
+                    // Sync mapping if provider_id is present
+                    if ($apply && !empty($productPayload['provider_id'])) {
+                        $mapping = ProductProviderMapping::query()
+                            ->where('provider', $provider)
+                            ->where('provider_id', $productPayload['provider_id'])
+                            ->first();
+
+                        if ($mapping && !$mapping->product_id) {
+                            continue;
+                        }
+
+                        ProductProviderMapping::updateOrCreate(
+                            [
+                                'provider' => $provider,
+                                'provider_id' => $productPayload['provider_id'],
+                            ],
+                            [
+                                'product_id' => $product->id,
+                            ]
+                        );
+                    }
                 }
 
                 foreach ($pricePayloads as $pricePayload) {
@@ -84,10 +108,17 @@ class CatalogImportService
                         continue;
                     }
 
-                    $price = Price::query()
+                    $providerId = (string) $pricePayload['provider_id'];
+                    unset($pricePayload['provider'], $pricePayload['provider_id']);
+
+                    $mapping = PriceProviderMapping::query()
                         ->where('provider', $provider)
-                        ->where('provider_id', $pricePayload['provider_id'])
+                        ->where('provider_id', $providerId)
                         ->first();
+                    if ($mapping && !$mapping->price_id) {
+                        continue;
+                    }
+                    $price = $mapping?->price;
 
                     $pricePayload['product_id'] = $product?->id ?? $price?->product_id;
 
@@ -96,9 +127,24 @@ class CatalogImportService
 
                     if ($apply) {
                         if ($priceAction === 'create') {
-                            Price::create($pricePayload);
+                            $price = Price::create($pricePayload);
                         } elseif ($priceAction === 'update' && $price) {
                             $price->update($this->filterUpdatablePayload($pricePayload));
+                        }
+
+                        if ($price) {
+                            if ($mapping && !$mapping->price_id) {
+                                continue;
+                            }
+                            PriceProviderMapping::updateOrCreate(
+                                [
+                                    'provider' => $provider,
+                                    'provider_id' => $providerId,
+                                ],
+                                [
+                                    'price_id' => $price->id,
+                                ]
+                            );
                         }
                     }
                 }

@@ -91,7 +91,8 @@ class BillingPortalController
             return redirect()->away($portalUrl);
         }
 
-        throw new RuntimeException('Paddle customer portal URL is not available yet.');
+        return redirect()->route('billing.index')
+            ->with('info', __('Billing portal is being prepared. Please check back shortly or contact support.'));
     }
 
     private function lemonSqueezyPortal(Subscription $subscription): RedirectResponse

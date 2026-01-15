@@ -7,7 +7,9 @@ use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Models\ProductProviderMapping;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
@@ -103,19 +105,39 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $customData = $attributes['custom_data'] ?? [];
         $key = $customData['plan_key'] ?? $customData['product_key'] ?? Str::slug("ls-{$productId}");
 
-        Product::updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => (string) $productId,
-            ],
-            [
-                'key' => $key,
-                'name' => $name ?? 'LemonSqueezy Product',
-                'description' => $attributes['description'] ?? null,
-                'is_active' => ($attributes['status'] ?? 'published') === 'published',
-                'synced_at' => now(),
-            ]
-        );
+        $mapping = ProductProviderMapping::where('provider', $this->provider())
+            ->where('provider_id', (string) $productId)
+            ->first();
+
+        if ($mapping && !$mapping->product && !config('saas.billing.allow_import_deleted', false)) {
+            return;
+        }
+
+        $status = $attributes['status'] ?? 'published';
+        if (!$mapping && $status !== 'published') {
+            return;
+        }
+
+        $productData = [
+            'key' => $key,
+            'name' => $name ?? 'LemonSqueezy Product',
+            'description' => $attributes['description'] ?? null,
+            'is_active' => $status === 'published',
+            'synced_at' => now(),
+        ];
+
+        if ($mapping) {
+            $mapping->product->update($productData);
+            return;
+        }
+
+        $product = Product::create($productData);
+
+        ProductProviderMapping::create([
+            'product_id' => $product->id,
+            'provider' => $this->provider(),
+            'provider_id' => (string) $productId,
+        ]);
     }
 
     private function syncVariant(array $payload, array $attributes, string $eventType): void
@@ -128,8 +150,10 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         }
 
         $product = Product::query()
-            ->where('provider', $this->provider())
-            ->where('provider_id', $productId)
+            ->whereHas('providerMappings', function ($q) use ($productId) {
+                $q->where('provider', $this->provider())
+                  ->where('provider_id', $productId);
+            })
             ->first();
 
         if (!$product) {
@@ -142,23 +166,43 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $intervalCount = (int) ($attributes['interval_count'] ?? 1);
         $key = $customData['price_key'] ?? ($interval === 'once' ? 'one_time' : ($intervalCount === 1 ? "{$interval}ly" : "every-{$intervalCount}-{$interval}"));
 
-        Price::updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => (string) $variantId,
-            ],
-            [
-                'product_id' => $product->id,
-                'key' => $key,
-                'label' => $attributes['name'] ?? ucfirst($key),
-                'interval' => $interval,
-                'interval_count' => $intervalCount,
-                'currency' => 'USD',
-                'amount' => (int) ($attributes['price'] ?? 0),
-                'type' => 'flat',
-                'is_active' => ($attributes['status'] ?? 'published') === 'published',
-            ]
-        );
+        $mapping = PriceProviderMapping::where('provider', $this->provider())
+            ->where('provider_id', (string) $variantId)
+            ->first();
+
+        if ($mapping && !$mapping->price && !config('saas.billing.allow_import_deleted', false)) {
+            return;
+        }
+
+        $status = $attributes['status'] ?? 'published';
+        if (!$mapping && $status !== 'published') {
+            return;
+        }
+
+        $priceData = [
+            'product_id' => $product->id,
+            'key' => $key,
+            'label' => $attributes['name'] ?? ucfirst($key),
+            'interval' => $interval,
+            'interval_count' => $intervalCount,
+            'currency' => 'USD',
+            'amount' => (int) ($attributes['price'] ?? 0),
+            'type' => 'flat',
+            'is_active' => $status === 'published',
+        ];
+
+        if ($mapping) {
+            $mapping->price->update($priceData);
+            return;
+        }
+
+        $price = Price::create($priceData);
+
+        PriceProviderMapping::create([
+            'price_id' => $price->id,
+            'provider' => $this->provider(),
+            'provider_id' => (string) $variantId,
+        ]);
     }
 
     public function syncSeatQuantity(Team $team, int $quantity): void
@@ -199,6 +243,68 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         if (!$response->successful()) {
             throw new RuntimeException('Lemon Squeezy seat sync failed: ' . $response->body());
         }
+        if (!$response->successful()) {
+            throw new RuntimeException('Lemon Squeezy seat sync failed: ' . $response->body());
+        }
+    }
+
+    public function createDiscount(Discount $discount): string
+    {
+        $apiKey = config('services.lemonsqueezy.api_key');
+        $storeId = config('services.lemonsqueezy.store_id');
+
+        if (!$apiKey || !$storeId) {
+            throw new RuntimeException('Lemon Squeezy API key or store id is not configured.');
+        }
+        
+        $attributes = [
+            'name' => $discount->name,
+            'code' => $discount->code,
+            'amount' => (int) $discount->amount,
+            'amount_type' => $discount->type === 'percent' ? 'percent' : 'fixed',
+        ];
+        
+        if ($discount->max_redemptions) {
+            $attributes['is_limited_redemptions'] = true;
+            $attributes['max_redemptions'] = $discount->max_redemptions;
+        }
+        
+        if ($discount->starts_at) {
+            $attributes['starts_at'] = $discount->starts_at->toIso8601String();
+        }
+        
+        if ($discount->ends_at) {
+            $attributes['expires_at'] = $discount->ends_at->toIso8601String();
+        }
+
+        $payload = [
+            'data' => [
+                'type' => 'discounts',
+                'attributes' => $attributes,
+                'relationships' => [
+                    'store' => [
+                        'data' => [
+                            'type' => 'stores',
+                            'id' => (string) $storeId,
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        $response = Http::withToken($apiKey)
+            ->withHeaders([
+                'Accept' => 'application/vnd.api+json',
+                'Content-Type' => 'application/vnd.api+json',
+            ])
+            ->withBody(json_encode($payload), 'application/vnd.api+json')
+            ->post('https://api.lemonsqueezy.com/v1/discounts');
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Lemon Squeezy discount creation failed: ' . $response->body());
+        }
+
+        return $response->json('data.id');
     }
 
     public function createCheckout(
@@ -538,5 +644,48 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         }
 
         return \Illuminate\Support\Carbon::parse($timestamp);
+    }
+    public function archiveProduct(string $providerId): void
+    {
+        $apiKey = config('services.lemonsqueezy.api_key');
+
+        if (!$apiKey) {
+            throw new RuntimeException('Lemon Squeezy API key is missing.');
+        }
+
+        // Lemon Squeezy uses DELETE to remove/archive
+        $response = Http::withToken($apiKey)
+            ->accept('application/vnd.api+json')
+            ->delete("https://api.lemonsqueezy.com/v1/products/{$providerId}");
+
+        if ($response->status() === 404) {
+            return;
+        }
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Lemon Squeezy archive product failed: ' . $response->body());
+        }
+    }
+
+    public function archivePrice(string $providerId): void
+    {
+        $apiKey = config('services.lemonsqueezy.api_key');
+
+        if (!$apiKey) {
+            throw new RuntimeException('Lemon Squeezy API key is missing.');
+        }
+
+        // Lemon Squeezy "prices" are Variants
+        $response = Http::withToken($apiKey)
+            ->accept('application/vnd.api+json')
+            ->delete("https://api.lemonsqueezy.com/v1/variants/{$providerId}");
+
+        if ($response->status() === 404) {
+            return;
+        }
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Lemon Squeezy archive price failed: ' . $response->body());
+        }
     }
 }

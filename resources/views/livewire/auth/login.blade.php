@@ -9,7 +9,8 @@
         </div>
     @endif
 
-    <form wire:submit="login" x-on:submit="submitting = true">
+    <form method="POST" action="{{ route('login.store') }}" wire:submit="login" x-on:submit="submitting = true">
+        @csrf
         <fieldset :disabled="submitting" x-bind:class="{ 'opacity-60': submitting }">
             {{-- Email Address --}}
             <div>

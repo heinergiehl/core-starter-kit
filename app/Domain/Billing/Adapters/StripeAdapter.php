@@ -234,6 +234,54 @@ class StripeAdapter implements BillingProviderAdapter
     }
 
     /**
+     * {@inheritDoc}
+     */
+    public function createDiscount(Discount $discount): string
+    {
+        $secret = config('services.stripe.secret');
+
+        if (!$secret) {
+            throw BillingException::missingConfiguration('Stripe', 'secret');
+        }
+
+        $payload = [
+            'name' => $discount->name,
+            'duration' => 'once', // Defaulting to once for simplicity in this generic implementation
+        ];
+        
+        // Map Amount
+        if ($discount->type === 'percent') {
+            $payload['percent_off'] = $discount->amount;
+        } else {
+            $payload['amount_off'] = $discount->amount;
+            $payload['currency'] = $discount->currency ?? 'USD';
+        }
+        
+        // Map Limits & Dates
+        if ($discount->max_redemptions) {
+             $payload['max_redemptions'] = $discount->max_redemptions;
+        }
+        
+        if ($discount->ends_at) {
+             $payload['redeem_by'] = $discount->ends_at->timestamp;
+        }
+        
+        // Try to use the code as ID for better readability in Stripe Dashboard
+        $payload['id'] = $discount->code;
+
+        try {
+            $client = new StripeClient($secret);
+            $coupon = $client->coupons->create($payload);
+            return $coupon->id;
+        } catch (\Exception $e) {
+            // Note: If ID already exists, Stripe throws error. 
+            // In that case we might want to just return the ID or let it bubble.
+            // Letting it bubble so user knows why it failed (duplicate).
+            throw BillingException::failedAction('Stripe', 'create discount', $e->getMessage());
+        }
+    }
+
+    /**
      * Build checkout session parameters.
      *
      * @param CheckoutRequest $request The checkout request
@@ -342,5 +390,34 @@ class StripeAdapter implements BillingProviderAdapter
         $item = $stripeSubscription->items->data[0] ?? null;
 
         return $item?->id;
+    }
+    public function archiveProduct(string $providerId): void
+    {
+        $secret = config('services.stripe.secret');
+        if (!$secret) {
+            throw BillingException::missingConfiguration('Stripe', 'secret');
+        }
+        $client = new StripeClient($secret);
+        
+        try {
+            $client->products->update($providerId, ['active' => false]);
+        } catch (\Exception $e) {
+            throw BillingException::failedAction('Stripe', 'archive product', $e->getMessage());
+        }
+    }
+
+    public function archivePrice(string $providerId): void
+    {
+        $secret = config('services.stripe.secret');
+        if (!$secret) {
+            throw BillingException::missingConfiguration('Stripe', 'secret');
+        }
+        $client = new StripeClient($secret);
+
+        try {
+            $client->prices->update($providerId, ['active' => false]);
+        } catch (\Exception $e) {
+            throw BillingException::failedAction('Stripe', 'archive price', $e->getMessage());
+        }
     }
 }

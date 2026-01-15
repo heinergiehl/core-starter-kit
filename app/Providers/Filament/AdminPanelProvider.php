@@ -29,10 +29,13 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->authGuard('web')
             ->font(config('saas.branding.fonts.sans', 'Instrument Sans'))
             ->serifFont(config('saas.branding.fonts.display', 'Instrument Serif'))
             ->colors([
-                'primary' => Color::Slate,
+                'primary' => config('saas.branding.colors.primary')
+                    ? Color::hex(config('saas.branding.colors.primary'))
+                    : Color::Slate,
             ])
             ->brandName(config('saas.branding.app_name', config('app.name')))
             ->brandLogo(config('saas.branding.logo_path') ? asset(config('saas.branding.logo_path')) : null)

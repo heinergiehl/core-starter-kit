@@ -5,6 +5,7 @@ namespace App\Domain\Billing\Adapters\Stripe\Handlers;
 use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
 use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Models\ProductProviderMapping;
 use App\Domain\Billing\Models\WebhookEvent;
 use Illuminate\Support\Str;
 
@@ -61,21 +62,54 @@ class StripeProductHandler implements StripeWebhookHandler
         }
 
         $active = data_get($object, 'active', true);
-        $key = $this->generateProductKey($name, $productId);
+        
+        $mapping = ProductProviderMapping::where('provider', 'stripe')
+            ->where('provider_id', $productId)
+            ->first();
 
-        return Product::updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => $productId,
-            ],
-            [
-                'key' => $key,
-                'name' => $name,
-                'description' => data_get($object, 'description'),
-                'is_active' => $active,
-                'synced_at' => now(),
-            ]
-        );
+        if ($mapping && !$mapping->product) {
+            if (!config('saas.billing.allow_import_deleted', false)) {
+                return null;
+            }
+        }
+
+        if (!$mapping && !$active && !config('saas.billing.allow_import_deleted', false)) {
+            return null;
+        }
+
+        $productData = [
+            'name' => $name,
+            'description' => data_get($object, 'description'),
+            'is_active' => $active,
+            'synced_at' => now(),
+        ];
+
+        if ($mapping) {
+             if (!$mapping->product) {
+                 $key = $this->generateProductKey($name, $productId);
+                 $productData['key'] = $key;
+                 $product = Product::create($productData);
+                 $mapping->update(['product_id' => $product->id]);
+
+                 return $product;
+             }
+
+             $mapping->product->update($productData);
+             return $mapping->product;
+        }
+
+        $key = $this->generateProductKey($name, $productId);
+        $productData['key'] = $key;
+        
+        $product = Product::create($productData);
+        
+        ProductProviderMapping::create([
+            'product_id' => $product->id,
+            'provider' => 'stripe',
+            'provider_id' => $productId,
+        ]);
+        
+        return $product;
     }
 
     /**
@@ -93,8 +127,10 @@ class StripeProductHandler implements StripeWebhookHandler
         }
 
         Product::query()
-            ->where('provider', $this->provider())
-            ->where('provider_id', $productId)
+            ->whereHas('providerMappings', function ($q) use ($productId) {
+                $q->where('provider', 'stripe')
+                  ->where('provider_id', $productId);
+            })
             ->update([
                 'is_active' => false,
                 'synced_at' => now(),
@@ -110,10 +146,12 @@ class StripeProductHandler implements StripeWebhookHandler
         $suffix = Str::substr($productId, -6);
 
         // Check if a product with this provider_id already exists and has a key
-        $existing = Product::query()
-            ->where('provider', $this->provider())
+        // Check if a product with this provider_id already exists and has a key
+        $existingMapping = ProductProviderMapping::where('provider', 'stripe')
             ->where('provider_id', $productId)
             ->first();
+            
+        $existing = $existingMapping?->product;
 
         if ($existing && $existing->key) {
             return $existing->key;

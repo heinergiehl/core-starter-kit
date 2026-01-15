@@ -5,6 +5,9 @@ use App\Http\Controllers\Billing\BillingCheckoutController;
 use App\Http\Controllers\Billing\BillingPortalController;
 use App\Http\Controllers\Billing\BillingProcessingController;
 use App\Http\Controllers\Billing\BillingStatusController;
+use App\Http\Controllers\Billing\CheckoutStartController;
+use App\Http\Controllers\Billing\CheckoutClaimController;
+use App\Http\Controllers\Billing\PaddleCheckoutController;
 use App\Http\Controllers\Billing\PricingController;
 use App\Http\Controllers\Billing\WebhookController;
 use App\Http\Controllers\Blog\BlogController;
@@ -21,7 +24,10 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
+Route::get('/', function (\Illuminate\Http\Request $request) {
+    if ($request->has('_ptxn')) {
+        return redirect()->route('billing.processing', ['provider' => 'paddle'] + $request->all());
+    }
     return view('welcome');
 })->name('home');
 
@@ -44,13 +50,26 @@ Route::get('/og/blog/{slug}', [OgImageController::class, 'blog'])->name('og.blog
 
 Route::get('/invitations/{token}', [TeamInvitationController::class, 'show'])->name('invitations.accept');
 Route::post('/invitations/{token}', [TeamInvitationController::class, 'store'])->name('invitations.store');
+Route::post('/invitations/{token}/register', [TeamInvitationController::class, 'register'])->name('invitations.register');
 
 Route::post('/webhooks/{provider}', WebhookController::class)
     ->withoutMiddleware([VerifyCsrfToken::class])
     ->name('webhooks.handle');
 
+Route::post('/billing/checkout', [BillingCheckoutController::class, 'store'])
+    ->name('billing.checkout');
+Route::get('/billing/processing', BillingProcessingController::class)
+    ->name('billing.processing');
+Route::get('/checkout/start', CheckoutStartController::class)
+    ->name('checkout.start');
+Route::get('/checkout/claim/{intent}', CheckoutClaimController::class)
+    ->middleware('signed')
+    ->name('checkout.claim');
+Route::get('/paddle/checkout', PaddleCheckoutController::class)
+    ->name('paddle.checkout');
+
 Route::get('/dashboard', DashboardController::class)
-    ->middleware(['auth', 'verified'])
+    ->middleware(['auth', 'verified', 'subscribed'])
     ->name('dashboard');
 
 // Onboarding
@@ -74,15 +93,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/billing/resume', [\App\Http\Controllers\Billing\BillingController::class, 'resume'])
         ->middleware('team')
         ->name('billing.resume');
-    Route::post('/billing/checkout', [BillingCheckoutController::class, 'store'])
-        ->middleware('team')
-        ->name('billing.checkout');
-    Route::get('/billing/processing', BillingProcessingController::class)
-        ->middleware('team')
-        ->name('billing.processing');
     Route::get('/billing/portal/{provider?}', BillingPortalController::class)
         ->middleware('team')
         ->name('billing.portal');
+
+    Route::get('/app/orders/{order}/invoice', [\App\Http\Controllers\Billing\InvoiceController::class, 'download'])
+        ->middleware('team')
+        ->name('invoices.download');
+
+    Route::get('/app/invoices/{invoice}/pdf', [\App\Http\Controllers\Billing\InvoiceController::class, 'downloadInvoice'])
+        ->middleware('team')
+        ->name('invoices.download_invoice');
+});
+
+// Protected App Routes (Require Subscription)
+Route::middleware(['auth', 'verified', 'subscribed'])->group(function () {
+    // Add other protected routes here if needed in the future
 });
 
 Route::middleware('auth')->group(function () {

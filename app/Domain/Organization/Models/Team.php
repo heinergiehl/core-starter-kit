@@ -25,6 +25,8 @@ class Team extends Model
     protected $fillable = [
         'name',
         'slug',
+        'subdomain',
+        'domain',
         'owner_id',
     ];
 
@@ -49,6 +51,11 @@ class Team extends Model
     public function subscriptions(): HasMany
     {
         return $this->hasMany(Subscription::class);
+    }
+
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class)->latestOfMany();
     }
 
     public function brandSetting(): HasOne

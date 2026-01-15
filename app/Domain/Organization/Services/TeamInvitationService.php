@@ -91,7 +91,7 @@ class TeamInvitationService
             'accepted_at' => now(),
         ]);
 
-        if (!$user->current_team_id) {
+        if ($user->current_team_id !== $invitation->team_id) {
             $user->update([
                 'current_team_id' => $invitation->team_id,
             ]);

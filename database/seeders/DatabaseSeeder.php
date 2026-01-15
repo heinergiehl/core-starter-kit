@@ -202,27 +202,36 @@ MD,
                 continue;
             }
 
+            // Create Price (agnostic)
+            $price = Price::updateOrCreate(
+                [
+                    'product_id' => $product->id,
+                    'key' => $definition['key'],
+                ],
+                [
+                    'label' => $definition['label'],
+                    'interval' => $definition['interval'],
+                    'interval_count' => 1,
+                    'currency' => 'USD',
+                    'amount' => $definition['amount'],
+                    'type' => 'flat',
+                    'has_trial' => (bool) ($definition['has_trial'] ?? false),
+                    'trial_interval' => $definition['trial_interval'] ?? null,
+                    'trial_interval_count' => $definition['trial_interval_count'] ?? null,
+                    'is_active' => true,
+                ]
+            );
+
+            // Create Mappings
             foreach ($providers as $provider) {
                 $providerId = sprintf('%s_%s_%s', $provider, $definition['plan'], $definition['key']);
 
-                Price::updateOrCreate(
+                $price->mappings()->updateOrCreate(
                     [
-                        'product_id' => $product->id,
                         'provider' => $provider,
-                        'provider_id' => $providerId,
                     ],
                     [
-                        'key' => $definition['key'],
-                        'label' => $definition['label'],
-                        'interval' => $definition['interval'],
-                        'interval_count' => 1,
-                        'currency' => 'USD',
-                        'amount' => $definition['amount'],
-                        'type' => 'flat',
-                        'has_trial' => (bool) ($definition['has_trial'] ?? false),
-                        'trial_interval' => $definition['trial_interval'] ?? null,
-                        'trial_interval_count' => $definition['trial_interval_count'] ?? null,
-                        'is_active' => true,
+                        'provider_id' => $providerId,
                     ]
                 );
             }

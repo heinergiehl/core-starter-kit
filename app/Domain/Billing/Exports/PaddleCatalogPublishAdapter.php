@@ -11,6 +11,7 @@ use RuntimeException;
 class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
 {
     private ?string $apiKey = null;
+    private string $baseUrl = 'https://api.paddle.com';
     /** @var array<string, array> */
     private array $productsByKey = [];
     /** @var array<string, array> */
@@ -24,6 +25,8 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
     public function prepare(): void
     {
         $this->apiKey = config('services.paddle.api_key');
+        $environment = config('services.paddle.environment', 'production');
+        $this->baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
         if (!$this->apiKey) {
             throw new RuntimeException('Paddle API key is not configured.');
@@ -32,35 +35,21 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
         $this->productsByKey = [];
         $this->pricesByLookupKey = [];
 
-        // Fetch existing products
-        $productsResponse = Http::withToken($this->apiKey)
-            ->acceptJson()
-            ->get('https://api.paddle.com/products', ['per_page' => 200]);
-
-        if ($productsResponse->successful()) {
-            foreach ($productsResponse->json('data') ?? [] as $product) {
-                $productKey = data_get($product, 'custom_data.product_key')
-                    ?? data_get($product, 'custom_data.plan_key');
-                if ($productKey) {
-                    $this->productsByKey[$productKey] = $product;
-                }
+        foreach ($this->paddleList('products') as $product) {
+            $productKey = data_get($product, 'custom_data.product_key')
+                ?? data_get($product, 'custom_data.plan_key');
+            if ($productKey) {
+                $this->productsByKey[$productKey] = $product;
             }
         }
 
-        // Fetch existing prices
-        $pricesResponse = Http::withToken($this->apiKey)
-            ->acceptJson()
-            ->get('https://api.paddle.com/prices', ['per_page' => 200]);
+        foreach ($this->paddleList('prices') as $price) {
+            $productKey = data_get($price, 'custom_data.product_key')
+                ?? data_get($price, 'custom_data.plan_key');
+            $priceKey = data_get($price, 'custom_data.price_key');
 
-        if ($pricesResponse->successful()) {
-            foreach ($pricesResponse->json('data') ?? [] as $price) {
-                $productKey = data_get($price, 'custom_data.product_key')
-                    ?? data_get($price, 'custom_data.plan_key');
-                $priceKey = data_get($price, 'custom_data.price_key');
-
-                if ($productKey && $priceKey) {
-                    $this->pricesByLookupKey[$this->lookupKey($productKey, $priceKey)] = $price;
-                }
+            if ($productKey && $priceKey) {
+                $this->pricesByLookupKey[$this->lookupKey($productKey, $priceKey)] = $price;
             }
         }
     }
@@ -76,11 +65,13 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
                 if ($apply) {
                     $response = Http::withToken($this->apiKey)
                         ->acceptJson()
-                        ->patch("https://api.paddle.com/products/{$existing['id']}", $payload);
+                        ->patch("{$this->baseUrl}/products/{$existing['id']}", $payload);
 
-                    if ($response->successful()) {
-                        $this->productsByKey[$productKey] = $response->json('data');
+                    if (!$response->successful()) {
+                        throw new RuntimeException('Paddle product update failed: ' . $response->body());
                     }
+
+                    $this->productsByKey[$productKey] = $response->json('data');
                 }
 
                 return ['action' => 'update', 'id' => (string) $existing['id']];
@@ -95,7 +86,7 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
 
         $response = Http::withToken($this->apiKey)
             ->acceptJson()
-            ->post('https://api.paddle.com/products', $payload);
+            ->post("{$this->baseUrl}/products", $payload);
 
         if (!$response->successful()) {
             throw new RuntimeException('Paddle product creation failed: ' . $response->body());
@@ -125,7 +116,8 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         // 2. Determine the Remote ID: Either explicitly set on Price OR from the matched lookup
-        $remoteId = $price->provider_id ?: ($matched['id'] ?? null);
+        $mappedPriceId = $this->providerPriceId($price);
+        $remoteId = $mappedPriceId ?: ($matched['id'] ?? null);
 
         // 3. If we have a remote ID, we are either updating or linking/skipping
         if ($remoteId) {
@@ -150,7 +142,7 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
 
         $response = Http::withToken($this->apiKey)
             ->acceptJson()
-            ->post('https://api.paddle.com/prices', $payload);
+            ->post("{$this->baseUrl}/prices", $payload);
 
         if (!$response->successful()) {
             throw new RuntimeException('Paddle price creation failed: ' . $response->body());
@@ -211,5 +203,57 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
     private function isRecurringInterval(string $interval): bool
     {
         return in_array($interval, ['day', 'week', 'month', 'year'], true);
+    }
+
+    private function providerPriceId(Price $price): ?string
+    {
+        if ($price->relationLoaded('mappings')) {
+            $mapping = $price->mappings->firstWhere('provider', $this->provider());
+        } else {
+            $mapping = $price->mappings()->where('provider', $this->provider())->first();
+        }
+
+        if (!$mapping || !$mapping->provider_id) {
+            return null;
+        }
+
+        return (string) $mapping->provider_id;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function paddleList(string $resource, int $perPage = 200): array
+    {
+        $items = [];
+        $url = "{$this->baseUrl}/{$resource}";
+        $query = ['per_page' => $perPage];
+        $safetyCounter = 0;
+
+        while ($url && $safetyCounter < 100) {
+            $response = Http::withToken($this->apiKey)
+                ->acceptJson()
+                ->get($url, $query);
+
+            if (!$response->successful()) {
+                throw new RuntimeException("Paddle {$resource} list failed: " . $response->body());
+            }
+
+            $items = array_merge($items, $response->json('data') ?? []);
+
+            $next = $response->json('meta.pagination.next')
+                ?? $response->json('links.next')
+                ?? null;
+
+            if (!$next) {
+                break;
+            }
+
+            $url = $next;
+            $query = [];
+            $safetyCounter++;
+        }
+
+        return $items;
     }
 }

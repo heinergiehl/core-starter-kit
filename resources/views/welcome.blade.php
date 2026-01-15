@@ -1,16 +1,11 @@
 <!DOCTYPE html>
 @php
-    use App\Domain\Settings\Models\BrandSetting;
+    use App\Domain\Settings\Services\BrandingService;
     
-    $activeTemplate = config('template.active', 'default');
-    
-    // Try to get the authenticated user's current team's template
-    if (auth()->check() && auth()->user()->current_team_id) {
-        $brandSetting = BrandSetting::where('team_id', auth()->user()->current_team_id)->first();
-        if ($brandSetting && $brandSetting->template) {
-            $activeTemplate = $brandSetting->template;
-        }
-    }
+    $branding = app(BrandingService::class);
+    $activeTemplate = $branding->templateForGuest();
+
+    $themeStyle = '';
 @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
     <head>

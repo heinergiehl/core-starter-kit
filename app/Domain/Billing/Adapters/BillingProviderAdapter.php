@@ -33,4 +33,13 @@ interface BillingProviderAdapter
         string $cancelUrl,
         ?Discount $discount = null
     ): string;
+
+    /**
+     * Create a discount on the provider and return the provider's ID.
+     */
+    public function createDiscount(Discount $discount): string;
+
+    public function archiveProduct(string $providerId): void;
+
+    public function archivePrice(string $providerId): void;
 }

@@ -5,7 +5,9 @@ namespace App\Console\Commands;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripePriceHandler;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeProductHandler;
 use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Models\ProductProviderMapping;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -27,21 +29,30 @@ class SyncBillingProducts extends Command
 {
     protected $signature = 'billing:sync-products
         {--provider=all : Provider to sync from (stripe|paddle|lemonsqueezy|all)}
-        {--dry-run : Preview changes without saving to database}';
+        {--dry-run : Preview changes without saving to database}
+        {--force : Re-import products/prices even if deleted locally}';
 
     protected $description = 'Sync products and prices from billing providers (Stripe, Paddle, LemonSqueezy)';
 
     private bool $dryRun = false;
+    private bool $allowImportDeleted = false;
 
     public function handle(): int
     {
         $provider = $this->option('provider');
         $this->dryRun = (bool) $this->option('dry-run');
+        $this->allowImportDeleted = (bool) $this->option('force');
 
         if ($this->dryRun) {
             $this->warn('🔍 Dry run mode - no changes will be saved');
             $this->newLine();
         }
+        if ($this->allowImportDeleted) {
+            config(['saas.billing.allow_import_deleted' => true]);
+            $this->warn('Force import enabled - deleted mappings may be re-imported');
+            $this->newLine();
+        }
+
 
         $success = true;
 
@@ -153,6 +164,8 @@ class SyncBillingProducts extends Command
         $this->info('🏓 Syncing from Paddle...');
 
         $apiKey = config('services.paddle.api_key');
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
         if (!$apiKey) {
             $this->error('  ❌ Paddle API key not configured');
@@ -164,7 +177,7 @@ class SyncBillingProducts extends Command
             $this->info('  → Fetching products...');
             $productsResponse = Http::withToken($apiKey)
                 ->acceptJson()
-                ->get('https://api.paddle.com/products', [
+                ->get("{$baseUrl}/products", [
                     'per_page' => 200,
                     'status' => 'active,archived',
                 ]);
@@ -187,7 +200,7 @@ class SyncBillingProducts extends Command
             $this->info('  → Fetching prices...');
             $pricesResponse = Http::withToken($apiKey)
                 ->acceptJson()
-                ->get('https://api.paddle.com/prices', [
+                ->get("{$baseUrl}/prices", [
                     'per_page' => 200,
                     'status' => 'active,archived',
                 ]);
@@ -236,19 +249,55 @@ class SyncBillingProducts extends Command
         // Ensure global uniqueness of the key (unless it belongs to THIS record)
         $finalKey = $this->ensureUniqueKey(Product::class, $this->preserveOrGenerateKey(Product::class, 'paddle', $id, $key), 'paddle', (string) $id);
 
-        Product::updateOrCreate(
-            [
+        // Check for existing mapping
+        $mapping = ProductProviderMapping::where('provider', 'paddle')
+            ->where('provider_id', (string) $id)
+            ->first();
+
+        $productData = [
+            'name' => $name,
+            'description' => $product['description'] ?? null,
+            'is_active' => ($product['status'] ?? 'active') === 'active',
+            'synced_at' => now(),
+        ];
+
+        if ($mapping) {
+            if (!$mapping->product) {
+                if (!$this->allowImportDeleted) {
+                    return;
+                }
+
+                $productData['key'] = $finalKey;
+                $productModel = Product::create($productData);
+                $mapping->update(['product_id' => $productModel->id]);
+                return;
+            }
+
+            $productModel = $mapping->product;
+            // Update existing product
+            $finalKey = $this->ensureUniqueKey(Product::class, $productModel->key, 'paddle', (string) $id);
+             // Verify key hasn't changed or if it has, uniqueness
+             if($productModel->key !== $finalKey) {
+                 $productData['key'] = $finalKey;
+             }
+             
+            $productModel->update($productData);
+        } else {
+            // Create new product
+            $key = $customData['plan_key'] ?? $customData['product_key'] ?? $this->generateKey($name, $id);
+            $finalKey = $this->ensureUniqueKey(Product::class, $key, 'paddle', (string) $id);
+            
+            $productData['key'] = $finalKey;
+            
+            $productModel = Product::create($productData);
+            
+            // Create mapping
+            ProductProviderMapping::create([
+                'product_id' => $productModel->id,
                 'provider' => 'paddle',
                 'provider_id' => (string) $id,
-            ],
-            [
-                'key' => $finalKey,
-                'name' => $name,
-                'description' => $product['description'] ?? null,
-                'is_active' => ($product['status'] ?? 'active') === 'active',
-                'synced_at' => now(),
-            ]
-        );
+            ]);
+        }
     }
 
     /**
@@ -283,26 +332,65 @@ class SyncBillingProducts extends Command
         $intervalCount = (int) ($billingCycle['frequency'] ?? 1);
         $key = $customData['price_key'] ?? $this->resolvePaddlePriceKey($interval, $intervalCount);
 
-        Price::updateOrCreate(
-            [
+        $mapping = PriceProviderMapping::where('provider', 'paddle')
+             ->where('provider_id', (string) $id)
+             ->first();
+
+        $priceData = [
+            'product_id' => $product->id,
+            'label' => $price['description'] ?? ucfirst($key),
+            'interval' => $interval,
+            'interval_count' => $intervalCount,
+            'currency' => strtoupper($unitPrice['currency_code'] ?? 'USD'),
+            'amount' => (int) ($unitPrice['amount'] ?? 0),
+            'type' => in_array($interval, ['day', 'week', 'month', 'year']) ? 'recurring' : 'one_time',
+            'has_trial' => isset($price['trial_period']),
+            'trial_interval' => $price['trial_period']['interval'] ?? null,
+            'trial_interval_count' => $price['trial_period']['frequency'] ?? null,
+            'is_active' => ($price['status'] ?? 'active') === 'active',
+        ];
+
+        if ($mapping) {
+            if (!$mapping->price) {
+                if (!$this->allowImportDeleted) {
+                    return;
+                }
+
+                $finalKey = $this->ensureUniqueKey(Price::class, $key, 'paddle', (string) $id);
+                $priceData['key'] = $finalKey;
+                $priceModel = Price::create($priceData);
+                $mapping->update(['price_id' => $priceModel->id]);
+                return;
+            }
+
+            $priceModel = $mapping->price;
+            // Ensure consistency similar to products
+            $finalKey = $this->ensureUniqueKey(Price::class, $priceModel->key, 'paddle', (string) $id);
+            if($priceModel->key !== $finalKey) {
+                 $priceData['key'] = $finalKey;
+            }
+            $priceModel->update($priceData);
+        } else {
+            $key = $customData['price_key'] ?? $this->resolvePaddlePriceKey($interval, $intervalCount);
+            // $key is not unique yet, maybe we should suffix it?
+            // Actually preserveOrGenerateKey handled that logic.
+            // Let's implement robust key logic inline or keep helper.
+            $key = $this->generateKey($interval, $id); // Simplification: just use generic + suffix, or user key
+            if(!empty($customData['price_key'])) {
+                $key = $customData['price_key'];
+            }
+            
+            $finalKey = $this->ensureUniqueKey(Price::class, $key, 'paddle', (string) $id);
+            $priceData['key'] = $finalKey;
+            
+            $priceModel = Price::create($priceData);
+            
+            PriceProviderMapping::create([
+                'price_id' => $priceModel->id,
                 'provider' => 'paddle',
                 'provider_id' => (string) $id,
-            ],
-            [
-                'product_id' => $product->id,
-                'key' => $this->preserveOrGenerateKey(Price::class, 'paddle', $id, $key),
-                'label' => $price['description'] ?? ucfirst($key),
-                'interval' => $interval,
-                'interval_count' => $intervalCount,
-                'currency' => strtoupper($unitPrice['currency_code'] ?? 'USD'),
-                'amount' => (int) ($unitPrice['amount'] ?? 0),
-                'type' => in_array($interval, ['day', 'week', 'month', 'year']) ? 'recurring' : 'one_time',
-                'has_trial' => isset($price['trial_period']),
-                'trial_interval' => $price['trial_period']['interval'] ?? null,
-                'trial_interval_count' => $price['trial_period']['frequency'] ?? null,
-                'is_active' => ($price['status'] ?? 'active') === 'active',
-            ]
-        );
+            ]);
+        }
     }
 
     /**
@@ -315,8 +403,10 @@ class SyncBillingProducts extends Command
         }
 
         return Product::query()
-            ->where('provider', 'paddle')
-            ->where('provider_id', $productId)
+            ->whereHas('providerMappings', function ($query) use ($productId) {
+                $query->where('provider', 'paddle')
+                      ->where('provider_id', $productId);
+            })
             ->first();
     }
 
@@ -427,19 +517,47 @@ class SyncBillingProducts extends Command
 
         $key = $attributes['custom_data']['product_key'] ?? $this->generateKey($name, $id);
 
-        Product::updateOrCreate(
-            [
-                'provider' => 'lemonsqueezy',
-                'provider_id' => (string) $id,
-            ],
-            [
-                'key' => $this->preserveOrGenerateKey(Product::class, 'lemonsqueezy', $id, $key),
-                'name' => $name,
-                'description' => $attributes['description'] ?? null,
-                'is_active' => ($attributes['status'] ?? 'published') === 'published',
-                'synced_at' => now(),
-            ]
-        );
+        // Check for existing mapping
+        $mapping = ProductProviderMapping::where('provider', 'lemonsqueezy')
+            ->where('provider_id', (string) $id)
+            ->first();
+
+        $productData = [
+            'name' => $name,
+            'description' => $attributes['description'] ?? null,
+            'is_active' => ($attributes['status'] ?? 'published') === 'published',
+            // 'synced_at' => now(), // syncing date is global on mapping or ignored on product? Using now() is fine for product update tracking
+        ];
+
+        if ($mapping) {
+            if (!$mapping->product) {
+                if (!$this->allowImportDeleted) {
+                    return;
+                }
+
+                $key = $attributes['custom_data']['product_key'] ?? $this->generateKey($name, $id);
+                $finalKey = $this->ensureUniqueKey(Product::class, $key, 'lemonsqueezy', (string) $id);
+                $productData['key'] = $finalKey;
+                $productModel = Product::create($productData);
+                $mapping->update(['product_id' => $productModel->id]);
+                return;
+            }
+
+            $productModel = $mapping->product;
+            $productModel->update($productData);
+        } else {
+             $key = $attributes['custom_data']['product_key'] ?? $this->generateKey($name, $id);
+             $finalKey = $this->ensureUniqueKey(Product::class, $key, 'lemonsqueezy', (string) $id);
+             $productData['key'] = $finalKey;
+
+             $productModel = Product::create($productData);
+
+             ProductProviderMapping::create([
+                 'product_id' => $productModel->id,
+                 'provider' => 'lemonsqueezy',
+                 'provider_id' => (string) $id,
+             ]);
+        }
     }
 
     /**
@@ -473,26 +591,54 @@ class SyncBillingProducts extends Command
         $interval = $this->resolveLemonSqueezyInterval($attributes);
         $key = $attributes['custom_data']['price_key'] ?? $this->generateKey($interval, $id);
 
-        Price::updateOrCreate(
-            [
-                'provider' => 'lemonsqueezy',
-                'provider_id' => (string) $id,
-            ],
-            [
-                'product_id' => $product->id,
-                'key' => $this->preserveOrGenerateKey(Price::class, 'lemonsqueezy', $id, $key),
-                'label' => $name,
-                'interval' => $interval,
-                'interval_count' => $attributes['interval_count'] ?? 1,
-                'currency' => strtoupper($attributes['currency'] ?? 'USD'),
-                'amount' => $attributes['price'] ?? 0,
-                'type' => ($attributes['is_subscription'] ?? false) ? 'recurring' : 'one_time',
-                'has_trial' => ($attributes['trial_interval_count'] ?? 0) > 0,
-                'trial_interval' => $attributes['trial_interval'] ?? null,
-                'trial_interval_count' => $attributes['trial_interval_count'] ?? null,
-                'is_active' => ($attributes['status'] ?? 'published') === 'published',
-            ]
-        );
+        $mapping = PriceProviderMapping::where('provider', 'lemonsqueezy')
+             ->where('provider_id', (string) $id)
+             ->first();
+
+        $priceData = [
+            'product_id' => $product->id,
+            'label' => $name,
+            'interval' => $interval,
+            'interval_count' => $attributes['interval_count'] ?? 1,
+            'currency' => strtoupper($attributes['currency'] ?? 'USD'),
+            'amount' => $attributes['price'] ?? 0,
+            'type' => ($attributes['is_subscription'] ?? false) ? 'recurring' : 'one_time',
+            'has_trial' => ($attributes['trial_interval_count'] ?? 0) > 0,
+            'trial_interval' => $attributes['trial_interval'] ?? null,
+            'trial_interval_count' => $attributes['trial_interval_count'] ?? null,
+            'is_active' => ($attributes['status'] ?? 'published') === 'published',
+        ];
+
+        if ($mapping) {
+            if (!$mapping->price) {
+                if (!$this->allowImportDeleted) {
+                    return;
+                }
+
+                $key = $attributes['custom_data']['price_key'] ?? $this->generateKey($interval, $id);
+                $finalKey = $this->ensureUniqueKey(Price::class, $key, 'lemonsqueezy', (string) $id);
+                $priceData['key'] = $finalKey;
+                $priceModel = Price::create($priceData);
+                $mapping->update(['price_id' => $priceModel->id]);
+                return;
+            }
+
+            // Update
+             $priceModel = $mapping->price;
+             $priceModel->update($priceData);
+        } else {
+             $key = $attributes['custom_data']['price_key'] ?? $this->generateKey($interval, $id);
+             $finalKey = $this->ensureUniqueKey(Price::class, $key, 'lemonsqueezy', (string) $id);
+             $priceData['key'] = $finalKey;
+             
+             $priceModel = Price::create($priceData);
+             
+             PriceProviderMapping::create([
+                 'price_id' => $priceModel->id,
+                 'provider' => 'lemonsqueezy',
+                 'provider_id' => (string) $id,
+             ]);
+        }
     }
 
     /**
@@ -505,8 +651,10 @@ class SyncBillingProducts extends Command
         }
 
         return Product::query()
-            ->where('provider', 'lemonsqueezy')
-            ->where('provider_id', $productId)
+            ->whereHas('providerMappings', function ($query) use ($productId) {
+                 $query->where('provider', 'lemonsqueezy')
+                       ->where('provider_id', $productId);
+            })
             ->first();
     }
 
@@ -543,11 +691,23 @@ class SyncBillingProducts extends Command
 
         while ($model::query()
             ->where('key', $key)
-            ->where(function ($query) use ($provider, $providerId) {
-                // Determine if this is a "different" record
-                // If provider/provider_id match, it's the SAME record, so collision is fine (it's itself)
-                $query->where('provider', '!=', $provider)
-                      ->orWhere('provider_id', '!=', $providerId);
+            // If we found a product with this key...
+            ->when($providerId, function($q) use ($provider, $providerId, $model) {
+                // Check if it is NOT the one linked to this provider/id
+                // We want to find IF 'key' is taken by SOMEONE ELSE.
+                if ($model === Product::class) {
+                     $q->whereDoesntHave('providerMappings', function ($mq) use ($provider, $providerId) {
+                         $mq->where('provider', $provider)
+                            ->where('provider_id', $providerId);
+                     });
+                }
+                // Also check for PriceProviderMapping if model is Price
+                if ($model === Price::class) {
+                     $q->whereDoesntHave('mappings', function ($mq) use ($provider, $providerId) {
+                        $mq->where('provider', $provider)
+                           ->where('provider_id', $providerId);
+                    });
+                }
             })
             ->exists()) {
             $key = "{$original}-{$counter}";
@@ -562,6 +722,26 @@ class SyncBillingProducts extends Command
      */
     private function preserveOrGenerateKey(string $model, string $provider, string $providerId, string $default): string
     {
+        if ($model === Product::class) {
+             $mapping = ProductProviderMapping::where('provider', $provider)
+                ->where('provider_id', $providerId)
+                ->first();
+             return $mapping ? $mapping->product->key : $default;
+        }
+
+        if ($model === Price::class) {
+             $mapping = PriceProviderMapping::where('provider', $provider)
+                ->where('provider_id', $providerId)
+                ->first();
+             return $mapping ? $mapping->price->key : $default;
+        }
+
+        // Fallback for models not yet refactored (none?)
+        // The query below would fail for Price/Product now as columns dropped.
+        if ($model === Product::class || $model === Price::class) {
+            return $default;
+        }
+        
         $existing = $model::query()
             ->where('provider', $provider)
             ->where('provider_id', $providerId)

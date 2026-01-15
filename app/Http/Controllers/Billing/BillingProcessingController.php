@@ -23,6 +23,14 @@ class BillingProcessingController
             }
         }
 
+        // Paddle Transaction ID support
+        if (!$sessionId && $request->has('_ptxn')) {
+             $sessionId = $request->query('_ptxn');
+             if (!$provider) {
+                 $provider = 'paddle';
+             }
+        }
+
         return view('billing.processing', [
             'provider' => $provider,
             'session_id' => $sessionId !== '' ? $sessionId : null,

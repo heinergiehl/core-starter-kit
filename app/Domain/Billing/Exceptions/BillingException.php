@@ -120,4 +120,15 @@ class BillingException extends RuntimeException
             'BILLING_SEAT_SYNC_FAILED'
         );
     }
+
+    /**
+     * Create exception for provider action failure.
+     */
+    public static function failedAction(string $provider, string $action, string $reason): self
+    {
+        return new self(
+            "{$provider} failed to {$action}: {$reason}",
+            'BILLING_ACTION_FAILED'
+        );
+    }
 }

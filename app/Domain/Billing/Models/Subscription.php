@@ -43,4 +43,12 @@ class Subscription extends Model
     {
         return $this->belongsTo(Team::class);
     }
+
+    /**
+     * Determine if the subscription is currently on trial.
+     */
+    public function onTrial(): bool
+    {
+        return $this->trial_ends_at && $this->trial_ends_at->isFuture();
+    }
 }

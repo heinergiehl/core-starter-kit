@@ -6,8 +6,10 @@ use App\Domain\Billing\Models\Discount;
 use App\Filament\Admin\Resources\DiscountResource\Pages\CreateDiscount;
 use App\Filament\Admin\Resources\DiscountResource\Pages\EditDiscount;
 use App\Filament\Admin\Resources\DiscountResource\Pages\ListDiscounts;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms;
 use Filament\Resources\Resource;
@@ -79,7 +81,9 @@ class DiscountResource extends Resource
                 Forms\Components\TextInput::make('provider_id')
                     ->label('Provider ID')
                     ->maxLength(191)
-                    ->required(),
+                    ->disabled()
+                    ->dehydrated()
+                    ->visible(fn (string $operation): bool => $operation === 'edit'),
                 Forms\Components\TextInput::make('max_redemptions')
                     ->numeric()
                     ->minValue(1)
@@ -152,6 +156,11 @@ class DiscountResource extends Resource
             ->actions([
                 EditAction::make(),
                 DeleteAction::make(),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ]);
     }
 

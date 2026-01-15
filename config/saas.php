@@ -4,6 +4,7 @@ return [
     'billing' => [
         'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
         'default_provider' => env('BILLING_DEFAULT_PROVIDER', 'stripe'),
+        'default_plan' => env('BILLING_DEFAULT_PLAN', 'starter'),
         'sync_catalog_via_webhooks' => env('BILLING_SYNC_CATALOG_VIA_WEBHOOKS', true),
         'catalog' => env('BILLING_CATALOG', 'config'),
         'discounts' => [
@@ -150,6 +151,26 @@ return [
             'accent' => env('BRAND_COLOR_ACCENT', '239 68 68'),
             'bg' => env('BRAND_COLOR_BG', '250 250 249'),
             'fg' => env('BRAND_COLOR_FG', '15 23 42'),
+        ],
+    ],
+    'tenancy' => [
+        'base_domain' => env('TENANCY_BASE_DOMAIN'),
+        'reserved_subdomains' => [
+            'www',
+            'app',
+            'admin',
+            'api',
+            'billing',
+            'dashboard',
+            'login',
+            'logout',
+            'register',
+            'support',
+            'www1',
+            'mail',
+            'smtp',
+            'pop',
+            'imap',
         ],
     ],
     'auth' => [

@@ -35,6 +35,16 @@ class EntitlementService
                 return new Entitlements($this->withDerivedEntitlements($entitlements));
             }
 
+            $defaultPlanKey = config('saas.billing.default_plan');
+
+            if ($defaultPlanKey) {
+                $plan = $this->resolvePlan($defaultPlanKey, $planService);
+                $entitlements = $plan['entitlements'] ?? [];
+                $entitlements['seats_in_use'] = $seatsInUse;
+
+                return new Entitlements($this->withDerivedEntitlements($entitlements));
+            }
+
             return new Entitlements($this->withDerivedEntitlements([
                 'max_seats' => 0,
                 'seats_in_use' => $seatsInUse,

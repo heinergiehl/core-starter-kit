@@ -7,6 +7,7 @@ use App\Domain\Organization\Services\TeamProvisioner;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
@@ -14,9 +15,14 @@ use Laravel\Socialite\Facades\Socialite;
 
 class SocialAuthController extends Controller
 {
-    public function redirect(string $provider): RedirectResponse
+    public function redirect(Request $request, string $provider): RedirectResponse
     {
         $provider = $this->normalizeProvider($provider);
+
+        $intended = (string) $request->query('intended', '');
+        if ($intended !== '') {
+            $request->session()->put('url.intended', $intended);
+        }
 
         return Socialite::driver($provider)->stateless()->redirect();
     }

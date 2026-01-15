@@ -3,7 +3,9 @@
 namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Models\Price as CatalogPrice;
+use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product as CatalogProduct;
+use App\Domain\Billing\Models\ProductProviderMapping;
 use RuntimeException;
 
 class BillingPlanService
@@ -97,12 +99,14 @@ class BillingPlanService
     public function providerPriceId(string $provider, string $planKey, string $priceKey): ?string
     {
         if ($this->useDatabaseCatalog()) {
-            $providerId = CatalogPrice::query()
+            $providerId = PriceProviderMapping::query()
                 ->where('provider', strtolower($provider))
-                ->whereHas('product', fn ($query) => $query->where('key', $planKey))
-                ->where(function ($query) use ($priceKey): void {
-                    $query->where('key', $priceKey)
-                        ->orWhere('interval', $priceKey);
+                ->whereHas('price', function ($query) use ($planKey, $priceKey) {
+                    $query->whereHas('product', fn ($q) => $q->where('key', $planKey))
+                          ->where(function ($q) use ($priceKey) {
+                                $q->where('key', $priceKey)
+                                  ->orWhere('interval', $priceKey);
+                          });
                 })
                 ->value('provider_id');
 
@@ -121,12 +125,12 @@ class BillingPlanService
         $provider = strtolower($provider);
 
         if ($this->useDatabaseCatalog()) {
-            $planKey = CatalogPrice::query()
+            $planKey = PriceProviderMapping::query()
                 ->where('provider', $provider)
                 ->where('provider_id', $providerPriceId)
-                ->whereHas('product')
-                ->with('product')
+                ->with('price.product')
                 ->first()
+                ?->price
                 ?->product
                 ?->key;
 
@@ -185,8 +189,11 @@ class BillingPlanService
     private function plansFromDatabase(): array
     {
         return CatalogProduct::query()
-            ->with(['prices'])
+            ->with(['prices.mappings'])
             ->where('is_active', true)
+            ->whereHas('prices', function ($query) {
+                $query->where('is_active', true);
+            })
             ->orderBy('id')
             ->get()
             ->map(fn (CatalogProduct $plan): array => $this->normalizeDatabasePlan($plan))
@@ -200,7 +207,7 @@ class BillingPlanService
     private function planFromDatabase(string $planKey): ?array
     {
         $plan = CatalogProduct::query()
-            ->with(['prices'])
+            ->with(['prices.mappings'])
             ->where('key', $planKey)
             ->first();
 
@@ -262,9 +269,16 @@ class BillingPlanService
                 ];
             }
 
-            $prices[$priceKey]['providers'][$price->provider] = $price->provider_id;
-            $prices[$priceKey]['amounts'][$price->provider] = $price->amount;
-            $prices[$priceKey]['currencies'][$price->provider] = $price->currency;
+            $prices[$priceKey]['providers'] = $price->mappings->pluck('provider_id', 'provider')->toArray();
+            
+            // For now, assume amounts/currencies are same across providers or fetched from generic price
+            // If we wanted per-provider amounts, we'd need to store them in the mapping or fetch them.
+            // But 'Price' model is now the single source of truth for amount/currency.
+            foreach($prices[$priceKey]['providers'] as $prov => $id) {
+                 $prices[$priceKey]['amounts'][$prov] = $price->amount;
+                 $prices[$priceKey]['currencies'][$prov] = $price->currency;
+            }
+            // Add self if no mappings? No, mappings are strictly for provider IDs.
         }
 
         $entitlements = $plan->entitlements ?? [];

@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
@@ -24,9 +25,33 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
-        $request->authenticate();
+        Log::info('login_controller_attempt', [
+            'email' => $request->string('email'),
+            'ip' => $request->ip(),
+            'session_id' => $request->session()->getId(),
+            'session_driver' => config('session.driver'),
+            'session_domain' => config('session.domain'),
+        ]);
+
+        try {
+            $request->authenticate();
+        } catch (\Throwable $exception) {
+            Log::warning('login_controller_failed', [
+                'email' => $request->string('email'),
+                'ip' => $request->ip(),
+                'error' => $exception->getMessage(),
+                'session_id' => $request->session()->getId(),
+            ]);
+
+            throw $exception;
+        }
 
         $user = Auth::user();
+        Log::info('login_controller_authenticated', [
+            'user_id' => $user?->id,
+            'email' => $user?->email,
+            'session_id' => $request->session()->getId(),
+        ]);
 
         // Check if 2FA is enabled for this user
         if ($user->hasTwoFactorEnabled()) {
@@ -39,10 +64,23 @@ class AuthenticatedSessionController extends Controller
             // Don't invalidate session - we need the 2fa_user_id
             $request->session()->regenerateToken();
 
+            Log::info('login_controller_requires_2fa', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'session_id' => $request->session()->getId(),
+            ]);
+
             return redirect()->route('two-factor.challenge');
         }
 
         $request->session()->regenerate();
+
+        Log::info('login_controller_redirect', [
+            'user_id' => $user?->id,
+            'email' => $user?->email,
+            'session_id' => $request->session()->getId(),
+            'redirect' => route('dashboard', absolute: false),
+        ]);
 
         return redirect()->intended(route('dashboard', absolute: false));
     }

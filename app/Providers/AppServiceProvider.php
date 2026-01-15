@@ -26,6 +26,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Price::observe(PriceObserver::class);
+        \App\Domain\Billing\Models\Product::observe(\App\Observers\ProductObserver::class);
 
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('brand_settings')) {
@@ -40,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
                         'saas.branding.colors.accent' => $globalSetting->color_accent ?? config('saas.branding.colors.accent'),
                         'saas.branding.colors.bg' => $globalSetting->color_bg ?? config('saas.branding.colors.bg'),
                         'saas.branding.colors.fg' => $globalSetting->color_fg ?? config('saas.branding.colors.fg'),
+                        'template.active' => $globalSetting->template ?? config('template.active'),
                     ]);
                 }
             }
@@ -47,26 +49,18 @@ class AppServiceProvider extends ServiceProvider
             // Suppress errors during early boot (e.g. migrations)
         }
 
-        \Filament\Facades\Filament::serving(function () {
-            $primaryColor = config('saas.branding.colors.primary');
-            
-            if ($primaryColor) {
-               $panel = \Filament\Facades\Filament::getCurrentPanel();
-               if ($panel) {
-                   $colors = $panel->getColors();
-                   $colors['primary'] = $primaryColor;
-                   $panel->colors($colors);
-               }
-            }
-        });
+
 
         View::composer('*', function ($view): void {
             $user = request()->user();
-            $team = $user?->currentTeam;
+            // Only apply Tenant Branding if we are inside the App Panel (/app/*)
+            // Otherwise (Marketing, Auth, Admin), use Global Branding (null).
+            $isAppRoute = request()->is('app') || request()->is('app/*');
+            $team = ($isAppRoute && $user) ? $user->currentTeam : null;
+            
             $branding = app(BrandingService::class);
-            $entitlements = $team ? app(EntitlementService::class)->forTeam($team) : null;
+            $entitlements = ($user && $user->currentTeam) ? app(EntitlementService::class)->forTeam($user->currentTeam) : null;
 
-            $view->with('themeTokens', $branding->tokensFor($team));
             $view->with('appBrandName', $branding->appNameFor($team));
             $view->with('appLogoPath', $branding->logoPathFor($team));
             $view->with('entitlements', $entitlements);

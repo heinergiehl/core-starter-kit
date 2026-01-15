@@ -65,6 +65,12 @@
             </div>
         @endif
 
+        @if ($errors->has('email'))
+            <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/10 text-rose-600 px-4 py-3 text-sm backdrop-blur">
+                {{ $errors->first('email') }}
+            </div>
+        @endif
+
         @if ($errors->has('coupon'))
             <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/10 text-rose-600 px-4 py-3 text-sm backdrop-blur">
                 {{ $errors->first('coupon') }}
@@ -164,9 +170,16 @@
                                             </button>
                                         </form>
                                     @elseif (!$user)
-                                        <div class="grid grid-cols-2 gap-3">
-                                            <a href="{{ route('register') }}" class="flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-primary/90">{{ __('Sign Up') }}</a>
-                                            <a href="{{ route('login') }}" class="flex items-center justify-center rounded-xl border border-ink/10 bg-surface/50 px-4 py-2 text-xs font-bold text-ink/70 transition hover:bg-surface hover:text-ink">{{ __('Log In') }}</a>
+                                        <div class="space-y-3">
+                                            <a
+                                                href="{{ route('checkout.start', ['provider' => $provider, 'plan' => $plan['key'], 'price' => $price['key']]) }}"
+                                                class="flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-primary/90"
+                                            >
+                                                {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
+                                            </a>
+                                            <div class="text-center text-[11px] text-ink/50">
+                                                <a href="{{ route('login') }}" class="underline underline-offset-2 hover:text-ink">{{ __('Log In') }}</a>
+                                            </div>
                                         </div>
                                     @elseif (!$team)
                                         <a href="{{ route('teams.select') }}" class="block w-full text-center rounded-xl bg-secondary/10 px-4 py-2 text-xs font-bold text-secondary transition hover:bg-secondary/20">{{ __('Select Team') }}</a>
@@ -224,5 +237,3 @@
         </div>
     </section>
 @endsection
-
-

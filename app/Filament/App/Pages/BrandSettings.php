@@ -49,69 +49,31 @@ class BrandSettings extends Page implements HasForms
                             ->disk('public')
                             ->directory('branding')
                             ->image()
-                            ->maxSize(1024)
+                            ->maxSize(4096)
                             ->formatStateUsing(fn (?string $state): ?string => $state ? Str::after($state, 'storage/') : null)
                             ->dehydrateStateUsing(fn (?string $state): ?string => $state ? "storage/{$state}" : null)
-                            ->helperText('Recommended: 512px square, PNG or SVG.'),
+                            ->helperText('Recommended: 512px square, PNG or JPG. Max 4MB.'),
                     ])
                     ->columns(2),
-                Section::make('Theme Template')
-                    ->description('Choose a visual style for your customer-facing pages.')
-                    ->schema([
-                        Forms\Components\Select::make('template')
-                            ->label('Template')
-                            ->options([
-                                'default' => '🔮 Default — Modern glassmorphism',
-                                'void' => '⚡ Void — Cyberpunk neon',
-                                'aurora' => '🌌 Aurora — Northern lights',
-                                'prism' => '🔶 Prism — Brutalist geometry',
-                                'velvet' => '👑 Velvet — Luxury editorial',
-                                'frost' => '❄️ Frost — Arctic glass',
-                                'ember' => '🔥 Ember — Warm fire glow',
-                                'ocean' => '🌊 Ocean — Deep sea depths',
-                            ])
-                            ->default('default')
-                            ->native(false)
-                            ->searchable()
-                            ->columnSpanFull(),
-                    ]),
-                Section::make('Colors')
-                    ->schema([
-                        Forms\Components\ColorPicker::make('color_primary')
-                            ->label('Primary')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_secondary')
-                            ->label('Secondary')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_accent')
-                            ->label('Accent')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_bg')
-                            ->label('Background')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                        Forms\Components\ColorPicker::make('color_fg')
-                            ->label('Foreground')
-                            ->formatStateUsing(fn (?string $state): ?string => $this->toHex($state)),
-                    ])
-                    ->columns(3),
-                Section::make('Invoice settings')
+                Section::make('Company Details')
+                    ->description('These details will be used for billing and invoices we send to you.')
                     ->schema([
                         Forms\Components\TextInput::make('invoice_name')
-                            ->label('Company name')
+                            ->label('Legal Company Name')
                             ->maxLength(255),
                         Forms\Components\TextInput::make('invoice_email')
-                            ->label('Billing email')
+                            ->label('Billing Email')
                             ->email()
                             ->maxLength(255),
                         Forms\Components\Textarea::make('invoice_address')
-                            ->label('Billing address')
+                            ->label('Billing Address')
                             ->rows(3),
                         Forms\Components\TextInput::make('invoice_tax_id')
-                            ->label('Tax ID')
+                            ->label('Tax / VAT ID')
                             ->maxLength(120),
-                        Forms\Components\TextInput::make('invoice_footer')
-                            ->label('Invoice footer')
-                            ->maxLength(255),
+                        // Forms\Components\TextInput::make('invoice_footer')
+                        //    ->label('Invoice footer')
+                        //    ->maxLength(255),
                     ])
                     ->columns(2),
             ])

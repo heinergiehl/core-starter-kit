@@ -31,9 +31,40 @@
                         </div>
                     @endif
                 @else
-                    <a href="{{ route('login') }}" class="inline-flex items-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/30 transition hover:bg-primary/90">
-                        Sign in to accept
-                    </a>
+                    @if($userExists)
+                        <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                            Please sign in with {{ $invitation->email }} to accept this invite.
+                        </div>
+                        <a href="{{ route('login') }}" class="mt-4 inline-flex items-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-primary/30 transition hover:bg-primary/90">
+                            Sign in to accept
+                        </a>
+                    @else
+                        <form method="POST" action="{{ route('invitations.register', $invitation->token) }}" class="space-y-4">
+                            @csrf
+                            <div>
+                                <label for="name" class="text-sm text-ink/70">Full name</label>
+                                <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name')" required autofocus />
+                                <x-input-error :messages="$errors->get('name')" class="mt-2" />
+                            </div>
+                            <div>
+                                <label for="email" class="text-sm text-ink/70">Email</label>
+                                <x-text-input id="email" type="email" class="mt-1 block w-full" :value="$invitation->email" disabled />
+                            </div>
+                            <div>
+                                <label for="password" class="text-sm text-ink/70">Password</label>
+                                <x-text-input id="password" name="password" type="password" class="mt-1 block w-full" required />
+                                <x-input-error :messages="$errors->get('password')" class="mt-2" />
+                            </div>
+                            <div>
+                                <label for="password_confirmation" class="text-sm text-ink/70">Confirm password</label>
+                                <x-text-input id="password_confirmation" name="password_confirmation" type="password" class="mt-1 block w-full" required />
+                                <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
+                            </div>
+                            <x-primary-button>
+                                Set password & accept
+                            </x-primary-button>
+                        </form>
+                    @endif
                 @endauth
             </div>
         </div>

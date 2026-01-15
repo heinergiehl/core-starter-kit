@@ -5,7 +5,9 @@ namespace App\Filament\App\Resources;
 use App\Domain\Organization\Models\TeamInvitation;
 use App\Filament\App\Resources\TeamInvitationResource\Pages\CreateTeamInvitation;
 use App\Filament\App\Resources\TeamInvitationResource\Pages\ListTeamInvitations;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Forms;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -91,6 +93,11 @@ class TeamInvitationResource extends Resource
             ->actions([
                 DeleteAction::make()
                     ->visible(fn (TeamInvitation $record): bool => !$record->accepted_at),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                ]),
             ])
             ->filters([
                 Tables\Filters\Filter::make('pending')

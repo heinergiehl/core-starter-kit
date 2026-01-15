@@ -16,6 +16,8 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
     public function fetch(): array
     {
         $apiKey = config('services.paddle.api_key');
+        $environment = config('services.paddle.environment', 'production');
+        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
         if (!$apiKey) {
             throw new RuntimeException('Paddle API key is not configured.');
@@ -27,7 +29,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         // Fetch products
         $productsResponse = Http::withToken($apiKey)
             ->acceptJson()
-            ->get('https://api.paddle.com/products', ['per_page' => 200]);
+            ->get("{$baseUrl}/products", ['per_page' => 200]);
 
         if (!$productsResponse->successful()) {
             throw new RuntimeException('Failed to fetch Paddle products: ' . $productsResponse->body());
@@ -38,7 +40,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         // Fetch all prices
         $pricesResponse = Http::withToken($apiKey)
             ->acceptJson()
-            ->get('https://api.paddle.com/prices', ['per_page' => 200]);
+            ->get("{$baseUrl}/prices", ['per_page' => 200]);
 
         if (!$pricesResponse->successful()) {
             throw new RuntimeException('Failed to fetch Paddle prices: ' . $pricesResponse->body());
