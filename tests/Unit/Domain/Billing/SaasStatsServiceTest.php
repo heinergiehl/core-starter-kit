@@ -128,12 +128,12 @@ class SaasStatsServiceTest extends TestCase
     {
         $team = Team::factory()->create();
 
-        $plan = Plan::factory()->create([
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
             'key' => 'pro-monthly',
         ]);
 
         Price::factory()->create([
-            'plan_id' => $plan->id,
+            'product_id' => $product->id,
             'amount' => 4900, // $49.00
             'interval' => 'month',
             'interval_count' => 1,
@@ -156,12 +156,12 @@ class SaasStatsServiceTest extends TestCase
     {
         $team = Team::factory()->create();
 
-        $plan = Plan::factory()->create([
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
             'key' => 'starter',
         ]);
 
         Price::factory()->create([
-            'plan_id' => $plan->id,
+            'product_id' => $product->id,
             'amount' => 2900, // $29.00
             'interval' => 'month',
             'interval_count' => 1,

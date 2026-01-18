@@ -10,6 +10,38 @@ return [
         'discounts' => [
             'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
         ],
+        'provider_api' => [
+            'timeouts' => [
+                'stripe' => env('BILLING_STRIPE_TIMEOUT', env('BILLING_PROVIDER_TIMEOUT', 15)),
+                'paddle' => env('BILLING_PADDLE_TIMEOUT', env('BILLING_PROVIDER_TIMEOUT', 15)),
+                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_TIMEOUT', env('BILLING_PROVIDER_TIMEOUT', 15)),
+            ],
+            'connect_timeouts' => [
+                'stripe' => env('BILLING_STRIPE_CONNECT_TIMEOUT', env('BILLING_PROVIDER_CONNECT_TIMEOUT', 5)),
+                'paddle' => env('BILLING_PADDLE_CONNECT_TIMEOUT', env('BILLING_PROVIDER_CONNECT_TIMEOUT', 5)),
+                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_CONNECT_TIMEOUT', env('BILLING_PROVIDER_CONNECT_TIMEOUT', 5)),
+            ],
+            'retries' => [
+                'stripe' => env('BILLING_STRIPE_RETRIES', env('BILLING_PROVIDER_RETRIES', 2)),
+                'paddle' => env('BILLING_PADDLE_RETRIES', env('BILLING_PROVIDER_RETRIES', 2)),
+                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_RETRIES', env('BILLING_PROVIDER_RETRIES', 2)),
+            ],
+            'retry_delay_ms' => env('BILLING_PROVIDER_RETRY_DELAY_MS', 500),
+        ],
+        'outbox' => [
+            'deletion_rate_limits' => [
+                'default' => env('BILLING_PROVIDER_DELETE_RATE', 30),
+                'stripe' => env('BILLING_STRIPE_DELETE_RATE', env('BILLING_PROVIDER_DELETE_RATE', 30)),
+                'paddle' => env('BILLING_PADDLE_DELETE_RATE', env('BILLING_PROVIDER_DELETE_RATE', 30)),
+                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_DELETE_RATE', env('BILLING_PROVIDER_DELETE_RATE', 30)),
+            ],
+            'publish_rate_limits' => [
+                'default' => env('BILLING_PROVIDER_PUBLISH_RATE', 10),
+                'stripe' => env('BILLING_STRIPE_PUBLISH_RATE', env('BILLING_PROVIDER_PUBLISH_RATE', 10)),
+                'paddle' => env('BILLING_PADDLE_PUBLISH_RATE', env('BILLING_PROVIDER_PUBLISH_RATE', 10)),
+                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_PUBLISH_RATE', env('BILLING_PROVIDER_PUBLISH_RATE', 10)),
+            ],
+        ],
         'success_url' => env('BILLING_SUCCESS_URL'),
         'cancel_url' => env('BILLING_CANCEL_URL'),
         'plans' => [

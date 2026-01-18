@@ -4,6 +4,7 @@ namespace App\Filament\App\Pages;
 
 use App\Domain\Organization\Enums\TeamRole;
 use App\Domain\Organization\Models\Team;
+use App\Domain\Tenancy\Services\TenantProvisioner;
 use Filament\Forms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -43,6 +44,7 @@ class WorkspaceSettings extends Page implements HasForms
             : 'Used for subdomains. Set TENANCY_BASE_DOMAIN to enable subdomain routing.';
 
         $validator = app(TenantDomainValidator::class);
+        $team = $this->getRecord();
 
         return $schema
             ->schema([
@@ -54,30 +56,38 @@ class WorkspaceSettings extends Page implements HasForms
                             ->maxLength(63)
                             ->helperText($subdomainHelper)
                             ->rule(function (): callable {
-                                return function (string $attribute, mixed $value, callable $fail) use ($validator): void {
+                                return function (string $attribute, mixed $value, callable $fail) use ($validator, $team): void {
                                     $message = $validator->validateSubdomain(is_string($value) ? $value : null);
 
                                     if ($message) {
                                         $fail($message);
+                                        return;
+                                    }
+
+                                    if ($validator->subdomainInUse(is_string($value) ? $value : null, $team->tenant_id)) {
+                                        $fail('This subdomain is already in use.');
                                     }
                                 };
                             })
-                            ->unique(table: Team::class, column: 'subdomain', ignoreRecord: true)
                             ->dehydrateStateUsing(fn (?string $state): ?string => $validator->normalize($state)),
                         Forms\Components\TextInput::make('domain')
                             ->label('Custom domain')
                             ->maxLength(255)
                             ->helperText('Optional custom domain like app.acme.com.')
                             ->rule(function (): callable {
-                                return function (string $attribute, mixed $value, callable $fail) use ($validator): void {
+                                return function (string $attribute, mixed $value, callable $fail) use ($validator, $team): void {
                                     $message = $validator->validateDomain(is_string($value) ? $value : null);
 
                                     if ($message) {
                                         $fail($message);
+                                        return;
+                                    }
+
+                                    if ($validator->domainInUse(is_string($value) ? $value : null, $team->tenant_id)) {
+                                        $fail('This domain is already in use.');
                                     }
                                 };
                             })
-                            ->unique(table: Team::class, column: 'domain', ignoreRecord: true)
                             ->dehydrateStateUsing(fn (?string $state): ?string => $validator->normalize($state)),
                     ])
                     ->columns(2),
@@ -93,6 +103,7 @@ class WorkspaceSettings extends Page implements HasForms
         $team = $this->getRecord();
         $team->fill($data);
         $team->save();
+        app(TenantProvisioner::class)->syncDomainsForTeam($team);
 
         Notification::make()
             ->title('Workspace domains updated.')

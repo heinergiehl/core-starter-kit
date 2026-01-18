@@ -4,6 +4,11 @@ namespace App\Providers;
 
 use App\Domain\Billing\Services\EntitlementService;
 use App\Domain\Settings\Services\BrandingService;
+use App\Domain\Billing\Models\ProviderDeletionOutbox;
+use App\Jobs\ProcessProviderDeletionJob;
+use App\Jobs\PublishCatalogJob;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -48,6 +53,41 @@ class AppServiceProvider extends ServiceProvider
         } catch (\Exception $e) {
             // Suppress errors during early boot (e.g. migrations)
         }
+
+        RateLimiter::for('provider-deletions', function ($job) {
+            $provider = null;
+
+            if ($job instanceof ProcessProviderDeletionJob) {
+                $outbox = ProviderDeletionOutbox::query()->find($job->outboxId);
+                $provider = $outbox?->provider;
+            }
+
+            $provider = $provider ? strtolower($provider) : 'default';
+            $limit = (int) config("saas.billing.outbox.deletion_rate_limits.{$provider}", 0);
+
+            if ($limit <= 0) {
+                $limit = (int) config('saas.billing.outbox.deletion_rate_limits.default', 30);
+            }
+
+            return $limit > 0
+                ? Limit::perMinute($limit)->by("provider-deletions:{$provider}")
+                : Limit::none();
+        });
+
+        RateLimiter::for('catalog-publish', function ($job) {
+            $provider = $job instanceof PublishCatalogJob
+                ? strtolower((string) $job->provider)
+                : 'default';
+            $limit = (int) config("saas.billing.outbox.publish_rate_limits.{$provider}", 0);
+
+            if ($limit <= 0) {
+                $limit = (int) config('saas.billing.outbox.publish_rate_limits.default', 10);
+            }
+
+            return $limit > 0
+                ? Limit::perMinute($limit)->by("catalog-publish:{$provider}")
+                : Limit::none();
+        });
 
 
 

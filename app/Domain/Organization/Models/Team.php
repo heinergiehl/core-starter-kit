@@ -5,6 +5,7 @@ namespace App\Domain\Organization\Models;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Organization\Enums\TeamRole;
 use App\Domain\Settings\Models\BrandSetting;
+use App\Domain\Tenancy\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -28,11 +29,17 @@ class Team extends Model
         'subdomain',
         'domain',
         'owner_id',
+        'tenant_id',
     ];
 
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function tenant(): BelongsTo
+    {
+        return $this->belongsTo(Tenant::class);
     }
 
     public function members(): BelongsToMany
@@ -68,10 +75,20 @@ class Team extends Model
      */
     public function activeSubscription(): ?Subscription
     {
-        return $this->subscriptions()
-            ->whereIn('status', ['active', 'trialing'])
+        $subscription = $this->subscriptions()
+            ->whereIn('status', ['active', 'trialing', 'past_due'])
             ->latest('id')
             ->first();
+
+        if ($subscription && $subscription->status === 'past_due') {
+            $graceDays = config('saas.billing.grace_period_days', 5);
+            // If updated_at (approx time of status change) + grace days is in the past, it's expired
+            if ($subscription->updated_at->copy()->addDays($graceDays)->isPast()) {
+                return null;
+            }
+        }
+
+        return $subscription;
     }
 
     /**
@@ -79,9 +96,7 @@ class Team extends Model
      */
     public function hasActiveSubscription(): bool
     {
-        return $this->subscriptions()
-            ->whereIn('status', ['active', 'trialing'])
-            ->exists();
+        return $this->activeSubscription() !== null;
     }
 
     public function isOwner(User $user): bool

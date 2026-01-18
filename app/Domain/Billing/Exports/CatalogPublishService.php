@@ -70,10 +70,12 @@ class CatalogPublishService
                         ?->provider_id;
 
                 if ($apply && $providerProductId) {
-                    ProductProviderMapping::updateOrCreate(
-                        ['product_id' => $product->id, 'provider' => $provider],
-                        ['provider_id' => $providerProductId]
-                    );
+                    DB::transaction(function () use ($product, $provider, $providerProductId) {
+                        ProductProviderMapping::updateOrCreate(
+                            ['product_id' => $product->id, 'provider' => $provider],
+                            ['provider_id' => $providerProductId]
+                        );
+                    });
                 }
 
                 // For preview mode: still show prices that would be created
@@ -103,20 +105,19 @@ class CatalogPublishService
                     }
 
                     if ($apply && !empty($priceResult['id'])) {
-                        PriceProviderMapping::updateOrCreate(
-                            ['price_id' => $price->id, 'provider' => $provider],
-                            ['provider_id' => $priceResult['id']]
-                        );
+                        DB::transaction(function () use ($price, $provider, $priceResult) {
+                            PriceProviderMapping::updateOrCreate(
+                                ['price_id' => $price->id, 'provider' => $provider],
+                                ['provider_id' => $priceResult['id']]
+                            );
+                        });
                     }
                 }
             }
         };
 
-        if ($apply) {
-            DB::transaction($runner);
-        } else {
-            $runner();
-        }
+        // REMOVED: DB::transaction wrapper to avoid holding locks during API calls
+        $runner();
 
         return [
             'summary' => $summary,

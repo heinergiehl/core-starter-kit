@@ -11,6 +11,21 @@ class Subscription extends Model
 {
     use HasFactory;
 
+    protected static function booted()
+    {
+        static::saved(function (Subscription $subscription) {
+            if ($subscription->team_id) {
+                \Illuminate\Support\Facades\Cache::forget("entitlements:team:{$subscription->team_id}");
+            }
+        });
+
+        static::deleted(function (Subscription $subscription) {
+            if ($subscription->team_id) {
+                \Illuminate\Support\Facades\Cache::forget("entitlements:team:{$subscription->team_id}");
+            }
+        });
+    }
+
     protected static function newFactory()
     {
         return \Database\Factories\Domain\Billing\SubscriptionFactory::new();

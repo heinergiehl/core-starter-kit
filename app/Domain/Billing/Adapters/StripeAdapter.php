@@ -135,13 +135,7 @@ class StripeAdapter implements BillingProviderAdapter
             return;
         }
 
-        $secret = config('services.stripe.secret');
-
-        if (!$secret) {
-            throw BillingException::missingConfiguration('Stripe', 'secret');
-        }
-
-        $client = new StripeClient($secret);
+        $client = $this->stripeClient();
         $itemId = $this->resolveSubscriptionItemId($subscription, $client);
 
         if (!$itemId) {
@@ -198,12 +192,6 @@ class StripeAdapter implements BillingProviderAdapter
      */
     public function createCheckoutSession(CheckoutRequest $request): string
     {
-        $secret = config('services.stripe.secret');
-
-        if (!$secret) {
-            throw BillingException::missingConfiguration('Stripe', 'secret');
-        }
-
         $planService = app(BillingPlanService::class);
         $plan = $planService->plan($request->planKey);
         $priceId = $planService->providerPriceId($this->provider(), $request->planKey, $request->priceKey);
@@ -218,7 +206,7 @@ class StripeAdapter implements BillingProviderAdapter
         $params = $this->buildCheckoutParams($request, $priceId, $mode, $metadata);
 
         try {
-            $client = new StripeClient($secret);
+            $client = $this->stripeClient();
             $session = $client->checkout->sessions->create($params);
 
             if (!$session->url) {
@@ -238,12 +226,6 @@ class StripeAdapter implements BillingProviderAdapter
      */
     public function createDiscount(Discount $discount): string
     {
-        $secret = config('services.stripe.secret');
-
-        if (!$secret) {
-            throw BillingException::missingConfiguration('Stripe', 'secret');
-        }
-
         $payload = [
             'name' => $discount->name,
             'duration' => 'once', // Defaulting to once for simplicity in this generic implementation
@@ -270,7 +252,7 @@ class StripeAdapter implements BillingProviderAdapter
         $payload['id'] = $discount->code;
 
         try {
-            $client = new StripeClient($secret);
+            $client = $this->stripeClient();
             $coupon = $client->coupons->create($payload);
             return $coupon->id;
         } catch (\Exception $e) {
@@ -391,13 +373,25 @@ class StripeAdapter implements BillingProviderAdapter
 
         return $item?->id;
     }
-    public function archiveProduct(string $providerId): void
+
+    private function stripeClient(): StripeClient
     {
         $secret = config('services.stripe.secret');
+
         if (!$secret) {
             throw BillingException::missingConfiguration('Stripe', 'secret');
         }
-        $client = new StripeClient($secret);
+
+        return new StripeClient([
+            'api_key' => $secret,
+            'timeout' => (int) config('saas.billing.provider_api.timeouts.stripe', 15),
+            'connect_timeout' => (int) config('saas.billing.provider_api.connect_timeouts.stripe', 5),
+            'max_network_retries' => (int) config('saas.billing.provider_api.retries.stripe', 2),
+        ]);
+    }
+    public function archiveProduct(string $providerId): void
+    {
+        $client = $this->stripeClient();
         
         try {
             $client->products->update($providerId, ['active' => false]);
@@ -408,11 +402,7 @@ class StripeAdapter implements BillingProviderAdapter
 
     public function archivePrice(string $providerId): void
     {
-        $secret = config('services.stripe.secret');
-        if (!$secret) {
-            throw BillingException::missingConfiguration('Stripe', 'secret');
-        }
-        $client = new StripeClient($secret);
+        $client = $this->stripeClient();
 
         try {
             $client->prices->update($providerId, ['active' => false]);

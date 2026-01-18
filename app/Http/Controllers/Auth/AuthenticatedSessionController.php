@@ -75,14 +75,20 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
+        // Determine redirect destination based on user role
+        $redirectTo = $user->is_admin 
+            ? route('filament.admin.pages.dashboard', absolute: false)
+            : route('dashboard', absolute: false);
+
         Log::info('login_controller_redirect', [
             'user_id' => $user?->id,
             'email' => $user?->email,
+            'is_admin' => $user?->is_admin,
             'session_id' => $request->session()->getId(),
-            'redirect' => route('dashboard', absolute: false),
+            'redirect' => $redirectTo,
         ]);
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        return redirect()->intended($redirectTo);
     }
 
     /**

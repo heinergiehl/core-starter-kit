@@ -91,6 +91,35 @@ class BillingPortalController
             return redirect()->away($portalUrl);
         }
 
+        // Try to fetch from Paddle API
+        $apiKey = config('services.paddle.api_key');
+        $baseUrl = config('services.paddle.environment') === 'sandbox' 
+            ? 'https://sandbox-api.paddle.com' 
+            : 'https://api.paddle.com';
+
+        if ($apiKey && $subscription->provider_id) {
+            try {
+                $response = Http::withToken($apiKey)
+                    ->get("{$baseUrl}/subscriptions/{$subscription->provider_id}");
+
+                if ($response->successful()) {
+                    $urls = data_get($response->json(), 'data.management_urls') ?? [];
+                    $portalUrl = $urls['update_payment_method'] ?? $urls['cancel'] ?? null;
+
+                    if ($portalUrl) {
+                        // Update metadata
+                        $metadata = $subscription->metadata ?? [];
+                        $metadata['management_urls'] = $urls;
+                        $subscription->update(['metadata' => $metadata]);
+
+                        return redirect()->away($portalUrl);
+                    }
+                }
+            } catch (\Throwable) {
+                // Fall through
+            }
+        }
+
         return redirect()->route('billing.index')
             ->with('info', __('Billing portal is being prepared. Please check back shortly or contact support.'));
     }

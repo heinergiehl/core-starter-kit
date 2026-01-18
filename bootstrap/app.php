@@ -12,6 +12,11 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withSchedule(function (Schedule $schedule) {
+        // Clean up old checkout sessions daily
+        $schedule->command('billing:clean-sessions')
+            ->daily()
+            ->at('02:00');
+
         // Daily sync for LemonSqueezy (no webhooks for products)
         $schedule->command('billing:sync-products --provider=lemonsqueezy')
             ->daily()
@@ -34,8 +39,9 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
-            \App\Http\Middleware\SetLocale::class,
+            \Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class,
             \App\Http\Middleware\ResolveTeamByDomain::class,
+            \App\Http\Middleware\SetLocale::class,
             \App\Http\Middleware\EnsureOnboardingComplete::class,
         ]);
     })

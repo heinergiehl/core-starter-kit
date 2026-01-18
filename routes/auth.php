@@ -26,23 +26,13 @@ Route::middleware('guest')->group(function () {
     Route::get('register', [RegisteredUserController::class, 'create'])
         ->name('register');
 
+    Route::post('register', [RegisteredUserController::class, 'store']);
+
     // Login - Livewire handles the form
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
     Route::post('login', [AuthenticatedSessionController::class, 'store'])
         ->name('login.store');
-
-    // Password Reset Request - Livewire handles the form
-    Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
-        ->name('password.request');
-
-    // Password Reset Form - Livewire handles the form
-    Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
-        ->name('password.reset');
-
-    // Two-Factor Challenge - Livewire handles the form
-    Route::get('two-factor-challenge', fn() => view('auth.two-factor-challenge'))
-        ->name('two-factor.challenge');
 
     // Social Authentication
     Route::get('auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
@@ -51,6 +41,21 @@ Route::middleware('guest')->group(function () {
     Route::get('auth/{provider}/callback', [SocialAuthController::class, 'callback'])
         ->name('social.callback');
 });
+
+// Password Reset - Accessible by Guest AND Auth users (for checkout flow)
+Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
+    ->middleware('guest')
+    ->name('password.request');
+
+Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+    ->middleware('guest')
+    ->name('password.email');
+
+Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
+    ->name('password.reset');
+
+Route::post('reset-password', [NewPasswordController::class, 'store'])
+    ->name('password.store');
 
 Route::middleware('auth')->group(function () {
     // Email Verification

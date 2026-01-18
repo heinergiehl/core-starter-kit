@@ -22,6 +22,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 
 class AppPanelProvider extends PanelProvider
 {
@@ -79,6 +80,8 @@ class AppPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
+                InitializeTenancyByDomain::class,
+                \App\Http\Middleware\ResolveTeamByDomain::class,
                 SetLocale::class,
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,

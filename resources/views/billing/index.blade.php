@@ -37,7 +37,7 @@
                     $statusColor = $statusColors[$subscription->status] ?? 'text-ink/60 bg-surface/10 border-ink/10';
                     // Pending cancellation = has canceled_at but still active status and ends_at in future
                     $isPendingCancellation = $subscription->canceled_at && $subscription->ends_at && $subscription->ends_at->isFuture();
-                    $supportsLocalCancel = in_array($subscription->provider, ['stripe', 'lemonsqueezy'], true);
+                    $supportsLocalCancel = in_array($subscription->provider, ['stripe', 'lemonsqueezy', 'paddle'], true);
                     $canResume = $supportsLocalCancel && $isPendingCancellation;
                     $canCancel = $supportsLocalCancel && !$isPendingCancellation && in_array($subscription->status, ['active', 'trialing'], true);
                 @endphp
@@ -98,8 +98,14 @@
                     <!-- Actions -->
                     <div class="mt-8 flex flex-wrap items-center gap-4 pt-6 border-t border-ink/5">
                         <a href="{{ route('billing.portal') }}" class="btn-primary">
-                            {{ $subscription->provider === 'paddle' ? __('Manage Subscription') : __('Manage Payment Method') }}
+                            {{ __('Manage Payment Method') }}
                         </a>
+
+                        @if (!$isPendingCancellation && in_array($subscription->status, ['active', 'trialing'], true))
+                            <a href="{{ route('pricing') }}?current_plan={{ $subscription->plan_key }}" class="btn-secondary">
+                                {{ __('Change Plan') }}
+                            </a>
+                        @endif
 
                         @if ($canResume)
                             <form method="POST" action="{{ route('billing.resume') }}" class="inline">
@@ -120,12 +126,6 @@
                             </button>
                         @endif
                     </div>
-
-                    @if (!$supportsLocalCancel && $subscription->provider === 'paddle')
-                        <div class="mt-6 rounded-xl border border-ink/10 bg-surface/40 px-4 py-3 text-sm text-ink/60">
-                            {{ __('Subscription changes are managed through the Paddle customer portal.') }}
-                        </div>
-                    @endif
 
                     @if ($isPendingCancellation && $subscription->ends_at)
                         <div class="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
@@ -167,6 +167,27 @@
                         </div>
                     </div>
                 @endif
+
+            @elseif($pendingOrder)
+                <!-- Provisioning State (Race Condition Handling) -->
+                <div class="glass-panel rounded-[32px] p-8 text-center animate-pulse">
+                    <div class="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4">
+                        <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-display font-bold text-ink">{{ __('Setting up your subscription') }}</h2>
+                    <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('We received your payment and are activating your plan. This usually takes just a few seconds.') }}</p>
+                    <div class="mt-6">
+                        <span class="text-xs font-mono text-ink/40">{{ __('Order ID: :id', ['id' => $pendingOrder->id]) }}</span>
+                    </div>
+                </div>
+                <script>
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                </script>
 
             @else
                 <!-- No Subscription -->

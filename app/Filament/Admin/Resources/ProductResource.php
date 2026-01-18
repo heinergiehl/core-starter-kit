@@ -3,10 +3,11 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\Product;
-use App\Domain\Billing\Exports\CatalogPublishService;
 use App\Filament\Admin\Resources\ProductResource\Pages\CreateProduct;
 use App\Filament\Admin\Resources\ProductResource\Pages\EditProduct;
 use App\Filament\Admin\Resources\ProductResource\Pages\ListProducts;
+
+use App\Jobs\SyncProductsJob;
 use Filament\Actions\Action;
 use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
@@ -20,6 +21,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Artisan;
 
 class ProductResource extends Resource
@@ -44,22 +46,29 @@ class ProductResource extends Resource
                     ->label('Key')
                     ->required()
                     ->maxLength(64)
+                    ->readOnly()
                     ->unique(ignoreRecord: true),
                 Forms\Components\TextInput::make('name')
                     ->required()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->readOnly()
+                    ->helperText('Managed by Provider (Sync to update)'),
                 Forms\Components\TextInput::make('summary')
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->helperText('Local marketing summary (not synced)'),
                 Forms\Components\Textarea::make('description')
                     ->rows(4)
-                    ->columnSpanFull(),
+                    ->columnSpanFull()
+                    ->readOnly()
+                    ->helperText('Managed by Provider (Sync to update)'),
                 Forms\Components\Select::make('type')
                     ->options([
                         'subscription' => 'Subscription',
                         'one_time' => 'One-time',
                     ])
                     ->required()
-                    ->default('subscription'),
+                    ->default('subscription')
+                    ->readOnly(),
                 Forms\Components\Toggle::make('seat_based')
                     ->label('Seat-based'),
                 Forms\Components\TextInput::make('max_seats')
@@ -140,8 +149,16 @@ class ProductResource extends Resource
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Active' : 'Inactive')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
             ])
+            ->filters([
+                Tables\Filters\TernaryFilter::make('is_active')
+                    ->label('Status')
+                    ->default(true) // Only show active by default
+                    ->trueLabel('Active Only')
+                    ->falseLabel('Inactive Only')
+                    ->placeholder('All Products'),
+            ])
             ->headerActions([
-                CreateAction::make(),
+                // CreateAction::make(), // Disabled for Provider-First
                 Action::make('sync')
                     ->label('Import from Providers')
                     ->icon('heroicon-o-arrow-path')
@@ -153,88 +170,25 @@ class ProductResource extends Resource
                     ])
                     ->action(function (array $data) {
                         $includeDeleted = (bool) ($data['include_deleted'] ?? false);
-                        Artisan::call('billing:sync-products', [
-                            '--force' => $includeDeleted,
-                        ]);
-                        Notification::make()
-                            ->title('Sync complete')
-                            ->body('Products and prices have been synced from all providers.')
-                            ->success()
-                            ->send();
-                    }),
-                Action::make('publish')
-                    ->label('Publish to Provider')
-                    ->icon('heroicon-o-cloud-arrow-up')
-                    ->color('primary')
-                    ->form([
-                        Forms\Components\Select::make('provider')
-                            ->options(self::providerOptions())
-                            ->required(),
-                        Forms\Components\Toggle::make('update')
-                            ->label('Update existing')
-                            ->default(false),
-                    ])
-                    ->action(function (array $data) {
-                        $provider = (string) ($data['provider'] ?? '');
-                        if ($provider === '') {
-                            return;
-                        }
-
-                        Artisan::call('billing:publish-catalog', [
-                            'provider' => $provider,
-                            '--apply' => true,
-                            '--update' => (bool) ($data['update'] ?? false),
-                        ]);
+                        
+                        SyncProductsJob::dispatch($includeDeleted);
 
                         Notification::make()
-                            ->title('Publish complete')
-                            ->body("Published catalog to {$provider}.")
-                            ->success()
+                            ->title('Sync started')
+                            ->body('Product synchronization has started in the background.')
+                            ->info()
                             ->send();
                     }),
+
+                // Publish Action Removed for Provider-First
             ])
             ->defaultSort('name')
             ->actions([
                 EditAction::make(),
-                DeleteAction::make(),
+                // Delete removed: Products are managed on provider side (Paddle/Stripe/LemonSqueezy)
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    BulkAction::make('publishSelected')
-                        ->label('Publish selected')
-                        ->icon('heroicon-o-cloud-arrow-up')
-                        ->color('primary')
-                        ->form([
-                            Forms\Components\Select::make('provider')
-                                ->options(self::providerOptions())
-                                ->required(),
-                            Forms\Components\Toggle::make('update')
-                                ->label('Update existing')
-                                ->default(false),
-                        ])
-                        ->requiresConfirmation()
-                        ->action(function ($records, array $data): void {
-                            $provider = (string) ($data['provider'] ?? '');
-                            if ($provider === '') {
-                                return;
-                            }
-
-                            $productIds = $records->pluck('id')->all();
-                            app(CatalogPublishService::class)->apply(
-                                $provider,
-                                (bool) ($data['update'] ?? false),
-                                $productIds
-                            );
-
-                            Notification::make()
-                                ->title('Publish complete')
-                                ->body("Published selected products to {$provider}.")
-                                ->success()
-                                ->send();
-                        }),
-                    \Filament\Actions\DeleteBulkAction::make()
-                        ->chunkSelectedRecords(250),
-                ]),
+                // Bulk delete removed: Products are managed on provider side
             ]);
     }
 
@@ -242,7 +196,7 @@ class ProductResource extends Resource
     {
         return [
             'index' => ListProducts::route('/'),
-            'create' => CreateProduct::route('/create'),
+            // 'create' => CreateProduct::route('/create'),
             'edit' => EditProduct::route('/{record}/edit'),
         ];
     }

@@ -5,9 +5,9 @@
 
 @section('content')
     @php
-        $portalUrl = $provider ? route('billing.portal', ['provider' => $provider]) : route('billing.portal');
-        $isGuest = !auth()->check();
-        $successRedirect = auth()->check() ? route('billing.index') : null;
+        $portalUrl = route('billing.portal');
+        $isLoggedIn = auth()->check();
+        $successRedirect = $isLoggedIn ? route('billing.index') : route('login');
     @endphp
 
     <section class="py-16">
@@ -20,14 +20,6 @@
                         We are waiting for the webhook confirmation from your billing provider.
                         This usually takes a few seconds.
                     </p>
-                    @if ($isGuest)
-                        <p class="mt-3 text-sm text-ink/60">
-                            Check your email to finish account setup once payment completes.
-                        </p>
-                    @endif
-                </div>
-                <div class="rounded-2xl border border-ink/10 bg-surface/70 px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-ink/60">
-                    {{ $provider ? ucfirst($provider) : 'Provider' }}
                 </div>
             </div>
 
@@ -35,22 +27,21 @@
                 <div class="card-inner px-5 py-4">
                     <p class="text-xs uppercase tracking-[0.2em] text-ink/50">Status</p>
                     <p id="billing-status" class="mt-2 text-lg font-semibold text-ink">
-                        {{ $isGuest ? __('Check your email') : __('Checking...') }}
+                        {{ __('Checking...') }}
                     </p>
                     <p id="billing-details" class="mt-2 text-sm text-ink/60">
-                        {{ $isGuest ? __('We will email you a secure link to claim your subscription.') : __('We will keep polling for updates.') }}
+                        {{ __('We will keep polling for updates.') }}
                     </p>
                 </div>
                 <div class="card-inner px-5 py-4">
                     <p class="text-xs uppercase tracking-[0.2em] text-ink/50">Next steps</p>
                     <div class="mt-3 flex flex-wrap gap-3 text-sm font-semibold">
-                        @if ($isGuest)
+                        @if ($isLoggedIn)
+                            <a href="{{ route('dashboard') }}" class="rounded-full border border-ink/15 px-4 py-2 text-ink/70 hover:text-ink">Go to dashboard</a>
+                            <a href="{{ $portalUrl }}" class="rounded-full bg-primary px-4 py-2 text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">Manage billing</a>
+                        @else
                             <a href="{{ route('login') }}" class="rounded-full border border-ink/15 px-4 py-2 text-ink/70 hover:text-ink">Log in</a>
                             <a href="{{ route('pricing') }}" class="rounded-full border border-ink/15 px-4 py-2 text-ink/70 hover:text-ink">View pricing</a>
-                        @else
-                            <a href="{{ route('dashboard') }}" class="rounded-full border border-ink/15 px-4 py-2 text-ink/70 hover:text-ink">Go to dashboard</a>
-                            <a href="{{ route('pricing') }}" class="rounded-full border border-ink/15 px-4 py-2 text-ink/70 hover:text-ink">View pricing</a>
-                            <a href="{{ $portalUrl }}" class="rounded-full bg-primary px-4 py-2 text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">Manage billing</a>
                         @endif
                     </div>
                 </div>
@@ -67,15 +58,18 @@
             const statusEl = document.getElementById('billing-status');
             const detailsEl = document.getElementById('billing-details');
             const retryEl = document.getElementById('billing-retry');
-            const sessionId = @json($session_id);
+            const sessionUuid = @json($session_uuid ?? null);
             const successRedirect = @json($successRedirect);
-            const isGuest = @json($isGuest);
+            const isLoggedIn = @json($isLoggedIn);
             const statusUrl = new URL(@json(route('billing.status')));
-            if (sessionId) {
-                statusUrl.searchParams.set('session_id', sessionId);
+            if (sessionUuid) {
+                statusUrl.searchParams.set('session', sessionUuid);
             }
-            const maxAttempts = 30;
-            const intervalMs = 3000;
+            // Add timestamp to prevent caching
+            statusUrl.searchParams.set('_t', Date.now());
+
+            const maxAttempts = 60; // Increased to 3 minutes
+            const intervalMs = 2000; // Faster polling (2s)
             let attempts = 0;
 
             const update = (status, detail, isDone) => {
@@ -87,15 +81,32 @@
             };
 
             const checkStatus = async () => {
-                if (isGuest) {
-                    return;
-                }
                 attempts += 1;
                 try {
                     const response = await fetch(statusUrl.toString(), {
                         headers: { 'Accept': 'application/json' },
                         credentials: 'same-origin',
                     });
+
+                    // Handle redirects (likely to login or verify-email)
+                    if (response.redirected) {
+                        console.log('Redirect detected, reloading page to restore session...');
+                        window.location.reload();
+                        return;
+                    }
+
+                    // Check content type
+                    const contentType = response.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                        console.log('Received non-JSON response:', contentType);
+                         // If we get HTML (like login page), reload to fix session
+                         if (attempts > 1) {
+                            console.log('Unexpected response type, reloading...');
+                            window.location.reload();
+                            return;
+                         }
+                        throw new Error("Invalid response type");
+                    }
 
                     if (response.ok) {
                         const data = await response.json();
@@ -109,7 +120,7 @@
                             if (successRedirect) {
                                 setTimeout(() => {
                                     window.location.href = successRedirect;
-                                }, 1200);
+                                }, 1000);
                             }
                             return;
                         }
@@ -121,9 +132,15 @@
 
                         update('Processing', `Waiting for ${type} confirmation...`, false);
                     } else {
+                        if (response.status === 401 || response.status === 419) {
+                             console.log('Session expired, reloading...');
+                             window.location.reload();
+                             return;
+                        }
                         update('Processing', 'Waiting for webhook confirmation...', false);
                     }
                 } catch (error) {
+                    console.error('Polling error:', error);
                     update('Processing', 'We will retry shortly.', false);
                 }
 

@@ -10,6 +10,7 @@ use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Organization\Enums\TeamRole;
 use App\Domain\Organization\Models\Team;
+use App\Domain\Tenancy\Services\TenantProvisioner;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -36,6 +37,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'platform-admins',
             'owner_id' => $admin->id,
         ]);
+        app(TenantProvisioner::class)->syncDomainsForTeam($adminTeam);
 
         $adminTeam->members()->attach($admin->id, [
             'role' => TeamRole::Owner->value,
@@ -55,6 +57,7 @@ class DatabaseSeeder extends Seeder
             'slug' => 'acme-studio',
             'owner_id' => $customer->id,
         ]);
+        app(TenantProvisioner::class)->syncDomainsForTeam($customerTeam);
 
         $customerTeam->members()->attach($customer->id, [
             'role' => TeamRole::Owner->value,

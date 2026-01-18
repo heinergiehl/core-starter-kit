@@ -25,6 +25,12 @@ class AnnouncementTest extends TestCase
         // Set current team
         $user->update(['current_team_id' => $team->id]);
 
+        // Create active subscription
+        \App\Domain\Billing\Models\Subscription::factory()->create([
+            'team_id' => $team->id,
+            'status' => 'active',
+        ]);
+
         return $user->fresh();
     }
 

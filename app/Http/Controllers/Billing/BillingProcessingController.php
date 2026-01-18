@@ -5,35 +5,22 @@ namespace App\Http\Controllers\Billing;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
+/**
+ * Handle the billing processing page after checkout redirect.
+ * 
+ * Session restoration is handled by RestoreCheckoutSession middleware.
+ */
 class BillingProcessingController
 {
     public function __invoke(Request $request): View
     {
-        $rawProvider = (string) $request->query('provider', '');
-        $sessionId = (string) $request->query('session_id', '');
-        $provider = $rawProvider !== '' ? $rawProvider : null;
-
-        if ($rawProvider !== '' && str_contains($rawProvider, '?')) {
-            [$providerValue, $queryString] = explode('?', $rawProvider, 2);
-            $provider = $providerValue !== '' ? $providerValue : null;
-
-            if (!$sessionId && $queryString) {
-                parse_str($queryString, $params);
-                $sessionId = (string) ($params['session_id'] ?? '');
-            }
-        }
-
-        // Paddle Transaction ID support
-        if (!$sessionId && $request->has('_ptxn')) {
-             $sessionId = $request->query('_ptxn');
-             if (!$provider) {
-                 $provider = 'paddle';
-             }
-        }
-
+        $sessionUuid = (string) $request->query('session', '');
+        
         return view('billing.processing', [
-            'provider' => $provider,
-            'session_id' => $sessionId !== '' ? $sessionId : null,
+            'session_uuid' => $sessionUuid !== '' ? $sessionUuid : null,
         ]);
     }
 }
+
+
+

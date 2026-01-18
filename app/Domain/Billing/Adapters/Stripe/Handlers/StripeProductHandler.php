@@ -81,7 +81,7 @@ class StripeProductHandler implements StripeWebhookHandler
             'name' => $name,
             'description' => data_get($object, 'description'),
             'is_active' => $active,
-            'synced_at' => now(),
+            // 'synced_at' => now(),
         ];
 
         if ($mapping) {
@@ -133,7 +133,7 @@ class StripeProductHandler implements StripeWebhookHandler
             })
             ->update([
                 'is_active' => false,
-                'synced_at' => now(),
+                // 'synced_at' => now(),
             ]);
     }
 

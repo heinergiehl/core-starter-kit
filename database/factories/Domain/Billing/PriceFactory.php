@@ -18,8 +18,8 @@ class PriceFactory extends Factory
         return [
             'product_id' => Product::factory(),
             'key' => fake()->unique()->slug(2),
-            'provider' => fake()->randomElement(['stripe', 'lemonsqueezy', 'paddle']),
-            'provider_id' => 'price_' . fake()->uuid(),
+            // 'provider' => removed
+            // 'provider_id' => removed
             'label' => 'Monthly',
             'interval' => 'month',
             'interval_count' => 1,

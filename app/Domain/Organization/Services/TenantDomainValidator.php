@@ -2,6 +2,7 @@
 
 namespace App\Domain\Organization\Services;
 
+use App\Domain\Tenancy\Models\TenantDomain;
 use Illuminate\Support\Str;
 
 class TenantDomainValidator
@@ -26,6 +27,18 @@ class TenantDomainValidator
         }
 
         return null;
+    }
+
+    public function subdomainInUse(?string $value, ?int $tenantId = null): bool
+    {
+        $value = $this->normalize($value);
+        $baseDomain = $this->baseDomain();
+
+        if (!$value || !$baseDomain) {
+            return false;
+        }
+
+        return $this->domainInUse("{$value}.{$baseDomain}", $tenantId);
     }
 
     /**
@@ -54,6 +67,23 @@ class TenantDomainValidator
         }
 
         return null;
+    }
+
+    public function domainInUse(?string $value, ?int $tenantId = null): bool
+    {
+        $value = $this->normalize($value);
+
+        if ($value === null) {
+            return false;
+        }
+
+        $query = TenantDomain::query()->where('domain', $value);
+
+        if ($tenantId) {
+            $query->where('tenant_id', '!=', $tenantId);
+        }
+
+        return $query->exists();
     }
 
     public function normalize(?string $value): ?string

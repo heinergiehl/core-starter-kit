@@ -71,6 +71,7 @@
         </style>
 
         
+        @livewireStyles
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="bg-surface text-ink">
@@ -88,5 +89,6 @@
             {{-- Unified Marketing Footer --}}
             @include('partials.marketing-footer')
         </div>
+        @livewireScripts
     </body>
 </html>

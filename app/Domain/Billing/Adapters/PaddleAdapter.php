@@ -18,6 +18,7 @@ use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use App\Notifications\CheckoutClaimNotification;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
@@ -290,9 +291,8 @@ class PaddleAdapter implements BillingProviderAdapter
             throw new RuntimeException('Paddle price id is missing for seat sync.');
         }
 
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->patch("https://api.paddle.com/subscriptions/{$subscription->provider_id}", [
+        $response = $this->paddleRequest($apiKey)
+            ->patch("/subscriptions/{$subscription->provider_id}", [
                 'items' => [
                     [
                         'price_id' => $priceId,
@@ -472,12 +472,8 @@ class PaddleAdapter implements BillingProviderAdapter
             throw new RuntimeException('Paddle API key is not configured.');
         }
 
-        $environment = config('services.paddle.environment', 'production');
-        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
-
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->post("{$baseUrl}/transactions", $payload);
+        $response = $this->paddleRequest($apiKey)
+            ->post('/transactions', $payload);
 
         if (!$response->successful()) {
             throw new RuntimeException('Paddle transaction failed: '.$response->body());
@@ -489,9 +485,6 @@ class PaddleAdapter implements BillingProviderAdapter
     public function createDiscount(Discount $discount): string
     {
         $apiKey = config('services.paddle.api_key');
-        $environment = config('services.paddle.environment', 'production');
-        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
-
         if (!$apiKey) {
             throw new RuntimeException('Paddle API key is not configured.');
         }
@@ -512,9 +505,8 @@ class PaddleAdapter implements BillingProviderAdapter
             $payload['expires_at'] = $discount->ends_at->toIso8601String();
         }
 
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->post("{$baseUrl}/discounts", $payload);
+        $response = $this->paddleRequest($apiKey)
+            ->post('/discounts', $payload);
 
         if (!$response->successful()) {
             throw new RuntimeException('Paddle discount creation failed: ' . $response->body());
@@ -575,8 +567,15 @@ class PaddleAdapter implements BillingProviderAdapter
         }
 
         $status = (string) (data_get($data, 'status') ?? 'paid');
-        $amount = (int) (data_get($data, 'amount') ?? data_get($data, 'amount_total') ?? 0);
-        $currency = strtoupper((string) (data_get($data, 'currency_code') ?? data_get($data, 'currency') ?? 'USD'));
+        $amount = (int) (data_get($data, 'amount') 
+            ?? data_get($data, 'amount_total') 
+            ?? data_get($data, 'details.totals.grand_total') 
+            ?? data_get($data, 'details.totals.total') 
+            ?? 0);
+        $currency = strtoupper((string) (data_get($data, 'currency_code') 
+            ?? data_get($data, 'currency') 
+            ?? data_get($data, 'details.totals.currency_code') 
+            ?? 'USD'));
 
         $order = Order::query()->updateOrCreate(
             [
@@ -585,6 +584,7 @@ class PaddleAdapter implements BillingProviderAdapter
             ],
             [
                 'team_id' => $teamId,
+                'provider_order_id' => (string) $orderId,
                 'plan_key' => $this->resolvePlanKey($data),
                 'status' => $status,
                 'amount' => $amount,
@@ -708,6 +708,7 @@ class PaddleAdapter implements BillingProviderAdapter
         );
     }
 
+
     private function syncInvoiceFromOrder(
         array $data,
         int $teamId,
@@ -718,27 +719,132 @@ class PaddleAdapter implements BillingProviderAdapter
     ): void {
         $normalizedStatus = strtolower($status);
         $paid = in_array($normalizedStatus, ['paid', 'completed', 'settled'], true);
+        
+        // Extract invoice identifiers
+        $transactionId = data_get($data, 'id');
+        $invoiceNumber = data_get($data, 'invoice_number');
+        $invoiceId = data_get($data, 'invoice_id');
+        
+        // Extract customer information (collected by Paddle during checkout)
+        $customer = data_get($data, 'customer', []);
+        $address = data_get($data, 'address', []) ?? data_get($customer, 'address', []);
+        $billingDetails = data_get($data, 'billing_details', []);
+        
+        // Extract tax breakdown
+        $details = data_get($data, 'details', []);
+        $totals = data_get($details, 'totals', []);
+        $subtotal = (int) data_get($totals, 'subtotal', 0);
+        $taxAmount = (int) data_get($totals, 'tax', 0);
+        
+        // PDF URLs (may not be available immediately)
+        $invoiceUrl = data_get($billingDetails, 'invoice_url') 
+            ?? data_get($data, 'invoice_url') 
+            ?? data_get($data, 'checkout.invoice_url');
+        
+        $invoicePdf = data_get($billingDetails, 'invoice_pdf')
+            ?? data_get($data, 'invoice_pdf')
+            ?? data_get($data, 'checkout.invoice_pdf');
 
-        Invoice::query()->updateOrCreate(
+        $invoice = Invoice::query()->updateOrCreate(
             [
                 'provider' => $this->provider(),
-                'provider_id' => (string) $order->provider_id,
+                'provider_id' => (string) $transactionId,
             ],
             [
                 'team_id' => $teamId,
                 'order_id' => $order->id,
+                'invoice_number' => $invoiceNumber,
+                'provider_invoice_id' => $invoiceId,
                 'status' => $normalizedStatus,
+                
+                // Customer information (from Paddle checkout)
+                'customer_name' => data_get($customer, 'name'),
+                'customer_email' => data_get($customer, 'email'),
+                'billing_address' => [
+                    'line1' => data_get($address, 'first_line'),
+                    'line2' => data_get($address, 'second_line'),
+                    'city' => data_get($address, 'city'),
+                    'postal_code' => data_get($address, 'postal_code'),
+                    'country' => data_get($address, 'country_code'),
+                ],
+                'customer_vat_number' => data_get($billingDetails, 'tax_identifier'),
+                
+                // Financial breakdown
                 'amount_due' => $amount,
                 'amount_paid' => $paid ? $amount : 0,
+                'subtotal' => $subtotal,
+                'tax_amount' => $taxAmount,
+                'tax_rate' => $this->calculateTaxRate($subtotal, $taxAmount),
                 'currency' => $currency,
+                
+                // Timestamps
                 'issued_at' => $this->timestampToDateTime(data_get($data, 'created_at') ?? data_get($data, 'billed_at')),
                 'paid_at' => $paid ? now() : null,
-                'hosted_invoice_url' => data_get($data, 'invoice_url') ?? data_get($data, 'invoice_pdf'),
-                'invoice_pdf' => data_get($data, 'invoice_pdf'),
-                'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data', 'invoice_url', 'invoice_pdf']),
+                
+                // PDF URLs (not cached yet, will be fetched on-demand)
+                'hosted_invoice_url' => $invoiceUrl,
+                'pdf_url' => $invoicePdf,
+                'pdf_url_expires_at' => null, // Will be set when fetched via API
+                
+                'metadata' => Arr::only($data, [
+                    'id', 'status', 'items', 'custom_data', 
+                    'invoice_number', 'invoice_id', 'billing_details',
+                    'customer', 'address', 'details'
+                ]),
             ]
         );
+        
+        // Sync line items
+        $this->syncInvoiceLineItems($invoice, data_get($data, 'items', []));
     }
+    
+    /**
+     * Calculate tax rate as percentage from subtotal and tax amount.
+     */
+    private function calculateTaxRate(int $subtotal, int $taxAmount): ?float
+    {
+        if ($subtotal > 0 && $taxAmount > 0) {
+            return round(($taxAmount / $subtotal) * 100, 2);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Sync invoice line items from Paddle transaction data.
+     */
+    private function syncInvoiceLineItems(Invoice $invoice, array $items): void
+    {
+        // Clear existing line items
+        $invoice->lineItems()->delete();
+        
+        foreach ($items as $item) {
+            $priceData = data_get($item, 'price', []);
+            $productData = data_get($item, 'product', []);
+            $itemTotals = data_get($item, 'totals', []);
+            $billingPeriod = data_get($item, 'billing_period', []);
+            
+            $invoice->lineItems()->create([
+                'product_name' => data_get($productData, 'name') 
+                    ?? data_get($priceData, 'description')
+                    ?? 'Product',
+                'description' => data_get($priceData, 'name') 
+                    ?? data_get($priceData, 'description'),
+                'quantity' => (int) data_get($item, 'quantity', 1),
+                'unit_price' => (int) data_get($priceData, 'unit_price.amount', 0),
+                'total_amount' => (int) data_get($itemTotals, 'total', 0),
+                'tax_rate' => null, // Paddle doesn't provide per-item tax rate
+                'period_start' => data_get($billingPeriod, 'starts_at') 
+                    ? Carbon::parse(data_get($billingPeriod, 'starts_at'))->toDateString()
+                    : null,
+                'period_end' => data_get($billingPeriod, 'ends_at')
+                    ? Carbon::parse(data_get($billingPeriod, 'ends_at'))->toDateString()
+                    : null,
+                'metadata' => $item,
+            ]);
+        }
+    }
+
 
     private function recordDiscountRedemption(
         array $data,
@@ -937,12 +1043,8 @@ class PaddleAdapter implements BillingProviderAdapter
             return null;
         }
 
-        $environment = config('services.paddle.environment', 'production');
-        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
-
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->get("{$baseUrl}/customers/{$customerId}");
+        $response = $this->paddleRequest($apiKey)
+            ->get("/customers/{$customerId}");
 
         if (!$response->successful()) {
             return null;
@@ -965,22 +1067,65 @@ class PaddleAdapter implements BillingProviderAdapter
 
         return \Illuminate\Support\Carbon::parse($timestamp);
     }
+
+    private function paddleRequest(string $apiKey): PendingRequest
+    {
+        $timeout = (int) config('saas.billing.provider_api.timeouts.paddle', 15);
+        $connectTimeout = (int) config('saas.billing.provider_api.connect_timeouts.paddle', 5);
+        $retries = (int) config('saas.billing.provider_api.retries.paddle', 2);
+        $retryDelay = (int) config('saas.billing.provider_api.retry_delay_ms', 500);
+
+        return Http::withToken($apiKey)
+            ->acceptJson()
+            ->baseUrl($this->paddleBaseUrl())
+            ->timeout($timeout)
+            ->connectTimeout($connectTimeout)
+            ->retry(
+                $retries,
+                $retryDelay,
+                fn ($exception, $request = null, $method = null): bool => $this->shouldRetryProviderRequest($exception),
+                false
+            );
+    }
+
+    private function paddleBaseUrl(): string
+    {
+        $environment = config('services.paddle.environment', 'production');
+
+        return $environment === 'sandbox'
+            ? 'https://sandbox-api.paddle.com'
+            : 'https://api.paddle.com';
+    }
+
+    private function shouldRetryProviderRequest(\Throwable $exception): bool
+    {
+        if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+            $response = $exception->response;
+            if (!$response) {
+                return true;
+            }
+
+            return $response->serverError()
+                || $response->status() === 429
+                || $response->status() === 408;
+        }
+
+        return true;
+    }
+
     public function archiveProduct(string $providerId): void
     {
         $apiKey = config('services.paddle.api_key');
-        $environment = config('services.paddle.environment', 'production');
-        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
         if (!$apiKey) {
             throw new RuntimeException('Paddle API key is missing.');
         }
 
-        $url = "{$baseUrl}/products/{$providerId}";
+        $url = $this->paddleBaseUrl() . "/products/{$providerId}";
         \Illuminate\Support\Facades\Log::info("PaddleAdapter: Attempting Synchronous Archive on: {$url}");
 
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->patch($url, [
+        $response = $this->paddleRequest($apiKey)
+            ->patch("/products/{$providerId}", [
                 'status' => 'archived',
             ]);
 
@@ -998,19 +1143,16 @@ class PaddleAdapter implements BillingProviderAdapter
     public function archivePrice(string $providerId): void
     {
         $apiKey = config('services.paddle.api_key');
-        $environment = config('services.paddle.environment', 'production');
-        $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
         if (!$apiKey) {
             throw new RuntimeException('Paddle API key is missing.');
         }
 
-        $url = "{$baseUrl}/prices/{$providerId}";
+        $url = $this->paddleBaseUrl() . "/prices/{$providerId}";
         \Illuminate\Support\Facades\Log::info("PaddleAdapter: Attempting Synchronous Archive on: {$url}");
 
-        $response = Http::withToken($apiKey)
-            ->acceptJson()
-            ->patch($url, [
+        $response = $this->paddleRequest($apiKey)
+            ->patch("/prices/{$providerId}", [
                 'status' => 'archived',
             ]);
 

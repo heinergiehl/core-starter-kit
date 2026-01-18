@@ -32,6 +32,12 @@ class EnsureOnboardingComplete
             'onboarding.*',
             'logout',
             'locale.update',
+            // Checkout routes - don't interrupt payment flow
+            'checkout.*',
+            'billing.checkout',
+            'billing.processing',
+            'paddle.checkout',
+            'webhooks.*',
         ];
 
         foreach ($excludedRoutes as $pattern) {

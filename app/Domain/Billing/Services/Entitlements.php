@@ -13,6 +13,11 @@ class Entitlements
         return $this->values[$key] ?? $default;
     }
 
+    public function __get(string $key): mixed
+    {
+        return $this->get($key);
+    }
+
     public function toArray(): array
     {
         return $this->values;

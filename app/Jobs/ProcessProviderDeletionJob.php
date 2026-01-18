@@ -9,6 +9,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\WithoutOverlapping;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -19,6 +21,8 @@ class ProcessProviderDeletionJob implements ShouldQueue
     public $tries = 5;
 
     public $backoff = [60, 300, 900, 1800, 3600];
+
+    public $timeout = 90;
 
     public function __construct(public int $outboxId)
     {
@@ -79,6 +83,14 @@ class ProcessProviderDeletionJob implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    public function middleware(): array
+    {
+        return [
+            (new WithoutOverlapping("provider-deletion-{$this->outboxId}"))->releaseAfter(10),
+            (new RateLimited('provider-deletions'))->releaseAfter(10),
+        ];
     }
 
     public function failed(Throwable $e): void

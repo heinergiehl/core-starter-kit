@@ -24,12 +24,7 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', function (\Illuminate\Http\Request $request) {
-    if ($request->has('_ptxn')) {
-        return redirect()->route('billing.processing', ['provider' => 'paddle'] + $request->all());
-    }
-    return view('welcome');
-})->name('home');
+Route::get('/', fn() => view('welcome'))->name('home');
 
 Route::get('/pricing', PricingController::class)->name('pricing');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
@@ -52,13 +47,19 @@ Route::get('/invitations/{token}', [TeamInvitationController::class, 'show'])->n
 Route::post('/invitations/{token}', [TeamInvitationController::class, 'store'])->name('invitations.store');
 Route::post('/invitations/{token}/register', [TeamInvitationController::class, 'register'])->name('invitations.register');
 
+// Webhook route - explicitly bypass tenancy middleware
 Route::post('/webhooks/{provider}', WebhookController::class)
-    ->withoutMiddleware([VerifyCsrfToken::class])
+    ->withoutMiddleware([
+        VerifyCsrfToken::class,
+        \Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class,
+        \App\Http\Middleware\ResolveTeamByDomain::class,
+    ])
     ->name('webhooks.handle');
 
 Route::post('/billing/checkout', [BillingCheckoutController::class, 'store'])
     ->name('billing.checkout');
 Route::get('/billing/processing', BillingProcessingController::class)
+    ->middleware(\App\Http\Middleware\RestoreCheckoutSession::class)
     ->name('billing.processing');
 Route::get('/checkout/start', CheckoutStartController::class)
     ->name('checkout.start');
@@ -79,11 +80,14 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/onboarding/skip', [\App\Http\Controllers\OnboardingController::class, 'skip'])->name('onboarding.skip');
 });
 
+Route::middleware(['auth'])->group(function () {
+    Route::get('/billing/status', BillingStatusController::class)->name('billing.status');
+});
+
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/teams/select', [TeamController::class, 'select'])->name('teams.select');
     Route::post('/teams/{team}/switch', [TeamController::class, 'switch'])->name('teams.switch');
 
-    Route::get('/billing/status', BillingStatusController::class)->name('billing.status');
     Route::get('/billing', [\App\Http\Controllers\Billing\BillingController::class, 'index'])
         ->middleware('team')
         ->name('billing.index');
@@ -93,6 +97,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/billing/resume', [\App\Http\Controllers\Billing\BillingController::class, 'resume'])
         ->middleware('team')
         ->name('billing.resume');
+    Route::post('/billing/change-plan', [\App\Http\Controllers\Billing\BillingController::class, 'changePlan'])
+        ->middleware('team')
+        ->name('billing.change-plan');
     Route::get('/billing/portal/{provider?}', BillingPortalController::class)
         ->middleware('team')
         ->name('billing.portal');

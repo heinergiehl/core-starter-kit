@@ -16,6 +16,7 @@ use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Organization\Models\Team;
 use App\Models\User;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Arr;
@@ -224,11 +225,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             throw new RuntimeException('Lemon Squeezy API key is not configured.');
         }
 
-        $response = Http::withToken($apiKey)
-            ->withHeaders([
-                'Accept' => 'application/vnd.api+json',
-                'Content-Type' => 'application/vnd.api+json',
-            ])
+        $response = $this->lemonSqueezyRequest($apiKey)
             ->withBody(json_encode([
                 'data' => [
                     'type' => 'subscriptions',
@@ -238,11 +235,8 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                     ],
                 ],
             ]), 'application/vnd.api+json')
-            ->patch("https://api.lemonsqueezy.com/v1/subscriptions/{$subscription->provider_id}");
+            ->patch("/subscriptions/{$subscription->provider_id}");
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy seat sync failed: ' . $response->body());
-        }
         if (!$response->successful()) {
             throw new RuntimeException('Lemon Squeezy seat sync failed: ' . $response->body());
         }
@@ -292,13 +286,9 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             ],
         ];
 
-        $response = Http::withToken($apiKey)
-            ->withHeaders([
-                'Accept' => 'application/vnd.api+json',
-                'Content-Type' => 'application/vnd.api+json',
-            ])
+        $response = $this->lemonSqueezyRequest($apiKey)
             ->withBody(json_encode($payload), 'application/vnd.api+json')
-            ->post('https://api.lemonsqueezy.com/v1/discounts');
+            ->post('/discounts');
 
         if (!$response->successful()) {
             throw new RuntimeException('Lemon Squeezy discount creation failed: ' . $response->body());
@@ -531,13 +521,48 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
     private function postCheckout(string $apiKey, array $payload): \Illuminate\Http\Client\Response
     {
+        return $this->lemonSqueezyRequest($apiKey)
+            ->withBody(json_encode($payload), 'application/vnd.api+json')
+            ->post('/checkouts');
+    }
+
+    private function lemonSqueezyRequest(string $apiKey): PendingRequest
+    {
+        $timeout = (int) config('saas.billing.provider_api.timeouts.lemonsqueezy', 15);
+        $connectTimeout = (int) config('saas.billing.provider_api.connect_timeouts.lemonsqueezy', 5);
+        $retries = (int) config('saas.billing.provider_api.retries.lemonsqueezy', 2);
+        $retryDelay = (int) config('saas.billing.provider_api.retry_delay_ms', 500);
+
         return Http::withToken($apiKey)
+            ->accept('application/vnd.api+json')
             ->withHeaders([
-                'Accept' => 'application/vnd.api+json',
                 'Content-Type' => 'application/vnd.api+json',
             ])
-            ->withBody(json_encode($payload), 'application/vnd.api+json')
-            ->post('https://api.lemonsqueezy.com/v1/checkouts');
+            ->baseUrl('https://api.lemonsqueezy.com/v1')
+            ->timeout($timeout)
+            ->connectTimeout($connectTimeout)
+            ->retry(
+                $retries,
+                $retryDelay,
+                fn ($exception, $request = null, $method = null): bool => $this->shouldRetryProviderRequest($exception),
+                false
+            );
+    }
+
+    private function shouldRetryProviderRequest(\Throwable $exception): bool
+    {
+        if ($exception instanceof \Illuminate\Http\Client\RequestException) {
+            $response = $exception->response;
+            if (!$response) {
+                return true;
+            }
+
+            return $response->serverError()
+                || $response->status() === 429
+                || $response->status() === 408;
+        }
+
+        return true;
     }
 
     private function syncInvoiceFromOrder(
@@ -654,9 +679,8 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         }
 
         // Lemon Squeezy uses DELETE to remove/archive
-        $response = Http::withToken($apiKey)
-            ->accept('application/vnd.api+json')
-            ->delete("https://api.lemonsqueezy.com/v1/products/{$providerId}");
+        $response = $this->lemonSqueezyRequest($apiKey)
+            ->delete("/products/{$providerId}");
 
         if ($response->status() === 404) {
             return;
@@ -676,9 +700,8 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         }
 
         // Lemon Squeezy "prices" are Variants
-        $response = Http::withToken($apiKey)
-            ->accept('application/vnd.api+json')
-            ->delete("https://api.lemonsqueezy.com/v1/variants/{$providerId}");
+        $response = $this->lemonSqueezyRequest($apiKey)
+            ->delete("/variants/{$providerId}");
 
         if ($response->status() === 404) {
             return;

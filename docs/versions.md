@@ -14,7 +14,7 @@ Update this file on every release that changes dependencies.
 - Laravel: 12.x
 - Filament: 4.4.x
 - Livewire: 3.7.x
-- Tenancy package (if installed): not installed
+- Tenancy package: stancl/tenancy 3.9.x
 - Social login: Socialite (not installed)
 
 ## Billing adapters

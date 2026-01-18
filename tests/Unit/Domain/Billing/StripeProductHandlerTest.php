@@ -43,23 +43,30 @@ class StripeProductHandlerTest extends TestCase
         $this->handler->handle($event, $object);
 
         $this->assertDatabaseHas('products', [
-            'provider' => 'stripe',
-            'provider_id' => 'prod_TestProduct123',
             'name' => 'Test Product',
             'description' => 'A test product description',
             'is_active' => true,
+        ]);
+
+        $this->assertDatabaseHas('product_provider_mappings', [
+            'provider' => 'stripe',
+            'provider_id' => 'prod_TestProduct123',
         ]);
     }
 
     public function test_handles_product_updated_event(): void
     {
         // Create existing product
-        Product::create([
+        $product = Product::create([
             'key' => 'test-product-123456',
             'name' => 'Old Name',
+            'is_active' => true,
+        ]);
+
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
+            'product_id' => $product->id,
             'provider' => 'stripe',
             'provider_id' => 'prod_UpdateTest123',
-            'is_active' => true,
         ]);
 
         $event = WebhookEvent::create([
@@ -83,8 +90,7 @@ class StripeProductHandlerTest extends TestCase
         $this->handler->handle($event, $object);
 
         $this->assertDatabaseHas('products', [
-            'provider' => 'stripe',
-            'provider_id' => 'prod_UpdateTest123',
+            'id' => $product->id,
             'name' => 'Updated Product Name',
             'description' => 'Updated description',
             'key' => 'test-product-123456', // Key preserved
@@ -94,12 +100,16 @@ class StripeProductHandlerTest extends TestCase
     public function test_handles_product_deleted_event(): void
     {
         // Create existing product
-        Product::create([
+        $product = Product::create([
             'key' => 'deleted-product-123456',
             'name' => 'Product To Delete',
+            'is_active' => true,
+        ]);
+
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
+            'product_id' => $product->id,
             'provider' => 'stripe',
             'provider_id' => 'prod_DeleteTest123',
-            'is_active' => true,
         ]);
 
         $event = WebhookEvent::create([
@@ -121,8 +131,7 @@ class StripeProductHandlerTest extends TestCase
 
         // Product should be deactivated, not deleted
         $this->assertDatabaseHas('products', [
-            'provider' => 'stripe',
-            'provider_id' => 'prod_DeleteTest123',
+            'id' => $product->id,
             'is_active' => false,
         ]);
     }
@@ -143,12 +152,16 @@ class StripeProductHandlerTest extends TestCase
     public function test_preserves_existing_key_on_update(): void
     {
         // Create product with custom key
-        Product::create([
+        $product = Product::create([
             'key' => 'custom-key',
             'name' => 'Original Name',
+            'is_active' => true,
+        ]);
+
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
+            'product_id' => $product->id,
             'provider' => 'stripe',
             'provider_id' => 'prod_PreserveKey12',
-            'is_active' => true,
         ]);
 
         // Sync same product with different name

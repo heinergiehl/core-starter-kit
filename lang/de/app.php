@@ -11,6 +11,11 @@ return [
     'login' => 'Anmelden',
     'register' => 'Registrieren',
     'logout' => 'Abmelden',
+    'Open App' => 'App öffnen',
+    'Choose a Plan' => 'Plan wählen',
+    'Admin Panel' => 'Admin-Panel',
+    'Sign In' => 'Anmelden',
+    'Get Started' => 'Jetzt starten',
     
     // Hero Section
     'hero_badge' => 'v1.0 ist jetzt live',

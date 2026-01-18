@@ -175,49 +175,106 @@ class SyncBillingProducts extends Command
         try {
             // Sync products
             $this->info('  → Fetching products...');
-            $productsResponse = Http::withToken($apiKey)
-                ->acceptJson()
-                ->get("{$baseUrl}/products", [
-                    'per_page' => 200,
-                    'status' => 'active,archived',
-                ]);
-
-            if (!$productsResponse->successful()) {
-                throw new \RuntimeException('Failed to fetch products: ' . $productsResponse->body());
-            }
-
-            $products = $productsResponse->json('data') ?? [];
+            $nextUrl = "{$baseUrl}/products?per_page=100&status=active,archived";
             $productCount = 0;
 
-            foreach ($products as $product) {
-                $this->syncPaddleProduct($product);
-                $productCount++;
-            }
+            do {
+                $productsResponse = Http::retry(3, 500)
+                    ->timeout(30)
+                    ->withToken($apiKey)
+                    ->acceptJson()
+                    ->get($nextUrl);
+
+                if (!$productsResponse->successful()) {
+                    throw new \RuntimeException('Failed to fetch products: ' . $productsResponse->body());
+                }
+
+                $data = $productsResponse->json();
+                $products = $data['data'] ?? [];
+                
+                // CRITICAL: If we get 0 products, stop pagination (Paddle bug workaround)
+                if (count($products) === 0) {
+                    break;
+                }
+                
+                // Pre-fetch all existing Paddle product mappings to avoid N+1 queries
+                $existingMappings = ProductProviderMapping::where('provider', 'paddle')
+                    ->pluck('product_id', 'provider_id');
+                
+                $page = 1;
+
+                foreach ($products as $product) {
+                    try {
+                        $this->syncPaddleProduct($product, $existingMappings);
+                        $productCount++;
+                    } catch (\Throwable $e) {
+                         $this->error("    ❌ Failed to sync product {$product['id']}: {$e->getMessage()}");
+                    }
+                }
+                
+                $nextUrl = $data['meta']['pagination']['next'] ?? null;
+                $page++;
+                
+                // Small delay between pagination requests to avoid rate limiting
+                if ($nextUrl) {
+                    usleep(500000); // 0.5 seconds
+                }
+                
+                if ($page > 50) {
+                    $this->warn("  ⚠️ Safety limit reached (50 pages). Stopping sync.");
+                    break;
+                }
+            } while ($nextUrl);
 
             $this->info("  ✓ {$productCount} products synced");
 
             // Sync prices
             $this->info('  → Fetching prices...');
-            $pricesResponse = Http::withToken($apiKey)
-                ->acceptJson()
-                ->get("{$baseUrl}/prices", [
-                    'per_page' => 200,
-                    'status' => 'active,archived',
-                ]);
-
-            if (!$pricesResponse->successful()) {
-                throw new \RuntimeException('Failed to fetch prices: ' . $pricesResponse->body());
-            }
-
-            $prices = $pricesResponse->json('data') ?? [];
+            $nextUrl = "{$baseUrl}/prices?per_page=100&status=active,archived";
             $priceCount = 0;
+            $skippedCount = 0;
 
-            foreach ($prices as $price) {
-                $this->syncPaddlePrice($price);
-                $priceCount++;
-            }
+            do {
+                $pricesResponse = Http::retry(3, 500)
+                    ->timeout(30)
+                    ->withToken($apiKey)
+                    ->acceptJson()
+                    ->get($nextUrl);
 
-            $this->info("  ✓ {$priceCount} prices synced");
+                if (!$pricesResponse->successful()) {
+                    throw new \RuntimeException('Failed to fetch prices: ' . $pricesResponse->body());
+                }
+
+                $data = $pricesResponse->json();
+                $prices = $data['data'] ?? [];
+                
+                // CRITICAL: If we get 0 prices, stop pagination (Paddle bug workaround)
+                if (count($prices) === 0) {
+                    break;
+                }
+                
+                // Pre-fetch all existing Paddle price mappings
+                $existingPriceMappings = PriceProviderMapping::where('provider', 'paddle')
+                    ->pluck('price_id', 'provider_id');
+
+                foreach ($prices as $price) {
+                    $synced = $this->syncPaddlePrice($price, $existingPriceMappings, $apiKey, $baseUrl);
+                    if ($synced) {
+                        $priceCount++;
+                    } else {
+                        $skippedCount++;
+                    }
+                }
+
+                $nextUrl = $data['meta']['pagination']['next'] ?? null;
+                
+                // Small delay between pagination requests
+                if ($nextUrl) {
+                    usleep(500000); // 0.5 seconds
+                }
+            } while ($nextUrl);
+
+            $this->info("  ✓ {$priceCount} prices synced" . ($skippedCount > 0 ? ", {$skippedCount} skipped" : ''));
 
             return true;
         } catch (\Throwable $e) {
@@ -229,12 +286,20 @@ class SyncBillingProducts extends Command
     /**
      * Sync a Paddle product.
      */
-    private function syncPaddleProduct(array $product): void
+    private function syncPaddleProduct(array $product, $existingMappings): void
     {
         $id = $product['id'] ?? null;
         $name = $product['name'] ?? 'Unknown';
 
         if (!$id) {
+            return;
+        }
+
+        // OPTIMIZATION: Check memory map first.
+        // If it's NOT in our map (unmapped) AND it's archived, skip it immediately.
+        // This avoids the DB query below.
+        $isMapped = $existingMappings->has((string) $id);
+        if (!$isMapped && ($product['status'] ?? 'active') !== 'active' && !$this->allowImportDeleted) {
             return;
         }
 
@@ -257,7 +322,8 @@ class SyncBillingProducts extends Command
         $productData = [
             'name' => $name,
             'description' => $product['description'] ?? null,
-            'is_active' => ($product['status'] ?? 'active') === 'active',
+            'type' => 'subscription',
+            'is_active' => strtolower($product['status'] ?? 'active') === 'active',
             'synced_at' => now(),
         ];
 
@@ -283,6 +349,41 @@ class SyncBillingProducts extends Command
              
             $productModel->update($productData);
         } else {
+            // Only import if active
+            if (strtolower($product['status'] ?? 'active') !== 'active' && !$this->allowImportDeleted) {
+                return;
+            }
+
+            // SMART LINKING: Check if product exists by name locally to avoid duplicates
+            $existingProduct = Product::where('name', $name)->first();
+
+            if ($existingProduct) {
+                // Check if mapping already exists to prevent duplicates
+                $existingMapping = ProductProviderMapping::where('provider', 'paddle')
+                    ->where('provider_id', (string) $id)
+                    ->first();
+                
+                if (!$existingMapping) {
+                    $this->info("    🔗 Linked '{$name}' to existing local product.");
+                    
+                    // Create the missing mapping (only if it truly doesn't exist)
+                    ProductProviderMapping::firstOrCreate([
+                        'provider' => 'paddle',
+                        'provider_id' => (string) $id,
+                    ], [
+                        'product_id' => $existingProduct->id,
+                    ]);
+                }
+
+                // Update the local product with latest data (e.g. key/status)
+                $finalKey = $this->ensureUniqueKey(Product::class, $existingProduct->key, 'paddle', (string) $id);
+                if($existingProduct->key !== $finalKey) {
+                     $productData['key'] = $finalKey;
+                }
+                $existingProduct->update($productData);
+                return;
+            }
+
             // Create new product
             $key = $customData['plan_key'] ?? $customData['product_key'] ?? $this->generateKey($name, $id);
             $finalKey = $this->ensureUniqueKey(Product::class, $key, 'paddle', (string) $id);
@@ -302,26 +403,52 @@ class SyncBillingProducts extends Command
 
     /**
      * Sync a Paddle price.
+     * 
+     * @return bool True if price was synced, false if skipped
      */
-    private function syncPaddlePrice(array $price): void
+    private function syncPaddlePrice(array $price, $existingMappings, string $apiKey, string $baseUrl): bool
     {
         $id = $price['id'] ?? null;
         $productId = $price['product_id'] ?? null;
 
         if (!$id) {
-            return;
+            return false;
+        }
+
+        // DEBUG: Targeted logging for the problematic price
+        $debug = false;
+        if ($debug) {
+            $this->warn("DEBUG: Processing target price {$id}");
+            $this->warn("DEBUG: Status: " . ($price['status'] ?? 'unknown'));
+            $this->warn("DEBUG: Product ID: {$productId}");
+        }
+
+        // OPTIMIZATION: Check memory map first.
+        $isMapped = $existingMappings->has((string) $id);
+
+        if ($debug) {
+             $this->warn("DEBUG: isMapped: " . ($isMapped ? 'yes' : 'no'));
+             $this->warn("DEBUG: allowImportDeleted: " . ($this->allowImportDeleted ? 'yes' : 'no'));
+        }
+        if (!$isMapped && ($price['status'] ?? 'active') !== 'active' && !$this->allowImportDeleted) {
+            if ($debug) $this->warn("DEBUG: Skipped due to optimization check");
+            return false;
         }
 
         if ($this->dryRun) {
             $this->line("    Would sync price: {$id}");
-            return;
+            return true;
         }
 
         // Find or create product
-        $product = $this->findPaddleProduct($productId);
+        $product = $this->findOrFetchPaddleProduct($productId, $apiKey, $baseUrl);
 
         if (!$product) {
-            return;
+            if ($debug) $this->warn("DEBUG: Skipped because product was not found/created");
+            $this->warn("    ⚠ Skipped price {$id}: Product {$productId} not found");
+            return false;
+        } else {
+            if ($debug) $this->warn("DEBUG: Product found: {$product->id}");
         }
 
         $customData = $price['custom_data'] ?? [];
@@ -347,50 +474,61 @@ class SyncBillingProducts extends Command
             'has_trial' => isset($price['trial_period']),
             'trial_interval' => $price['trial_period']['interval'] ?? null,
             'trial_interval_count' => $price['trial_period']['frequency'] ?? null,
-            'is_active' => ($price['status'] ?? 'active') === 'active',
+            'is_active' => strtolower($price['status'] ?? 'active') === 'active',
         ];
 
-        if ($mapping) {
-            if (!$mapping->price) {
-                if (!$this->allowImportDeleted) {
-                    return;
+        if ($debug) {
+            $this->warn("DEBUG: priceData: " . json_encode($priceData));
+        }
+
+        try {
+            if ($mapping) {
+                if (!$mapping->price) {
+                    if (!$this->allowImportDeleted) {
+                        return false;
+                    }
+
+                    $finalKey = $this->ensureUniqueKey(Price::class, $key, 'paddle', (string) $id);
+                    $priceData['key'] = $finalKey;
+                    $priceModel = Price::create($priceData);
+                    $mapping->update(['price_id' => $priceModel->id]);
+                    return true;
+                }
+
+                $priceModel = $mapping->price;
+                $finalKey = $this->ensureUniqueKey(Price::class, $priceModel->key, 'paddle', (string) $id);
+                if($priceModel->key !== $finalKey) {
+                     $priceData['key'] = $finalKey;
+                }
+                $priceModel->update($priceData);
+                if ($debug) $this->warn("DEBUG: Updated existing price model {$priceModel->id}");
+                return true;
+            } else {
+                // Only import if active
+                if (strtolower($price['status'] ?? 'active') !== 'active' && !$this->allowImportDeleted) {
+                    if ($debug) $this->warn("DEBUG: Skipped inactive price (Status: " . ($price['status'] ?? 'active') . ")");
+                    return false;
                 }
 
                 $finalKey = $this->ensureUniqueKey(Price::class, $key, 'paddle', (string) $id);
                 $priceData['key'] = $finalKey;
-                $priceModel = Price::create($priceData);
-                $mapping->update(['price_id' => $priceModel->id]);
-                return;
-            }
 
-            $priceModel = $mapping->price;
-            // Ensure consistency similar to products
-            $finalKey = $this->ensureUniqueKey(Price::class, $priceModel->key, 'paddle', (string) $id);
-            if($priceModel->key !== $finalKey) {
-                 $priceData['key'] = $finalKey;
+                $priceModel = Price::create($priceData);
+                
+                PriceProviderMapping::create([
+                    'price_id' => $priceModel->id,
+                    'provider' => 'paddle',
+                    'provider_id' => (string) $id,
+                ]);
+
+                if ($debug) $this->warn("DEBUG: Created new price {$priceModel->id} and mapping for {$id}");
+                return true;
             }
-            $priceModel->update($priceData);
-        } else {
-            $key = $customData['price_key'] ?? $this->resolvePaddlePriceKey($interval, $intervalCount);
-            // $key is not unique yet, maybe we should suffix it?
-            // Actually preserveOrGenerateKey handled that logic.
-            // Let's implement robust key logic inline or keep helper.
-            $key = $this->generateKey($interval, $id); // Simplification: just use generic + suffix, or user key
-            if(!empty($customData['price_key'])) {
-                $key = $customData['price_key'];
-            }
-            
-            $finalKey = $this->ensureUniqueKey(Price::class, $key, 'paddle', (string) $id);
-            $priceData['key'] = $finalKey;
-            
-            $priceModel = Price::create($priceData);
-            
-            PriceProviderMapping::create([
-                'price_id' => $priceModel->id,
-                'provider' => 'paddle',
-                'provider_id' => (string) $id,
-            ]);
+        } catch (\Exception $e) {
+            $this->error("ERROR: Failed to save price/mapping for {$id}: " . $e->getMessage());
+            return false;
         }
+
     }
 
     /**
@@ -408,6 +546,128 @@ class SyncBillingProducts extends Command
                       ->where('provider_id', $productId);
             })
             ->first();
+    }
+
+    /**
+     * Find product locally, or fetch from Paddle API if not found.
+     */
+    private function findOrFetchPaddleProduct(?string $productId, string $apiKey, string $baseUrl): ?Product
+    {
+        if (!$productId) {
+            return null;
+        }
+
+        // First try to find locally
+        $product = $this->findPaddleProduct($productId);
+        
+        if ($product) {
+            return $product;
+        }
+
+        // Check if there's a mapping but product was deleted
+        $existingMapping = ProductProviderMapping::where('provider', 'paddle')
+            ->where('provider_id', (string) $productId)
+            ->first();
+            
+        if ($existingMapping && !$existingMapping->product) {
+            // Mapping exists but product was deleted
+            if (!$this->allowImportDeleted) {
+                $this->line("      (Product {$productId} was previously deleted locally)");
+                return null;
+            }
+            
+            // --force flag is set - restore the product by fetching from Paddle and linking to existing mapping
+            try {
+                $this->line("      Restoring deleted product {$productId}...");
+                
+                $response = Http::retry(2, 500)
+                    ->timeout(15)
+                    ->withToken($apiKey)
+                    ->acceptJson()
+                    ->get("{$baseUrl}/products/{$productId}");
+
+                if ($response->successful()) {
+                    $this->line("      API response for {$productId}: " . $response->status());
+                } else {
+                    $this->line("      API returned error: " . $response->body());
+                    return null;
+                }
+
+                $paddleProduct = $response->json('data');
+                
+                if (!$paddleProduct) {
+                    $this->line("      No product data in response. Data found: " . json_encode($response->json()));
+                    return null;
+                }
+
+                $name = $paddleProduct['name'] ?? 'Unknown';
+                $customData = $paddleProduct['custom_data'] ?? [];
+                $key = $customData['plan_key'] ?? $customData['product_key'] ?? $this->generateKey($name, $productId);
+                $finalKey = $this->ensureUniqueKey(Product::class, $key, 'paddle', (string) $productId);
+                
+                $productModel = Product::create([
+                    'key' => $finalKey,
+                    'name' => $name,
+                    'description' => $paddleProduct['description'] ?? null,
+                    'type' => 'subscription',
+                    'is_active' => strtolower($paddleProduct['status'] ?? 'active') === 'active',
+                    'synced_at' => now(),
+                ]);
+                
+                // Update the existing mapping to point to the new product
+                $existingMapping->update(['product_id' => $productModel->id]);
+                
+                $this->info("      ✓ Restored product: {$name}");
+                return $productModel;
+            } catch (\Throwable $e) {
+                $this->warn("    ⚠ Failed to restore product {$productId}: {$e->getMessage()}");
+                return null;
+            }
+        }
+
+        // Not found locally - fetch from Paddle API and create
+        try {
+            $this->line("      Fetching product {$productId} from Paddle API...");
+            
+            $response = Http::retry(2, 500)
+                ->timeout(15)
+                ->withToken($apiKey)
+                ->acceptJson()
+                ->get("{$baseUrl}/products/{$productId}");
+
+            if (!$response->successful()) {
+                $this->line("      API returned status: {$response->status()}");
+                return null;
+            }
+
+            $paddleProduct = $response->json('data');
+            
+            if (!$paddleProduct) {
+                $this->line("      No product data in response");
+                return null;
+            }
+
+            // Pre-fetch existing mappings (empty collection for new product)
+            $existingMappings = ProductProviderMapping::where('provider', 'paddle')
+                ->pluck('product_id', 'provider_id');
+
+            // Sync the product
+            $this->syncPaddleProduct($paddleProduct, $existingMappings);
+
+            // Now find it
+            $product = $this->findPaddleProduct($productId);
+            
+            if ($product) {
+                $this->info("      ✓ Created product: {$product->name}");
+            } else {
+                $this->line("      Failed to create product locally");
+            }
+            
+            return $product;
+        } catch (\Throwable $e) {
+            $this->warn("    ⚠ Failed to fetch product {$productId} from Paddle: {$e->getMessage()}");
+            return null;
+        }
     }
 
     /**
@@ -450,27 +710,79 @@ class SyncBillingProducts extends Command
         try {
             // Sync products
             $this->info('  → Fetching products...');
-            $products = $this->fetchLemonSqueezyResource('products', $apiKey, [
-                'filter[store_id]' => $storeId,
-            ]);
+            $nextUrl = "https://api.lemonsqueezy.com/v1/products?filter[store_id]={$storeId}&page[size]=100";
             $productCount = 0;
 
-            foreach ($products as $product) {
-                $this->syncLemonSqueezyProduct($product);
-                $productCount++;
-            }
+            do {
+                $productsResponse = Http::retry(3, 500)
+                    ->timeout(30)
+                    ->withToken($apiKey)
+                    ->withHeaders(['Accept' => 'application/vnd.api+json'])
+                    ->get($nextUrl);
+
+                if (!$productsResponse->successful()) {
+                    throw new \RuntimeException('Failed to fetch products: ' . $productsResponse->body());
+                }
+
+                $data = $productsResponse->json();
+                $products = $data['data'] ?? [];
+                
+                // CRITICAL: If we get 0 products, stop pagination (API bug workaround)
+                if (count($products) === 0) {
+                    break;
+                }
+
+                foreach ($products as $product) {
+                    $this->syncLemonSqueezyProduct($product);
+                    $productCount++;
+                }
+
+                $nextUrl = $data['links']['next'] ?? null;
+                
+                // Small delay between pagination requests
+                if ($nextUrl) {
+                    usleep(500000); // 0.5 seconds
+                }
+            } while ($nextUrl);
 
             $this->info("  ✓ {$productCount} products synced");
 
             // Sync variants (these are like prices in LS)
             $this->info('  → Fetching variants...');
-            $variants = $this->fetchLemonSqueezyResource('variants', $apiKey);
+            $nextUrl = "https://api.lemonsqueezy.com/v1/variants?page[size]=100";
             $variantCount = 0;
 
-            foreach ($variants as $variant) {
-                $this->syncLemonSqueezyVariant($variant);
-                $variantCount++;
-            }
+            do {
+                $variantsResponse = Http::retry(3, 500)
+                    ->timeout(30)
+                    ->withToken($apiKey)
+                    ->withHeaders(['Accept' => 'application/vnd.api+json'])
+                    ->get($nextUrl);
+
+                if (!$variantsResponse->successful()) {
+                    throw new \RuntimeException('Failed to fetch variants: ' . $variantsResponse->body());
+                }
+
+                $data = $variantsResponse->json();
+                $variants = $data['data'] ?? [];
+                
+                // CRITICAL: If we get 0 variants, stop pagination (API bug workaround)
+                if (count($variants) === 0) {
+                    break;
+                }
+
+                foreach ($variants as $variant) {
+                    $this->syncLemonSqueezyVariant($variant);
+                    $variantCount++;
+                }
+
+                $nextUrl = $data['links']['next'] ?? null;
+                
+                // Small delay between pagination requests
+                if ($nextUrl) {
+                    usleep(500000); // 0.5 seconds
+                }
+            } while ($nextUrl);
 
             $this->info("  ✓ {$variantCount} variants synced");
 
@@ -578,13 +890,15 @@ class SyncBillingProducts extends Command
             return;
         }
 
-        // Get product ID from relationships
-        $productId = $variant['relationships']['product']['data']['id'] ?? null;
+        // Get product ID from attributes (primary) or relationships (fallback)
+        // LemonSqueezy API includes product_id directly in attributes
+        $productId = $attributes['product_id'] ?? $variant['relationships']['product']['data']['id'] ?? null;
 
         // Find product for this variant
         $product = $this->findLemonSqueezyProduct($productId);
 
         if (!$product) {
+            $this->warn("      ⚠ Variant {$id}: Product {$productId} not found locally");
             return;
         }
 
@@ -686,35 +1000,57 @@ class SyncBillingProducts extends Command
      */
     private function ensureUniqueKey(string $model, string $key, string $provider, string $providerId): string
     {
-        $original = $key;
-        $counter = 1;
+        // Check if the desired key is already available (not taken, or taken by THIS record)
+        $query = $model::query();
 
-        while ($model::query()
-            ->where('key', $key)
-            // If we found a product with this key...
+        if (method_exists($model, 'withTrashed')) {
+            $query->withTrashed();
+        }
+
+        $query->where('key', $key)
             ->when($providerId, function($q) use ($provider, $providerId, $model) {
-                // Check if it is NOT the one linked to this provider/id
-                // We want to find IF 'key' is taken by SOMEONE ELSE.
+                // Ignore if it's the SAME record (checks both Product and Price mappings)
                 if ($model === Product::class) {
                      $q->whereDoesntHave('providerMappings', function ($mq) use ($provider, $providerId) {
                          $mq->where('provider', $provider)
                             ->where('provider_id', $providerId);
                      });
-                }
-                // Also check for PriceProviderMapping if model is Price
-                if ($model === Price::class) {
+                } elseif ($model === Price::class) {
                      $q->whereDoesntHave('mappings', function ($mq) use ($provider, $providerId) {
                         $mq->where('provider', $provider)
                            ->where('provider_id', $providerId);
                     });
                 }
-            })
-            ->exists()) {
-            $key = "{$original}-{$counter}";
+            });
+
+        if (!$query->exists()) {
+            return $key;
+        }
+
+        $original = $key;
+
+        // If taken, find all keys starting with "{$original}-" to determine the next suffix
+        // We use a raw query or simple LIKE to fetch potential collisions
+        // Limit to 1000 collisions to avoid memory issues in extreme cases, though unlikely.
+        $collisionQuery = $model::query();
+        if (method_exists($model, 'withTrashed')) {
+             $collisionQuery->withTrashed();
+        }
+
+        $collisions = $collisionQuery
+            ->where('key', 'LIKE', "{$original}-%")
+            ->pluck('key')
+            ->toArray();
+
+        // Convert collisions to a lookup set for O(1) checking
+        $taken = array_flip($collisions);
+        $counter = 1;
+
+        while (isset($taken["{$original}-{$counter}"])) {
             $counter++;
         }
 
-        return $key;
+        return "{$original}-{$counter}";
     }
 
     /**
@@ -726,14 +1062,14 @@ class SyncBillingProducts extends Command
              $mapping = ProductProviderMapping::where('provider', $provider)
                 ->where('provider_id', $providerId)
                 ->first();
-             return $mapping ? $mapping->product->key : $default;
+             return ($mapping && $mapping->product) ? $mapping->product->key : $default;
         }
 
         if ($model === Price::class) {
              $mapping = PriceProviderMapping::where('provider', $provider)
                 ->where('provider_id', $providerId)
                 ->first();
-             return $mapping ? $mapping->price->key : $default;
+             return ($mapping && $mapping->price) ? $mapping->price->key : $default;
         }
 
         // Fallback for models not yet refactored (none?)

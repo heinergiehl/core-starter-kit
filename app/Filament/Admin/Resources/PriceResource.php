@@ -45,6 +45,7 @@ class PriceResource extends Resource
                     ->preload(),
                 Forms\Components\TextInput::make('key')
                     ->label('Key')
+                    ->readOnly()
                     ->maxLength(64)
                     ->helperText('Use keys like monthly, yearly, lifetime.'),
                 Forms\Components\TextInput::make('label')
@@ -61,40 +62,49 @@ class PriceResource extends Resource
                     ->label('Interval')
                     ->maxLength(32)
                     ->required()
+                    ->readOnly()
                     ->helperText('Example: month, year, lifetime.'),
                 Forms\Components\TextInput::make('interval_count')
                     ->label('Interval count')
                     ->numeric()
                     ->minValue(1)
-                    ->default(1),
+                    ->default(1)
+                    ->readOnly(),
                 Forms\Components\TextInput::make('currency')
                     ->label('Currency')
                     ->maxLength(3)
                     ->required()
+                    ->readOnly()
                     ->dehydrateStateUsing(fn (?string $state): ?string => $state ? strtoupper($state) : null),
                 Forms\Components\TextInput::make('amount')
                     ->numeric()
                     ->minValue(0)
                     ->required()
+                    ->readOnly()
                     ->helperText('Stored in minor units (e.g. 2900 for €29.00).'),
                 Forms\Components\Select::make('type')
                     ->options([
                         'flat' => 'Flat',
                         'per_seat' => 'Per seat',
                     ])
-                    ->default('flat'),
+                    ->default('flat')
+                    ->readOnly(),
                 Forms\Components\Toggle::make('has_trial')
-                    ->label('Has trial'),
+                    ->label('Has trial')
+                    ->readOnly(),
                 Forms\Components\TextInput::make('trial_interval')
                     ->label('Trial interval')
-                    ->maxLength(32),
+                    ->maxLength(32)
+                    ->readOnly(),
                 Forms\Components\TextInput::make('trial_interval_count')
                     ->label('Trial interval count')
                     ->numeric()
-                    ->minValue(1),
+                    ->minValue(1)
+                    ->readOnly(),
                 Forms\Components\Toggle::make('is_active')
                     ->label('Active')
-                    ->default(false),
+                    ->default(false)
+                    ->helperText('Controls local visibility only.'),
             ])
             ->columns(2);
     }
@@ -136,7 +146,7 @@ class PriceResource extends Resource
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
             ])
             ->headerActions([
-                CreateAction::make(),
+                // CreateAction::make(), // Disabled for Provider-First
                 Action::make('sync')
                     ->label('Sync from Providers')
                     ->icon('heroicon-o-arrow-path')
@@ -153,12 +163,10 @@ class PriceResource extends Resource
             ->defaultSort('product_id')
             ->actions([
                 EditAction::make(),
-                DeleteAction::make(),
+                // Delete removed: Prices are managed on provider side (Paddle/Stripe/LemonSqueezy)
             ])
             ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                // Bulk delete removed: Prices are managed on provider side
             ]);
     }
 
@@ -166,7 +174,7 @@ class PriceResource extends Resource
     {
         return [
             'index' => ListPrices::route('/'),
-            'create' => CreatePrice::route('/create'),
+            // 'create' => CreatePrice::route('/create'),
             'edit' => EditPrice::route('/{record}/edit'),
         ];
     }

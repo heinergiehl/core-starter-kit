@@ -24,23 +24,17 @@ class StripePriceHandlerTest extends TestCase
 
     public function test_handles_price_created_event(): void
     {
-        // Create product and plan first
+        // Create product first
         $product = Product::create([
             'key' => 'test-product-abc123',
             'name' => 'Test Product',
-            'provider' => 'stripe',
-            'provider_id' => 'prod_PriceTest123',
             'is_active' => true,
         ]);
 
-        Plan::create([
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
             'product_id' => $product->id,
-            'key' => 'test-plan',
-            'name' => 'Test Plan',
-            'type' => 'subscription',
             'provider' => 'stripe',
             'provider_id' => 'prod_PriceTest123',
-            'is_active' => true,
         ]);
 
         $event = WebhookEvent::create([
@@ -70,46 +64,48 @@ class StripePriceHandlerTest extends TestCase
         $this->handler->handle($event, $object);
 
         $this->assertDatabaseHas('prices', [
-            'provider' => 'stripe',
-            'provider_id' => 'price_TestPrice123',
+            'product_id' => $product->id,
             'currency' => 'USD',
             'amount' => 2900,
             'interval' => 'month',
             'interval_count' => 1,
             'is_active' => true,
         ]);
+
+        $this->assertDatabaseHas('price_provider_mappings', [
+            'provider' => 'stripe',
+            'provider_id' => 'price_TestPrice123',
+        ]);
     }
 
     public function test_handles_price_deleted_event(): void
     {
-        // Create product, plan, and price
+        // Create product and price
         $product = Product::create([
             'key' => 'test-product-del123',
             'name' => 'Test Product',
-            'provider' => 'stripe',
-            'provider_id' => 'prod_DeletePrice',
             'is_active' => true,
         ]);
 
-        $plan = Plan::create([
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
             'product_id' => $product->id,
-            'key' => 'test-plan-del',
-            'name' => 'Test Plan',
-            'type' => 'subscription',
             'provider' => 'stripe',
             'provider_id' => 'prod_DeletePrice',
-            'is_active' => true,
         ]);
 
-        Price::create([
-            'plan_id' => $plan->id,
+        $price = Price::create([
+            'product_id' => $product->id,
             'key' => 'monthly-del123',
-            'provider' => 'stripe',
-            'provider_id' => 'price_ToDelete123',
             'interval' => 'month',
             'currency' => 'USD',
             'amount' => 1000,
             'is_active' => true,
+        ]);
+
+        \App\Domain\Billing\Models\PriceProviderMapping::create([
+            'price_id' => $price->id,
+            'provider' => 'stripe',
+            'provider_id' => 'price_ToDelete123',
         ]);
 
         $event = WebhookEvent::create([
@@ -131,8 +127,7 @@ class StripePriceHandlerTest extends TestCase
 
         // Price should be deactivated, not deleted
         $this->assertDatabaseHas('prices', [
-            'provider' => 'stripe',
-            'provider_id' => 'price_ToDelete123',
+            'id' => $price->id,
             'is_active' => false,
         ]);
     }
@@ -142,19 +137,13 @@ class StripePriceHandlerTest extends TestCase
         $product = Product::create([
             'key' => 'label-test-abc123',
             'name' => 'Label Test',
-            'provider' => 'stripe',
-            'provider_id' => 'prod_LabelTest123',
             'is_active' => true,
         ]);
 
-        Plan::create([
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
             'product_id' => $product->id,
-            'key' => 'label-test-plan',
-            'name' => 'Label Test Plan',
-            'type' => 'subscription',
             'provider' => 'stripe',
             'provider_id' => 'prod_LabelTest123',
-            'is_active' => true,
         ]);
 
         $price = $this->handler->syncPrice([
@@ -179,19 +168,13 @@ class StripePriceHandlerTest extends TestCase
         $product = Product::create([
             'key' => 'onetime-test-abc123',
             'name' => 'One Time Test',
-            'provider' => 'stripe',
-            'provider_id' => 'prod_OneTime123',
             'is_active' => true,
         ]);
 
-        Plan::create([
+        \App\Domain\Billing\Models\ProductProviderMapping::create([
             'product_id' => $product->id,
-            'key' => 'onetime-test-plan',
-            'name' => 'One Time Plan',
-            'type' => 'one_time',
             'provider' => 'stripe',
             'provider_id' => 'prod_OneTime123',
-            'is_active' => true,
         ]);
 
         $price = $this->handler->syncPrice([

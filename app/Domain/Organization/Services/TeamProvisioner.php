@@ -5,6 +5,7 @@ namespace App\Domain\Organization\Services;
 use App\Domain\Organization\Enums\TeamRole;
 use App\Domain\Organization\Models\Team;
 use App\Domain\Organization\Services\TenantDomainValidator;
+use App\Domain\Tenancy\Services\TenantProvisioner;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -43,6 +44,8 @@ class TeamProvisioner
             'subdomain' => $subdomain,
             'owner_id' => $user->id,
         ]);
+
+        app(TenantProvisioner::class)->syncDomainsForTeam($team);
 
         $team->members()->attach($user->id, [
             'role' => TeamRole::Owner->value,
