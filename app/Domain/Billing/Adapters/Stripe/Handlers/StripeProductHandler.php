@@ -8,6 +8,7 @@ use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\ProductProviderMapping;
 use App\Domain\Billing\Models\WebhookEvent;
 use Illuminate\Support\Str;
+use Stripe\StripeClient;
 
 /**
  * Handles Stripe product lifecycle webhook events.
@@ -77,9 +78,13 @@ class StripeProductHandler implements StripeWebhookHandler
             return null;
         }
 
+        // Determine product type from Stripe prices
+        $type = $this->resolveProductType($productId);
+
         $productData = [
             'name' => $name,
             'description' => data_get($object, 'description'),
+            'type' => $type,
             'is_active' => $active,
             // 'synced_at' => now(),
         ];
@@ -110,6 +115,45 @@ class StripeProductHandler implements StripeWebhookHandler
         ]);
         
         return $product;
+    }
+
+    /**
+     * Determine the product type based on its Stripe prices.
+     * 
+     * If all prices are one-time (no recurring), returns 'one_time'.
+     * If any price has recurring billing, returns 'subscription'.
+     */
+    private function resolveProductType(string $productId): string
+    {
+        $secret = config('services.stripe.secret');
+
+        if (!$secret) {
+            return 'subscription'; // Default to subscription if we can't check
+        }
+
+        try {
+            $client = new StripeClient($secret);
+            $prices = $client->prices->all([
+                'product' => $productId,
+                'limit' => 10,
+            ]);
+
+            if (empty($prices->data)) {
+                return 'subscription'; // No prices yet, default to subscription
+            }
+
+            // Check if ANY price has a recurring component
+            foreach ($prices->data as $price) {
+                if (!empty($price->recurring)) {
+                    return 'subscription';
+                }
+            }
+
+            // All prices are one-time
+            return 'one_time';
+        } catch (\Throwable) {
+            return 'subscription'; // On error, default to subscription
+        }
     }
 
     /**

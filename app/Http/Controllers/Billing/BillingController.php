@@ -48,18 +48,40 @@ class BillingController
                 ->take(5)
                 ->get();
         } else {
-             // Check for recent completed order (provisioning race condition)
+             // Check for recent completed subscription order (provisioning race condition)
+             // Only show pending state for subscription orders, not one-time purchases
+             // We determine one-time vs subscription by checking if the associated product has type='one_time'
              $pendingOrder = \App\Domain\Billing\Models\Order::query()
                 ->where('team_id', $team->id)
                 ->whereIn('status', ['paid', 'completed'])
                 ->where('created_at', '>=', now()->subMinutes(10))
+                // Exclude one-time product orders - they don't create subscriptions
+                ->whereDoesntHave('product', fn ($q) => $q->where('type', 'one_time'))
                 ->latest('id')
                 ->first();
         }
         
+        // Check for recent one-time purchases to show success banner (within 10 minutes)
+        $recentOneTimeOrder = \App\Domain\Billing\Models\Order::query()
+            ->where('team_id', $team->id)
+            ->whereIn('status', ['paid', 'completed'])
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->whereHas('product', fn ($q) => $q->where('type', 'one_time'))
+            ->latest('id')
+            ->first();
+        
+        // Get all one-time orders for purchase history (regardless of when they were made)
+        $oneTimeOrders = \App\Domain\Billing\Models\Order::query()
+            ->where('team_id', $team->id)
+            ->whereIn('status', ['paid', 'completed'])
+            ->whereHas('product', fn ($q) => $q->where('type', 'one_time'))
+            ->with('product')
+            ->latest('id')
+            ->get();
+        
         $canCancel = $subscription && in_array($subscription->status, ['active', 'trialing']);
 
-        return view('billing.index', compact('team', 'subscription', 'plan', 'invoices', 'pendingOrder', 'canCancel'));
+        return view('billing.index', compact('team', 'subscription', 'plan', 'invoices', 'pendingOrder', 'recentOneTimeOrder', 'oneTimeOrders', 'canCancel'));
     }
 
     /**

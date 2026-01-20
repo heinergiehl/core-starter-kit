@@ -13,6 +13,10 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         return 'paddle';
     }
 
+    private const PER_PAGE = 100;
+    private const MAX_RETRIES = 3;
+    private const RETRY_SLEEP_MS = 200;
+
     public function fetch(): array
     {
         $apiKey = config('services.paddle.api_key');
@@ -27,26 +31,49 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         $warnings = [];
 
         // Fetch products
-        $productsResponse = Http::withToken($apiKey)
-            ->acceptJson()
-            ->get("{$baseUrl}/products", ['per_page' => 200]);
+        $products = [];
+        $nextUrl = "{$baseUrl}/products";
+        $queryParams = ['per_page' => self::PER_PAGE]; 
 
-        if (!$productsResponse->successful()) {
-            throw new RuntimeException('Failed to fetch Paddle products: ' . $productsResponse->body());
-        }
+        do {
+            $response = Http::withToken($apiKey)
+                ->acceptJson()
+                ->retry(self::MAX_RETRIES, self::RETRY_SLEEP_MS)
+                ->get($nextUrl, $queryParams);
 
-        $products = $productsResponse->json('data') ?? [];
+            if (!$response->successful()) {
+                throw new RuntimeException('Failed to fetch Paddle products: ' . $response->body());
+            }
+
+            $data = $response->json();
+            $products = array_merge($products, $data['data'] ?? []);
+            
+            $nextUrl = $data['meta']['pagination']['next'] ?? null;
+            $queryParams = []; 
+        } while ($nextUrl);
+
 
         // Fetch all prices
-        $pricesResponse = Http::withToken($apiKey)
-            ->acceptJson()
-            ->get("{$baseUrl}/prices", ['per_page' => 200]);
+        $allPrices = collect();
+        $nextUrl = "{$baseUrl}/prices";
+        $queryParams = ['per_page' => self::PER_PAGE];
 
-        if (!$pricesResponse->successful()) {
-            throw new RuntimeException('Failed to fetch Paddle prices: ' . $pricesResponse->body());
-        }
+        do {
+            $response = Http::withToken($apiKey)
+                ->acceptJson()
+                ->retry(self::MAX_RETRIES, self::RETRY_SLEEP_MS)
+                ->get($nextUrl, $queryParams);
 
-        $allPrices = collect($pricesResponse->json('data') ?? []);
+            if (!$response->successful()) {
+                throw new RuntimeException('Failed to fetch Paddle prices: ' . $response->body());
+            }
+
+            $data = $response->json();
+            $allPrices = $allPrices->merge($data['data'] ?? []);
+
+            $nextUrl = $data['meta']['pagination']['next'] ?? null;
+            $queryParams = [];
+        } while ($nextUrl);
 
         foreach ($products as $product) {
             $productId = $product['id'] ?? null;
@@ -83,9 +110,12 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         $productKey = $this->resolveProductKey($customData, $product);
         $planKey = $this->resolvePlanKey($product, $customData);
         $planType = $this->resolvePlanType($customData, $prices);
+        
+        $providerId = (string) ($product['id'] ?? '');
 
         return [
             'product' => [
+                'provider_id' => $providerId,
                 'key' => $productKey,
                 'name' => $customData['product_name'] ?? $product['name'] ?? 'Paddle Product',
                 'description' => $product['description'] ?? '',
@@ -111,16 +141,21 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
     private function normalizePrice(array $price, array $product, array $customData): ?array
     {
         $unitPrice = $price['unit_price'] ?? [];
-        $amount = (int) ($unitPrice['amount'] ?? 0);
+        // Paddle returns amounts in minor units string, e.g. "1000" for $10.00
+        // We cast to int. 0 is valid for free plans.
+        $amount = isset($unitPrice['amount']) ? (int) $unitPrice['amount'] : null;
 
-        if ($amount === 0) {
+        if ($amount === null) {
             return null;
         }
 
         $billingCycle = $price['billing_cycle'] ?? null;
         $interval = $billingCycle['interval'] ?? 'once';
         $intervalCount = (int) ($billingCycle['frequency'] ?? 1);
-        $trialDays = (int) ($price['trial_period']['frequency'] ?? 0);
+        
+        $trialPeriod = $price['trial_period'] ?? null;
+        $trialDays = (int) ($trialPeriod['frequency'] ?? 0);
+        $trialInterval = $trialPeriod['interval'] ?? 'day';
 
         $priceCustomData = $price['custom_data'] ?? [];
         $priceKey = $this->resolvePriceKey($price, $priceCustomData, $interval, $intervalCount);
@@ -137,7 +172,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
             'amount' => $amount,
             'type' => 'flat',
             'has_trial' => $trialDays > 0,
-            'trial_interval' => $trialDays > 0 ? 'day' : null,
+            'trial_interval' => $trialDays > 0 ? $trialInterval : null,
             'trial_interval_count' => $trialDays > 0 ? $trialDays : null,
             'is_active' => ($price['status'] ?? 'active') === 'active',
         ];
@@ -210,6 +245,10 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
     {
         if (is_bool($value)) {
             return $value;
+        }
+
+        if (is_numeric($value)) {
+            return (bool) ((int) $value);
         }
 
         if (is_string($value)) {

@@ -6,7 +6,10 @@ return [
         'default_provider' => env('BILLING_DEFAULT_PROVIDER', 'stripe'),
         'default_plan' => env('BILLING_DEFAULT_PLAN', 'starter'),
         'sync_catalog_via_webhooks' => env('BILLING_SYNC_CATALOG_VIA_WEBHOOKS', true),
-        'catalog' => env('BILLING_CATALOG', 'config'),
+        // Catalog source: 'database' uses products/prices synced from billing providers
+        // All plan management happens in Stripe/Paddle/LemonSqueezy dashboards
+        // Features & entitlements are edited via Filament /admin/products
+        'catalog' => 'database',
         'discounts' => [
             'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
         ],
@@ -29,134 +32,25 @@ return [
             'retry_delay_ms' => env('BILLING_PROVIDER_RETRY_DELAY_MS', 500),
         ],
         'outbox' => [
-            'deletion_rate_limits' => [
-                'default' => env('BILLING_PROVIDER_DELETE_RATE', 30),
-                'stripe' => env('BILLING_STRIPE_DELETE_RATE', env('BILLING_PROVIDER_DELETE_RATE', 30)),
-                'paddle' => env('BILLING_PADDLE_DELETE_RATE', env('BILLING_PROVIDER_DELETE_RATE', 30)),
-                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_DELETE_RATE', env('BILLING_PROVIDER_DELETE_RATE', 30)),
-            ],
-            'publish_rate_limits' => [
-                'default' => env('BILLING_PROVIDER_PUBLISH_RATE', 10),
-                'stripe' => env('BILLING_STRIPE_PUBLISH_RATE', env('BILLING_PROVIDER_PUBLISH_RATE', 10)),
-                'paddle' => env('BILLING_PADDLE_PUBLISH_RATE', env('BILLING_PROVIDER_PUBLISH_RATE', 10)),
-                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_PUBLISH_RATE', env('BILLING_PROVIDER_PUBLISH_RATE', 10)),
-            ],
+            // Reserved for future use
         ],
         'success_url' => env('BILLING_SUCCESS_URL'),
         'cancel_url' => env('BILLING_CANCEL_URL'),
-        'plans' => [
-            'starter' => [
-                'name' => 'Starter',
-                'summary' => 'Solo founders validating demand.',
-                'type' => 'subscription',
-                'seat_based' => false,
-                'entitlements' => [
-                    'max_seats' => 3,
-                    'storage_limit_mb' => 2048,
-                    'support_sla' => 'community',
-                ],
-                'features' => [
-                    'Up to 3 team members',
-                    '2 GB storage',
-                    'Email support',
-                    'Core analytics',
-                ],
-                'prices' => [
-                    'monthly' => [
-                        'label' => 'Monthly',
-                        'amount' => 29,
-                        'currency' => 'USD',
-                        'interval' => 'month',
-                        'providers' => [
-                            'stripe' => env('BILLING_STARTER_MONTHLY_STRIPE_ID'),
-                            'paddle' => env('BILLING_STARTER_MONTHLY_PADDLE_ID'),
-                            'lemonsqueezy' => env('BILLING_STARTER_MONTHLY_LEMON_SQUEEZY_ID'),
-                        ],
-                    ],
-                    'yearly' => [
-                        'label' => 'Yearly',
-                        'amount' => 290,
-                        'currency' => 'USD',
-                        'interval' => 'year',
-                        'providers' => [
-                            'stripe' => env('BILLING_STARTER_YEARLY_STRIPE_ID'),
-                            'paddle' => env('BILLING_STARTER_YEARLY_PADDLE_ID'),
-                            'lemonsqueezy' => env('BILLING_STARTER_YEARLY_LEMON_SQUEEZY_ID'),
-                        ],
-                    ],
-                ],
-            ],
-            'team' => [
-                'name' => 'Team',
-                'summary' => 'Seat-based billing for growing teams.',
-                'type' => 'subscription',
-                'seat_based' => true,
-                'highlight' => true,
-                'entitlements' => [
-                    'max_seats' => null,
-                    'storage_limit_mb' => 10240,
-                    'support_sla' => 'priority',
-                ],
-                'features' => [
-                    'Seat-based pricing that scales',
-                    '10 GB storage',
-                    'Audit log + team roles',
-                    'Priority email support',
-                ],
-                'prices' => [
-                    'monthly' => [
-                        'label' => 'Monthly',
-                        'amount' => 59,
-                        'currency' => 'USD',
-                        'interval' => 'month',
-                        'providers' => [
-                            'stripe' => env('BILLING_TEAM_MONTHLY_STRIPE_ID'),
-                            'paddle' => env('BILLING_TEAM_MONTHLY_PADDLE_ID'),
-                            'lemonsqueezy' => env('BILLING_TEAM_MONTHLY_LEMON_SQUEEZY_ID'),
-                        ],
-                    ],
-                    'yearly' => [
-                        'label' => 'Yearly',
-                        'amount' => 590,
-                        'currency' => 'USD',
-                        'interval' => 'year',
-                        'providers' => [
-                            'stripe' => env('BILLING_TEAM_YEARLY_STRIPE_ID'),
-                            'paddle' => env('BILLING_TEAM_YEARLY_PADDLE_ID'),
-                            'lemonsqueezy' => env('BILLING_TEAM_YEARLY_LEMON_SQUEEZY_ID'),
-                        ],
-                    ],
-                ],
-            ],
-            'lifetime' => [
-                'name' => 'Lifetime',
-                'summary' => 'One-time purchase for indie teams.',
-                'type' => 'one_time',
-                'seat_based' => false,
-                'entitlements' => [
-                    'max_seats' => 5,
-                    'storage_limit_mb' => 5120,
-                    'support_sla' => 'email',
-                ],
-                'features' => [
-                    'Pay once, keep updates',
-                    'Up to 5 team members',
-                    '5 GB storage',
-                    'Priority bug fixes',
-                ],
-                'prices' => [
-                    'lifetime' => [
-                        'label' => 'One-time',
-                        'amount' => 499,
-                        'currency' => 'USD',
-                        'interval' => 'once',
-                        'providers' => [
-                            'stripe' => env('BILLING_LIFETIME_STRIPE_ID'),
-                            'paddle' => env('BILLING_LIFETIME_PADDLE_ID'),
-                            'lemonsqueezy' => env('BILLING_LIFETIME_LEMON_SQUEEZY_ID'),
-                        ],
-                    ],
-                ],
+        
+        // Pricing page display options
+        'pricing' => [
+            // Allow customers to choose their preferred payment provider
+            // Useful when serving international customers who may prefer different
+            // payment methods (PayPal via Paddle, local methods, etc.)
+            // Set to false to use only the default_provider
+            'provider_choice_enabled' => env('BILLING_PROVIDER_CHOICE_ENABLED', true),
+            
+            // Provider display labels (customer-friendly names)
+            // Customize these based on what payment methods you've enabled
+            'provider_labels' => [
+                'stripe' => 'Stripe',
+                'paddle' => 'Paddle',
+                'lemonsqueezy' => 'Lemon Squeezy',
             ],
         ],
     ],

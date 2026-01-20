@@ -14,6 +14,8 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
         return 'stripe';
     }
 
+    private const PER_PAGE = 100;
+
     public function fetch(): array
     {
         $secret = config('services.stripe.secret');
@@ -26,11 +28,11 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
         $items = [];
         $warnings = [];
 
-        foreach ($client->products->all(['limit' => 100])->autoPagingIterator() as $product) {
+        foreach ($client->products->all(['limit' => self::PER_PAGE])->autoPagingIterator() as $product) {
             $productMetadata = $this->normalizeMetadata($product->metadata ?? []);
 
             $prices = [];
-            foreach ($client->prices->all(['limit' => 100, 'product' => $product->id])->autoPagingIterator() as $price) {
+            foreach ($client->prices->all(['limit' => self::PER_PAGE, 'product' => $product->id])->autoPagingIterator() as $price) {
                 $pricePayload = $this->normalizePrice($price, $product, $productMetadata);
 
                 if (!$pricePayload) {
@@ -60,6 +62,7 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
 
         return [
             'product' => [
+                'provider_id' => $product->id,
                 'key' => $productKey,
                 'name' => $this->resolveProductName($productKey, $metadata, (string) $product->name),
                 'description' => $productDescription,

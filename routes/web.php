@@ -6,7 +6,6 @@ use App\Http\Controllers\Billing\BillingPortalController;
 use App\Http\Controllers\Billing\BillingProcessingController;
 use App\Http\Controllers\Billing\BillingStatusController;
 use App\Http\Controllers\Billing\CheckoutStartController;
-use App\Http\Controllers\Billing\CheckoutClaimController;
 use App\Http\Controllers\Billing\PaddleCheckoutController;
 use App\Http\Controllers\Billing\PricingController;
 use App\Http\Controllers\Billing\WebhookController;
@@ -63,9 +62,6 @@ Route::get('/billing/processing', BillingProcessingController::class)
     ->name('billing.processing');
 Route::get('/checkout/start', CheckoutStartController::class)
     ->name('checkout.start');
-Route::get('/checkout/claim/{intent}', CheckoutClaimController::class)
-    ->middleware('signed')
-    ->name('checkout.claim');
 Route::get('/paddle/checkout', PaddleCheckoutController::class)
     ->name('paddle.checkout');
 
@@ -111,11 +107,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/app/invoices/{invoice}/pdf', [\App\Http\Controllers\Billing\InvoiceController::class, 'downloadInvoice'])
         ->middleware('team')
         ->name('invoices.download_invoice');
-});
-
-// Protected App Routes (Require Subscription)
-Route::middleware(['auth', 'verified', 'subscribed'])->group(function () {
-    // Add other protected routes here if needed in the future
 });
 
 Route::middleware('auth')->group(function () {

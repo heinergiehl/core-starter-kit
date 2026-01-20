@@ -3,22 +3,15 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\Price;
-use App\Filament\Admin\Resources\PriceResource\Pages\CreatePrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\EditPrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\ListPrices;
-use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Support\Facades\Artisan;
+
 
 class PriceResource extends Resource
 {
@@ -120,15 +113,17 @@ class PriceResource extends Resource
                 Tables\Columns\TextColumn::make('key')
                     ->badge()
                     ->toggleable(),
-                // Tables\Columns\TextColumn::make('provider')
-                //     ->badge()
-                //     ->color(fn (?string $state): string => match ($state) {
-                //         'stripe' => 'primary',
-                //         'lemonsqueezy' => 'warning',
-                //         'paddle' => 'success',
-                //         default => 'gray',
-                //     })
-                //     ->sortable(),
+                Tables\Columns\TextColumn::make('mappings.provider')
+                    ->label('Providers')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
+                        'stripe' => 'primary',
+                        'lemonsqueezy' => 'warning',
+                        'paddle' => 'success',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
+                    ->toggleable(),
                 Tables\Columns\TextColumn::make('interval')
                     ->sortable(),
                 Tables\Columns\TextColumn::make('amount')
@@ -146,19 +141,7 @@ class PriceResource extends Resource
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
             ])
             ->headerActions([
-                // CreateAction::make(), // Disabled for Provider-First
-                Action::make('sync')
-                    ->label('Sync from Providers')
-                    ->icon('heroicon-o-arrow-path')
-                    ->color('gray')
-                    ->action(function () {
-                        Artisan::call('billing:sync-products');
-                        Notification::make()
-                            ->title('Sync complete')
-                            ->body('Products and prices have been synced from all providers.')
-                            ->success()
-                            ->send();
-                    }),
+                // Sync moved to ProductResource - prices are synced together with products
             ])
             ->defaultSort('product_id')
             ->actions([

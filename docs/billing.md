@@ -291,3 +291,41 @@ Notes:
   - verify webhook endpoint is reachable from the provider
   - verify signature secret
   - check `webhook_events` log in Admin Panel
+
+---
+
+## 14) Archive Products (Provider Cleanup)
+
+Use the `billing:archive-all` command to archive (soft-delete) products directly on billing provider dashboards. Archived products won't sync into the local database.
+
+### Usage
+
+```bash
+# Preview what would be archived (no changes made)
+php artisan billing:archive-all --provider=stripe --dry-run
+
+# Archive all Stripe products
+php artisan billing:archive-all --provider=stripe
+
+# Archive all Paddle products and prices
+php artisan billing:archive-all --provider=paddle
+
+# Archive across all providers
+php artisan billing:archive-all --provider=all
+
+# Include prices (Stripe only)
+php artisan billing:archive-all --provider=stripe --include-prices
+```
+
+### Provider behavior
+
+| Provider | Action |
+|----------|--------|
+| Stripe | Sets `active: false` on products (and optionally prices) |
+| Paddle | Sets `status: archived` on products and prices |
+| LemonSqueezy | ⚠️ Not supported via API - archive manually in dashboard |
+
+### When to use
+- **Development cleanup** - Clear out test products
+- **Provider migration** - Archive old provider before switching
+- **Fresh start** - Clean slate for your product catalog

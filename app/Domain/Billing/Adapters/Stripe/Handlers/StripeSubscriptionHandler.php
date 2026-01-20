@@ -78,7 +78,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $metadata['stripe_status'] = $status;
         $metadata['event_type'] = $eventType;
 
-        Subscription::query()->updateOrCreate(
+        $subscription = Subscription::query()->updateOrCreate(
             [
                 'provider' => $this->provider(),
                 'provider_id' => $providerId,
@@ -97,6 +97,33 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         );
 
         $this->syncBillingCustomer($teamId, $customerId, data_get($object, 'customer_email'));
+
+        // Dispatch Notifications
+        $team = $subscription->team;
+        $owner = $team?->owner;
+
+        if ($owner) {
+            // 1. Welcome / Started Notification
+            if ($subscription->status === 'active' && !$subscription->welcome_email_sent_at) {
+                $owner->notify(new \App\Notifications\SubscriptionStartedNotification(
+                    planName: ucfirst($planKey),
+                    amount: (int) data_get($object, 'items.data.0.price.unit_amount', 0),
+                    currency: strtoupper((string) data_get($object, 'currency', 'usd')),
+                ));
+
+                $subscription->forceFill(['welcome_email_sent_at' => now()])->save();
+            }
+
+            // 2. Cancellation Notification
+            if ($subscription->status === 'canceled' && !$subscription->cancellation_email_sent_at) {
+                $owner->notify(new \App\Notifications\SubscriptionCancelledNotification(
+                    planName: ucfirst($planKey),
+                    accessUntil: $subscription->ends_at?->format('F j, Y'),
+                ));
+
+                $subscription->forceFill(['cancellation_email_sent_at' => now()])->save();
+            }
+        }
     }
 
     /**

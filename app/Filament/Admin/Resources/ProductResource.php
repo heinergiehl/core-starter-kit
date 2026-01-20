@@ -68,7 +68,7 @@ class ProductResource extends Resource
                     ])
                     ->required()
                     ->default('subscription')
-                    ->readOnly(),
+                    ->disabled(),
                 Forms\Components\Toggle::make('seat_based')
                     ->label('Seat-based'),
                 Forms\Components\TextInput::make('max_seats')
@@ -133,15 +133,16 @@ class ProductResource extends Resource
                 Tables\Columns\TextColumn::make('type')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'one_time' ? 'warning' : 'primary'),
-                Tables\Columns\TextColumn::make('provider')
+                Tables\Columns\TextColumn::make('providerMappings.provider')
+                    ->label('Providers')
                     ->badge()
-                    ->color(fn (?string $state): string => match ($state) {
+                    ->color(fn (string $state): string => match ($state) {
                         'stripe' => 'primary',
                         'lemonsqueezy' => 'warning',
                         'paddle' => 'success',
                         default => 'gray',
                     })
-                    ->sortable()
+                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
                     ->toggleable(),
                 Tables\Columns\TextColumn::make('is_active')
                     ->label('Status')

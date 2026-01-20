@@ -60,6 +60,9 @@
                     <x-application-logo class="h-10 w-10 text-primary" />
                     <span class="font-display text-2xl tracking-tight">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
                 </a>
+                <div class="ml-auto">
+                    <x-theme-switcher />
+                </div>
             </div>
 
             <div class="w-full sm:max-w-md mt-8 px-8 py-8 glass-panel overflow-hidden rounded-[24px]">

@@ -65,6 +65,7 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
                 EnsureAdminUser::class,
-            ]);
+            ])
+            ->globalSearch(false);
     }
 }

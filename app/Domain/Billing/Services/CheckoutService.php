@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Adapters\PaddleAdapter;
-use App\Domain\Billing\Models\CheckoutIntent;
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Subscription;
@@ -133,6 +132,26 @@ class CheckoutService
     }
 
     /**
+     * Check if team has any purchase (subscription OR one-time order).
+     * 
+     * This is used to prevent duplicate purchases - once a team has bought
+     * either a subscription or a one-time product, they cannot purchase again.
+     */
+    public function hasAnyPurchase(Team $team): bool
+    {
+        // Check for active subscription
+        if ($this->hasActiveSubscription($team)) {
+            return true;
+        }
+
+        // Check for any paid one-time order
+        return \App\Domain\Billing\Models\Order::query()
+            ->where('team_id', $team->id)
+            ->whereIn('status', ['paid', 'completed'])
+            ->exists();
+    }
+
+    /**
      * Create a Paddle transaction and return the transaction ID.
      *
      * @return string|RedirectResponse Transaction ID on success, RedirectResponse on failure
@@ -231,39 +250,7 @@ class CheckoutService
         return $data;
     }
 
-    /**
-     * Create a CheckoutIntent for guest Paddle checkouts.
-     */
-    public function createCheckoutIntent(
-        Request $request,
-        string $provider,
-        string $planKey,
-        string $priceKey,
-        int $quantity,
-        ?string $priceCurrency,
-        ?int $amount,
-        ?Discount $discount,
-    ): CheckoutIntent {
-        return CheckoutIntent::create([
-            'provider' => $provider,
-            'plan_key' => $planKey,
-            'price_key' => $priceKey,
-            'quantity' => $quantity,
-            'currency' => $priceCurrency,
-            'amount' => $amount,
-            'amount_is_minor' => true,
-            'status' => 'pending',
-            'discount_id' => $discount?->id,
-            'discount_code' => $discount?->code,
-            'metadata' => [
-                'host' => $request->getHost(),
-                'locale' => app()->getLocale(),
-                'ip' => $request->ip(),
-                'user_agent' => substr((string) $request->userAgent(), 0, 255),
-                'referrer' => $request->headers->get('referer'),
-            ],
-        ]);
-    }
+
 
     /**
      * Create a checkout session for tracking the checkout flow.
@@ -291,21 +278,29 @@ class CheckoutService
     /**
      * Build checkout URLs with session UUID for secure auth restoration.
      *
+     * @param string $planType The plan type ('subscription' or 'one_time')
      * @return array{success: string, cancel: string}
      */
-    public function buildCheckoutUrls(string $provider, CheckoutSession $session): array
+    public function buildCheckoutUrls(string $provider, CheckoutSession $session, string $planType = 'subscription'): array
     {
         $successUrl = config('saas.billing.success_url');
         $cancelUrl = config('saas.billing.cancel_url');
 
         if (!$successUrl) {
-            $successUrl = route('billing.processing', [
-                'session' => $session->uuid,
-            ], true);
+            // One-time payments skip processing page - payment is already complete
+            // No need to poll for webhook, just show success directly
+            if ($planType === 'one_time') {
+                $successUrl = route('billing.index', [], true);
+            } else {
+                // Subscriptions need to wait for webhook to create subscription record
+                $successUrl = route('billing.processing', [
+                    'session' => $session->uuid,
+                ], true);
 
-            // Stripe needs session_id placeholder
-            if ($provider === 'stripe') {
-                $successUrl .= '&stripe_session={CHECKOUT_SESSION_ID}';
+                // Stripe needs session_id placeholder
+                if ($provider === 'stripe') {
+                    $successUrl .= '&stripe_session={CHECKOUT_SESSION_ID}';
+                }
             }
         }
 
@@ -316,48 +311,7 @@ class CheckoutService
         return ['success' => $successUrl, 'cancel' => $cancelUrl];
     }
 
-    /**
-     * Generate a signed auth token for session recovery.
-     */
-    public function generateAuthToken(User $user): string
-    {
-        $data = [
-            'user_id' => $user->id,
-            'expires' => now()->addHours(1)->timestamp,
-        ];
-        
-        $payload = base64_encode(json_encode($data));
-        $signature = hash_hmac('sha256', $payload, config('app.key'));
-        
-        return $payload . '.' . $signature;
-    }
 
-    /**
-     * Verify and decode an auth token.
-     * 
-     * @return User|null
-     */
-    public function verifyAuthToken(?string $token): ?User
-    {
-        if (!$token || !str_contains($token, '.')) {
-            return null;
-        }
-        
-        [$payload, $signature] = explode('.', $token, 2);
-        $expectedSignature = hash_hmac('sha256', $payload, config('app.key'));
-        
-        if (!hash_equals($expectedSignature, $signature)) {
-            return null;
-        }
-        
-        $data = json_decode(base64_decode($payload), true);
-        
-        if (!$data || ($data['expires'] ?? 0) < now()->timestamp) {
-            return null;
-        }
-        
-        return User::find($data['user_id'] ?? 0);
-    }
 
     /**
      * Calculate quantity for checkout, considering seat-based plans.

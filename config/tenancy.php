@@ -40,7 +40,9 @@ return [
      */
     'bootstrappers' => [
         Stancl\Tenancy\Bootstrappers\CacheTenancyBootstrapper::class,
-        // Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,
+        Stancl\Tenancy\Bootstrappers\FilesystemTenancyBootstrapper::class,
+        Stancl\Tenancy\Bootstrappers\QueueTenancyBootstrapper::class,
+        // Stancl\Tenancy\Bootstrappers\DatabaseTenancyBootstrapper::class, // Disabled for Single-Database Tenancy
         // Stancl\Tenancy\Bootstrappers\RedisTenancyBootstrapper::class, // Note: phpredis is needed
     ],
 

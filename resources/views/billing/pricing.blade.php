@@ -8,11 +8,20 @@
         $user = auth()->user();
         $team = $user?->currentTeam;
         $canCheckout = $user && $team && $user->can('billing', $team);
-        $providerLabels = [
+        
+        // Check if user already has any purchase (subscription OR one-time)
+        $hasPurchased = $canCheckout && app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($team);
+        
+        // Get customer-friendly provider labels from config
+        $providerLabels = config('saas.billing.pricing.provider_labels', [
             'stripe' => 'Stripe',
             'paddle' => 'Paddle',
             'lemonsqueezy' => 'Lemon Squeezy',
-        ];
+        ]);
+        
+        // Check if provider choice is enabled for customers
+        $providerChoiceEnabled = config('saas.billing.pricing.provider_choice_enabled', true);
+        
         $catalog = strtolower((string) config('saas.billing.catalog', 'config'));
         $couponEnabledProviders = array_map('strtolower', config('saas.billing.discounts.providers', ['stripe']));
         $couponEnabled = in_array($provider ?? 'stripe', $couponEnabledProviders, true);
@@ -28,36 +37,40 @@
                 <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data. Switch providers instantly.') }}</p>
             </div>
             
-            <!-- Provider Toggles -->
-            <div class="flex flex-wrap items-center gap-2 p-1.5 rounded-full bg-surface-highlight/10 border border-ink/5 backdrop-blur-md">
-                @foreach ($providers as $providerOption)
-                    <a
-                        href="{{ route('pricing', ['provider' => $providerOption]) }}"
-                        class="{{ $providerOption === $provider 
-                            ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                            : 'text-ink/60 hover:text-ink hover:bg-surface/50' }} 
-                            rounded-full px-5 py-2 text-sm font-semibold transition-all duration-300"
-                    >
-                        {{ $providerLabels[$providerOption] ?? ucfirst($providerOption) }}
-                    </a>
-                @endforeach
-            </div>
+            @if ($providerChoiceEnabled && count($providers) > 1)
+                <!-- Provider Toggles (only shown when multiple providers and choice enabled) -->
+                <div class="flex flex-wrap items-center gap-2 p-1.5 rounded-full bg-surface-highlight/10 border border-ink/5 backdrop-blur-md">
+                    @foreach ($providers as $providerOption)
+                        <a
+                            href="{{ route('pricing', ['provider' => $providerOption]) }}"
+                            class="{{ $providerOption === $provider 
+                                ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+                                : 'text-ink/60 hover:text-ink hover:bg-surface/50' }} 
+                                rounded-full px-5 py-2 text-sm font-semibold transition-all duration-300"
+                        >
+                            {{ $providerLabels[$providerOption] ?? ucfirst($providerOption) }}
+                        </a>
+                    @endforeach
+                </div>
+            @endif
         </div>
 
-        <!-- Provider Info Banner -->
-        <div class="mt-8 rounded-2xl border border-ink/5 bg-surface-highlight/5 px-6 py-3 text-sm text-ink/60 backdrop-blur flex items-center gap-2">
-            <svg class="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            <span>
-                <span class="font-semibold text-ink">{{ __('Active Provider:') }}</span>
-                {{ $providerLabels[$provider] ?? ucfirst($provider) }}
-            </span>
-            <span class="mx-2 text-ink/20">|</span>
-            <span>
-                {{ $catalog === 'database'
-                    ? __('Manage prices in Admin > Prices to activate checkout buttons.')
-                    : __('Use pricing IDs from `.env` to activate checkout buttons.') }}
-            </span>
-        </div>
+        @if ($providerChoiceEnabled && count($providers) > 1)
+            <!-- Provider Info Banner (only shown in multi-provider mode) -->
+            <div class="mt-8 rounded-2xl border border-ink/5 bg-surface-highlight/5 px-6 py-3 text-sm text-ink/60 backdrop-blur flex items-center gap-2">
+                <svg class="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                <span>
+                    <span class="font-semibold text-ink">{{ __('Active Provider:') }}</span>
+                    {{ $providerLabels[$provider] ?? ucfirst($provider) }}
+                </span>
+                <span class="mx-2 text-ink/20">|</span>
+                <span>
+                    {{ $catalog === 'database'
+                        ? __('Manage prices in Admin > Prices to activate checkout buttons.')
+                        : __('Use pricing IDs from `.env` to activate checkout buttons.') }}
+                </span>
+            </div>
+        @endif
 
         @if ($errors->has('billing'))
             <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/10 text-rose-600 px-4 py-3 text-sm backdrop-blur">
@@ -146,6 +159,15 @@
                                         @else
                                             <p class="text-xs font-medium text-amber-500 bg-amber-500/10 px-2 py-1 rounded-md inline-block">{{ __('Missing Env ID') }}</p>
                                         @endif
+                                    @elseif ($hasPurchased)
+                                        {{-- User already has a purchase - show link to billing instead --}}
+                                        <div class="text-center space-y-2">
+                                            <p class="text-xs font-medium text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
+                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                                                {{ __('Already purchased') }}
+                                            </p>
+                                            <a href="{{ route('billing.index') }}" class="block text-xs text-primary hover:text-primary/80 font-medium">{{ __('View billing →') }}</a>
+                                        </div>
                                     @elseif ($canCheckout)
                                         <form method="POST" action="{{ route('billing.checkout') }}">
                                             @csrf

@@ -189,20 +189,86 @@
                     }, 3000);
                 </script>
 
-            @else
-                <!-- No Subscription -->
+            @elseif($recentOneTimeOrder)
+                <!-- One-Time Purchase Success -->
                 <div class="glass-panel rounded-[32px] p-8 text-center">
-                    <div class="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4">
+                    <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-4">
                         <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <h2 class="text-xl font-display font-bold text-ink">{{ __('No Active Subscription') }}</h2>
-                    <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('You are currently on the free plan. Upgrade to unlock premium features.') }}</p>
-                    <a href="{{ route('pricing') }}" class="btn-primary mt-6 inline-block">
-                        {{ __('View Plans') }}
+                    <h2 class="text-xl font-display font-bold text-ink">{{ __('Purchase Complete!') }}</h2>
+                    <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('Thank you for your purchase. Your order has been processed successfully.') }}</p>
+                    <div class="mt-6">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border text-emerald-600 bg-emerald-500/10 border-emerald-500/20">
+                            {{ __('Paid') }} • {{ strtoupper($recentOneTimeOrder->currency) }} {{ number_format($recentOneTimeOrder->amount / 100, 2) }}
+                        </span>
+                    </div>
+                    <div class="mt-4">
+                        <span class="text-xs font-mono text-ink/40">{{ __('Order ID: :id', ['id' => $recentOneTimeOrder->id]) }}</span>
+                    </div>
+                    <a href="{{ route('dashboard') }}" class="btn-primary mt-6 inline-block">
+                        {{ __('Go to Dashboard') }}
                     </a>
                 </div>
+
+            @else
+                @if (isset($oneTimeOrders) && $oneTimeOrders->count() > 0)
+                    {{-- One-Time Purchases Section --}}
+                    <div class="glass-panel rounded-[32px] p-8">
+                        <div class="flex items-center gap-3 mb-6">
+                            <div class="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-display font-bold text-ink">{{ __('Your Purchases') }}</h2>
+                                <p class="text-sm text-ink/60">{{ __('One-time payments completed') }}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-3">
+                            @foreach ($oneTimeOrders as $order)
+                                <div class="card-inner px-5 py-4 flex items-center justify-between">
+                                    <div>
+                                        <p class="font-semibold text-ink">{{ $order->product?->name ?? $order->plan_key }}</p>
+                                        <p class="text-xs text-ink/50">{{ __('Order') }} #{{ $order->id }} · {{ $order->created_at->format('M d, Y') }}</p>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-lg">
+                                            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
+                                            {{ __('Paid') }}
+                                        </span>
+                                        <p class="text-sm font-medium text-ink mt-1">
+                                            {{ strtoupper($order->currency ?? 'USD') }} {{ number_format($order->amount / 100, 2) }}
+                                        </p>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                        
+                        <div class="mt-6 pt-6 border-t border-ink/5 text-center">
+                            <a href="{{ route('dashboard') }}" class="btn-primary inline-block">
+                                {{ __('Go to Dashboard') }}
+                            </a>
+                        </div>
+                    </div>
+                @else
+                    <!-- No Subscription and No Purchases -->
+                    <div class="glass-panel rounded-[32px] p-8 text-center">
+                        <div class="mx-auto w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-4">
+                            <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                            </svg>
+                        </div>
+                        <h2 class="text-xl font-display font-bold text-ink">{{ __('No Active Subscription') }}</h2>
+                        <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('You are currently on the free plan. Upgrade to unlock premium features.') }}</p>
+                        <a href="{{ route('pricing') }}" class="btn-primary mt-6 inline-block">
+                            {{ __('View Plans') }}
+                        </a>
+                    </div>
+                @endif
             @endif
         </div>
     </div>

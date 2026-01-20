@@ -6,12 +6,13 @@ use App\Domain\Organization\Models\Team;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class BillingCustomer extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToTenant;
 
-    protected $table = 'billing_customers';
+    protected $guarded = [];
 
     protected $fillable = [
         'team_id',

@@ -399,7 +399,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $status = (string) (data_get($attributes, 'status') ?? 'active');
         $quantity = (int) (data_get($attributes, 'quantity') ?? 1);
 
-        Subscription::query()->updateOrCreate(
+        $subscription = Subscription::query()->updateOrCreate(
             [
                 'provider' => $this->provider(),
                 'provider_id' => (string) $subscriptionId,
@@ -426,6 +426,37 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             $planKey,
             data_get($payload, 'meta.custom_data.price_key')
         );
+
+        // Dispatch Notifications
+        $team = $subscription->team;
+        $owner = $team?->owner;
+
+        if ($owner) {
+            // 1. Welcome / Started Notification
+            if ($subscription->status === 'active' && !$subscription->welcome_email_sent_at) {
+                // Try to find amount from order if available in payload, otherwise 0
+                $amount = (int) (data_get($attributes, 'total') ?? 0);
+                $currency = (string) (data_get($attributes, 'currency') ?? 'USD');
+
+                $owner->notify(new \App\Notifications\SubscriptionStartedNotification(
+                    planName: ucfirst($planKey),
+                    amount: $amount,
+                    currency: strtoupper($currency),
+                ));
+
+                $subscription->forceFill(['welcome_email_sent_at' => now()])->save();
+            }
+
+            // 2. Cancellation Notification
+            if ($subscription->status === 'canceled' && !$subscription->cancellation_email_sent_at) {
+                $owner->notify(new \App\Notifications\SubscriptionCancelledNotification(
+                    planName: ucfirst($planKey),
+                    accessUntil: $subscription->ends_at?->format('F j, Y'),
+                ));
+
+                $subscription->forceFill(['cancellation_email_sent_at' => now()])->save();
+            }
+        }
     }
 
     private function syncOrder(array $payload, array $attributes, string $eventType): void
@@ -669,46 +700,5 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         }
 
         return \Illuminate\Support\Carbon::parse($timestamp);
-    }
-    public function archiveProduct(string $providerId): void
-    {
-        $apiKey = config('services.lemonsqueezy.api_key');
-
-        if (!$apiKey) {
-            throw new RuntimeException('Lemon Squeezy API key is missing.');
-        }
-
-        // Lemon Squeezy uses DELETE to remove/archive
-        $response = $this->lemonSqueezyRequest($apiKey)
-            ->delete("/products/{$providerId}");
-
-        if ($response->status() === 404) {
-            return;
-        }
-
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy archive product failed: ' . $response->body());
-        }
-    }
-
-    public function archivePrice(string $providerId): void
-    {
-        $apiKey = config('services.lemonsqueezy.api_key');
-
-        if (!$apiKey) {
-            throw new RuntimeException('Lemon Squeezy API key is missing.');
-        }
-
-        // Lemon Squeezy "prices" are Variants
-        $response = $this->lemonSqueezyRequest($apiKey)
-            ->delete("/variants/{$providerId}");
-
-        if ($response->status() === 404) {
-            return;
-        }
-
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy archive price failed: ' . $response->body());
-        }
     }
 }

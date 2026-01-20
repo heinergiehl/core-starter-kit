@@ -81,15 +81,6 @@ class CatalogImportService
 
                     // Sync mapping if provider_id is present
                     if ($apply && !empty($productPayload['provider_id'])) {
-                        $mapping = ProductProviderMapping::query()
-                            ->where('provider', $provider)
-                            ->where('provider_id', $productPayload['provider_id'])
-                            ->first();
-
-                        if ($mapping && !$mapping->product_id) {
-                            continue;
-                        }
-
                         ProductProviderMapping::updateOrCreate(
                             [
                                 'provider' => $provider,
@@ -115,9 +106,10 @@ class CatalogImportService
                         ->where('provider', $provider)
                         ->where('provider_id', $providerId)
                         ->first();
-                    if ($mapping && !$mapping->price_id) {
-                        continue;
-                    }
+                    
+                    // Note: We do NOT skip if mapping exists but has no price_id (tombstone).
+                    // We want to re-link it if found/created.
+
                     $price = $mapping?->price;
 
                     $pricePayload['product_id'] = $product?->id ?? $price?->product_id;
@@ -133,9 +125,6 @@ class CatalogImportService
                         }
 
                         if ($price) {
-                            if ($mapping && !$mapping->price_id) {
-                                continue;
-                            }
                             PriceProviderMapping::updateOrCreate(
                                 [
                                     'provider' => $provider,

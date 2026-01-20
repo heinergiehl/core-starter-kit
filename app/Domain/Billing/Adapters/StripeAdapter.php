@@ -203,7 +203,7 @@ class StripeAdapter implements BillingProviderAdapter
         $mode = $request->resolveMode($plan);
         $metadata = $request->metadata();
 
-        $params = $this->buildCheckoutParams($request, $priceId, $mode, $metadata);
+        $params = $this->buildCheckoutParams($request, $priceId, $mode, $metadata, $plan);
 
         try {
             $client = $this->stripeClient();
@@ -270,14 +270,20 @@ class StripeAdapter implements BillingProviderAdapter
      * @param string $priceId Stripe price ID
      * @param string $mode Payment mode (subscription or payment)
      * @param array<string, string> $metadata Session metadata
+     * @param array<string, mixed> $plan The plan configuration
      * @return array<string, mixed>
      */
     private function buildCheckoutParams(
         CheckoutRequest $request,
         string $priceId,
         string $mode,
-        array $metadata
+        array $metadata,
+        array $plan = []
     ): array {
+        // Build descriptive payment type info
+        $paymentTypeLabel = $mode === 'subscription' ? 'Subscription' : 'One-time purchase';
+        $planName = $plan['name'] ?? $request->planKey;
+        
         $params = [
             'mode' => $mode,
             'line_items' => [
@@ -291,6 +297,16 @@ class StripeAdapter implements BillingProviderAdapter
             'client_reference_id' => (string) $request->team->id,
             'metadata' => $metadata,
             'allow_promotion_codes' => true,
+            // Customize the submit button based on payment type
+            'submit_type' => $mode === 'subscription' ? 'auto' : 'pay',
+            // Add custom text for better user experience
+            'custom_text' => [
+                'submit' => [
+                    'message' => $mode === 'subscription' 
+                        ? "You'll be charged automatically each billing period." 
+                        : "This is a one-time payment. No recurring charges.",
+                ],
+            ],
         ];
 
         // Apply discount if provided
@@ -382,32 +398,15 @@ class StripeAdapter implements BillingProviderAdapter
             throw BillingException::missingConfiguration('Stripe', 'secret');
         }
 
-        return new StripeClient([
-            'api_key' => $secret,
-            'timeout' => (int) config('saas.billing.provider_api.timeouts.stripe', 15),
-            'connect_timeout' => (int) config('saas.billing.provider_api.connect_timeouts.stripe', 5),
-            'max_network_retries' => (int) config('saas.billing.provider_api.retries.stripe', 2),
-        ]);
-    }
-    public function archiveProduct(string $providerId): void
-    {
-        $client = $this->stripeClient();
+        // Note: Stripe SDK configures timeouts via Stripe\Stripe::setMaxNetworkRetries()
+        // and request options, not via constructor. See Stripe SDK docs.
+        $client = new StripeClient($secret);
         
-        try {
-            $client->products->update($providerId, ['active' => false]);
-        } catch (\Exception $e) {
-            throw BillingException::failedAction('Stripe', 'archive product', $e->getMessage());
-        }
-    }
+        // Configure retries at the SDK level
+        \Stripe\Stripe::setMaxNetworkRetries(
+            (int) config('saas.billing.provider_api.retries.stripe', 2)
+        );
 
-    public function archivePrice(string $providerId): void
-    {
-        $client = $this->stripeClient();
-
-        try {
-            $client->prices->update($providerId, ['active' => false]);
-        } catch (\Exception $e) {
-            throw BillingException::failedAction('Stripe', 'archive price', $e->getMessage());
-        }
+        return $client;
     }
 }

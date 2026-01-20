@@ -6,10 +6,12 @@ use App\Domain\Organization\Models\Team;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class Subscription extends Model
 {
-    use HasFactory;
+    use HasFactory, BelongsToTenant;
 
     protected static function booted()
     {
@@ -42,6 +44,8 @@ class Subscription extends Model
         'renews_at',
         'ends_at',
         'canceled_at',
+        'welcome_email_sent_at',
+        'cancellation_email_sent_at',
         'metadata',
     ];
 
@@ -51,6 +55,8 @@ class Subscription extends Model
         'renews_at' => 'datetime',
         'ends_at' => 'datetime',
         'canceled_at' => 'datetime',
+        'welcome_email_sent_at' => 'datetime',
+        'cancellation_email_sent_at' => 'datetime',
         'metadata' => 'array',
     ];
 

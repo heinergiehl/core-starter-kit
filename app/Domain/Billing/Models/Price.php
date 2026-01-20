@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Price extends Model
 {
-    use HasFactory, \Illuminate\Database\Eloquent\SoftDeletes;
+    use HasFactory;
 
     protected static function newFactory()
     {
@@ -42,14 +42,6 @@ class Price extends Model
     ];
 
     public function mappings(): HasMany
-    {
-        return $this->hasMany(PriceProviderMapping::class);
-    }
-    
-    /**
-     * @deprecated Use mappings instead
-     */
-    public function providerMappings(): HasMany
     {
         return $this->hasMany(PriceProviderMapping::class);
     }
