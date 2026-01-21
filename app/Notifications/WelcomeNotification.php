@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Mail\WelcomeMail;
+use App\Notifications\Concerns\SetsMailRecipient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -12,7 +13,7 @@ use Illuminate\Notifications\Notification;
  */
 class WelcomeNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SetsMailRecipient;
 
     public function via(object $notifiable): array
     {
@@ -21,6 +22,6 @@ class WelcomeNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): WelcomeMail
     {
-        return new WelcomeMail($notifiable);
+        return $this->setMailRecipient($notifiable, new WelcomeMail($notifiable));
     }
 }

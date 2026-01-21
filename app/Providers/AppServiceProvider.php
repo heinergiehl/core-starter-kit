@@ -14,7 +14,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        if ($this->app->environment('local')
+            && class_exists(\Laravel\Telescope\TelescopeApplicationServiceProvider::class)
+        ) {
+            $this->app->register(\App\Providers\TelescopeServiceProvider::class);
+        }
     }
 
     /**
@@ -59,5 +63,8 @@ class AppServiceProvider extends ServiceProvider
             $view->with('appLogoPath', $branding->logoPathFor($team));
             $view->with('entitlements', $entitlements);
         });
+
+        \App\Domain\Billing\Models\Subscription::observe(\App\Domain\Billing\Observers\SubscriptionObserver::class);
+        \App\Domain\Billing\Models\Order::observe(\App\Domain\Billing\Observers\OrderObserver::class);
     }
 }

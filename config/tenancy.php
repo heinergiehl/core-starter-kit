@@ -9,7 +9,6 @@ $defaultCentralDomains = array_filter([
     parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST),
     '127.0.0.1',
     'localhost',
-    'af5d4708e3ec.ngrok-free.app', // Added for local dev testing
 ]);
 
 $centralDomainsEnv = env('TENANCY_CENTRAL_DOMAINS');

@@ -9,7 +9,7 @@ return [
         // Catalog source: 'database' uses products/prices synced from billing providers
         // All plan management happens in Stripe/Paddle/LemonSqueezy dashboards
         // Features & entitlements are edited via Filament /admin/products
-        'catalog' => 'database',
+        'catalog' => env('BILLING_CATALOG', 'database'),
         'discounts' => [
             'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
         ],
@@ -101,6 +101,7 @@ return [
     ],
     'auth' => [
         'social_providers' => ['google', 'github', 'linkedin'],
+        'socialite_stateless' => env('SOCIALITE_STATELESS'),
     ],
     'locales' => [
         'default' => env('APP_LOCALE', 'en'),

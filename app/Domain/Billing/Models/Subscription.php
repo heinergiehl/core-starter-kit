@@ -13,20 +13,7 @@ class Subscription extends Model
 {
     use HasFactory, BelongsToTenant;
 
-    protected static function booted()
-    {
-        static::saved(function (Subscription $subscription) {
-            if ($subscription->team_id) {
-                \Illuminate\Support\Facades\Cache::forget("entitlements:team:{$subscription->team_id}");
-            }
-        });
 
-        static::deleted(function (Subscription $subscription) {
-            if ($subscription->team_id) {
-                \Illuminate\Support\Facades\Cache::forget("entitlements:team:{$subscription->team_id}");
-            }
-        });
-    }
 
     protected static function newFactory()
     {
@@ -45,6 +32,7 @@ class Subscription extends Model
         'ends_at',
         'canceled_at',
         'welcome_email_sent_at',
+        'trial_started_email_sent_at',
         'cancellation_email_sent_at',
         'metadata',
     ];
@@ -56,6 +44,7 @@ class Subscription extends Model
         'ends_at' => 'datetime',
         'canceled_at' => 'datetime',
         'welcome_email_sent_at' => 'datetime',
+        'trial_started_email_sent_at' => 'datetime',
         'cancellation_email_sent_at' => 'datetime',
         'metadata' => 'array',
     ];

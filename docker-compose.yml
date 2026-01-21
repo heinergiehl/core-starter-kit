@@ -37,6 +37,14 @@ services:
         depends_on:
             - pgsql
 
+    mailhog:
+        image: 'mailhog/mailhog:latest'
+        ports:
+            - "${MAILHOG_PORT:-8025}:8025"
+            - "${MAILHOG_SMTP_PORT:-1025}:1025"
+        networks:
+            - sail
+
 networks:
     sail:
         driver: bridge

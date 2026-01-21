@@ -4,6 +4,7 @@ namespace App\Domain\Identity\Services;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Session;
 
 class ImpersonationService
@@ -39,14 +40,11 @@ class ImpersonationService
         Auth::login($target);
 
         // Log this action for audit
-        activity()
-            ->causedBy($impersonator)
-            ->performedOn($target)
-            ->withProperties([
-                'impersonator_name' => $impersonator->name,
-                'impersonator_email' => $impersonator->email,
-            ])
-            ->log('User impersonation started');
+        Log::info('User impersonation started', [
+            'impersonator_id' => $impersonator->id,
+            'impersonator_email' => $impersonator->email,
+            'impersonated_id' => $target->id,
+        ]);
 
         return true;
     }
@@ -74,10 +72,11 @@ class ImpersonationService
         $impersonated = User::find($impersonatedId);
 
         if ($impersonated) {
-            activity()
-                ->causedBy($impersonator)
-                ->performedOn($impersonated)
-                ->log('User impersonation ended');
+            Log::info('User impersonation ended', [
+                'impersonator_id' => $impersonator->id,
+                'impersonator_email' => $impersonator->email,
+                'impersonated_id' => $impersonated->id,
+            ]);
         }
 
         // Clear session and log back in as original user

@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Mail\SubscriptionCancelledMail;
+use App\Notifications\Concerns\SetsMailRecipient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -12,7 +13,7 @@ use Illuminate\Notifications\Notification;
  */
 class SubscriptionCancelledNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SetsMailRecipient;
 
     public function __construct(
         private readonly ?string $planName = null,
@@ -27,10 +28,10 @@ class SubscriptionCancelledNotification extends Notification implements ShouldQu
 
     public function toMail(object $notifiable): SubscriptionCancelledMail
     {
-        return new SubscriptionCancelledMail(
+        return $this->setMailRecipient($notifiable, new SubscriptionCancelledMail(
             user: $notifiable,
             planName: $this->planName,
             accessUntil: $this->accessUntil,
-        );
+        ));
     }
 }

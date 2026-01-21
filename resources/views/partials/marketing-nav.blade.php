@@ -1,4 +1,13 @@
 {{-- Shared Marketing Navigation --}}
+@php
+    $user = auth()->user();
+    $team = $user?->currentTeam;
+    $hasSubscription = $team?->hasActiveSubscription() ?? false;
+    $hasPurchase = $team
+        ? app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($team)
+        : false;
+    $isAdmin = $user?->is_admin ?? false;
+@endphp
 <header class="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
     <a href="/" class="flex items-center gap-3 group">
         <div class="relative flex h-10 w-10 items-center justify-center rounded-xl bg-surface-highlight/50 border border-ink/10 shadow-inner overflow-hidden transition-all group-hover:scale-110 group-hover:border-primary/50">
@@ -23,18 +32,14 @@
         <x-locale-switcher class="hidden md:block" />
         
         @auth
-            @php
-                $hasSubscription = Auth::user()->currentTeam?->hasActiveSubscription() ?? false;
-                $isAdmin = Auth::user()->is_admin ?? false;
-            @endphp
             <div class="relative hidden sm:block">
                 <button 
                     onclick="toggleUserDropdown(event)" 
                     class="inline-flex items-center gap-2 rounded-full border border-ink/15 px-3 py-1.5 text-sm font-medium text-ink/80 transition hover:border-ink/30 hover:text-ink">
                     <span class="h-6 w-6 rounded-full {{ $isAdmin ? 'bg-amber-500/20 text-amber-600' : 'bg-primary/20 text-primary' }} flex items-center justify-center text-xs font-bold">
-                        {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
+                        {{ strtoupper(substr($user->name, 0, 1)) }}
                     </span>
-                    <span class="max-w-[100px] truncate">{{ Auth::user()->name }}</span>
+                    <span class="max-w-[100px] truncate">{{ $user->name }}</span>
                     <svg class="h-4 w-4 transition-transform" id="user-dropdown-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
@@ -45,8 +50,8 @@
                     style="display: none;"
                     class="absolute right-0 mt-2 w-48 rounded-xl border border-ink/10 bg-surface shadow-xl shadow-ink/5 py-2 z-50">
                     <div class="px-4 py-2 border-b border-ink/10">
-                        <p class="text-sm font-medium text-ink truncate">{{ Auth::user()->name }}</p>
-                        <p class="text-xs text-ink/60 truncate">{{ Auth::user()->email }}</p>
+                        <p class="text-sm font-medium text-ink truncate">{{ $user->name }}</p>
+                        <p class="text-xs text-ink/60 truncate">{{ $user->email }}</p>
                         @if($isAdmin)
                             <span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium text-amber-600 bg-amber-500/10 rounded-full">{{ __('Admin') }}</span>
                         @endif
@@ -62,6 +67,10 @@
                         </a>
                         <a href="{{ url('/app') }}" class="block px-4 py-2 text-sm text-ink/70 hover:text-ink hover:bg-surface-highlight/50 transition">
                             {{ __('Open App') }}
+                        </a>
+                    @elseif($hasPurchase)
+                        <a href="{{ route('billing.index') }}" class="block px-4 py-2 text-sm text-ink/70 hover:text-ink hover:bg-surface-highlight/50 transition">
+                            {{ __('Billing') }}
                         </a>
                     @elseif(!$isAdmin)
                         <a href="{{ route('pricing') }}" class="block px-4 py-2 text-sm text-ink/70 hover:text-ink hover:bg-surface-highlight/50 transition">
@@ -102,6 +111,8 @@
                 <a href="{{ url('/admin') }}" class="rounded-full bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-amber-500/20 transition hover:bg-amber-600">{{ __('Admin Panel') }}</a>
             @elseif($hasSubscription)
                 <a href="{{ url('/app') }}" class="rounded-full bg-primary px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90 whitespace-nowrap">{{ __('Open App') }}</a>
+            @elseif($hasPurchase)
+                <a href="{{ route('billing.index') }}" class="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">{{ __('Billing') }}</a>
             @else
                 <a href="{{ route('pricing') }}" class="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition hover:bg-primary/90">{{ __('Choose a Plan') }}</a>
             @endif
@@ -134,17 +145,13 @@
         
         <div class="pt-2 border-t border-ink/10">
             @auth
-                @php
-                    $hasSubscription = Auth::user()->currentTeam?->hasActiveSubscription() ?? false;
-                    $isAdmin = Auth::user()->is_admin ?? false;
-                @endphp
                 <div class="px-4 py-2 flex items-center gap-2 mb-2">
                     <span class="h-8 w-8 rounded-full {{ $isAdmin ? 'bg-amber-500/20 text-amber-600' : 'bg-primary/20 text-primary' }} flex items-center justify-center text-sm font-bold">
-                        {{ strtoupper(substr(Auth::user()->name, 0, 1)) }}
+                        {{ strtoupper(substr($user->name, 0, 1)) }}
                     </span>
                     <div class="min-w-0">
-                        <p class="text-sm font-medium text-ink truncate">{{ Auth::user()->name }}</p>
-                        <p class="text-xs text-ink/60 truncate">{{ Auth::user()->email }}</p>
+                        <p class="text-sm font-medium text-ink truncate">{{ $user->name }}</p>
+                        <p class="text-xs text-ink/60 truncate">{{ $user->email }}</p>
                         @if($isAdmin)
                             <span class="inline-block mt-0.5 px-2 py-0.5 text-xs font-medium text-amber-600 bg-amber-500/10 rounded-full">{{ __('Admin') }}</span>
                         @endif
@@ -156,6 +163,8 @@
                 @if($hasSubscription)
                     <a href="{{ route('dashboard') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50">{{ __('Dashboard') }}</a>
                     <a href="{{ url('/app') }}" class="block px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 rounded-lg hover:bg-primary/5">{{ __('Open app') }}</a>
+                @elseif($hasPurchase)
+                    <a href="{{ route('billing.index') }}" class="block px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 rounded-lg hover:bg-primary/5">{{ __('Billing') }}</a>
                 @elseif(!$isAdmin)
                     <a href="{{ route('pricing') }}" class="block px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 rounded-lg hover:bg-primary/5">{{ __('Choose a Plan') }}</a>
                 @endif

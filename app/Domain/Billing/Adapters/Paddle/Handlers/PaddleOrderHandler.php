@@ -12,6 +12,7 @@ use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Organization\Models\Team;
 use App\Models\User;
+use App\Notifications\PaymentFailedNotification;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 
@@ -40,13 +41,13 @@ class PaddleOrderHandler implements PaddleWebhookHandler
 
     public function handle(WebhookEvent $event, array $data): void
     {
-        $this->syncOrder($data);
+        $this->syncOrder($data, $event->type ?? null);
     }
 
     /**
      * Sync a Paddle order (transaction) to the local database.
      */
-    public function syncOrder(array $data): ?Order
+    public function syncOrder(array $data, ?string $eventType = null): ?Order
     {
         $orderId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
         $teamId = $this->resolveTeamId($data);
@@ -83,7 +84,9 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             ]
         );
 
-        $this->syncInvoiceFromOrder($data, $teamId, $order, $status, $amount, $currency);
+        $invoice = $this->syncInvoiceFromOrder($data, $teamId, $order, $status, $amount, $currency);
+
+        $this->maybeNotifyPaymentFailed($order, $invoice, $status, $eventType, $data);
 
         $this->recordDiscountRedemption(
             $data,
@@ -106,7 +109,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
         string $status,
         int $amount,
         string $currency
-    ): void {
+    ): Invoice {
         $normalizedStatus = strtolower($status);
         $paid = in_array($normalizedStatus, ['paid', 'completed', 'settled'], true);
 
@@ -186,6 +189,49 @@ class PaddleOrderHandler implements PaddleWebhookHandler
 
         // Sync line items
         $this->syncInvoiceLineItems($invoice, data_get($data, 'items', []));
+
+        return $invoice;
+    }
+
+    private function maybeNotifyPaymentFailed(
+        Order $order,
+        Invoice $invoice,
+        string $status,
+        ?string $eventType,
+        array $data
+    ): void {
+        if ($invoice->payment_failed_email_sent_at) {
+            return;
+        }
+
+        $normalizedStatus = strtolower($status);
+        $failedEvent = $eventType && in_array($eventType, ['transaction.past_due', 'transaction.payment_failed'], true);
+        $failedStatus = in_array($normalizedStatus, ['past_due', 'payment_failed', 'failed'], true);
+
+        if (!$failedEvent && !$failedStatus) {
+            return;
+        }
+
+        $team = $order->team;
+        $owner = $team?->owner;
+
+        if (!$owner) {
+            return;
+        }
+
+        $failureReason = data_get($data, 'failure_reason')
+            ?? data_get($data, 'error')
+            ?? data_get($data, 'details.failure_reason')
+            ?? null;
+
+        $owner->notify(new PaymentFailedNotification(
+            planName: $this->resolvePlanName($order->plan_key),
+            amount: $order->amount,
+            currency: $order->currency,
+            failureReason: is_string($failureReason) ? $failureReason : null,
+        ));
+
+        $invoice->forceFill(['payment_failed_email_sent_at' => now()])->save();
     }
 
     /**
@@ -288,5 +334,20 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'source' => 'paddle_webhook',
             ]
         );
+    }
+
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (!$planKey) {
+            return 'subscription';
+        }
+
+        try {
+            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
+        }
     }
 }

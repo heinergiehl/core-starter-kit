@@ -16,6 +16,9 @@ use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Organization\Models\Team;
 use App\Models\User;
+use App\Notifications\PaymentFailedNotification;
+use App\Notifications\SubscriptionPlanChangedNotification;
+use App\Notifications\SubscriptionTrialStartedNotification;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -395,6 +398,13 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             return;
         }
 
+        $existingSubscription = Subscription::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', (string) $subscriptionId)
+            ->first();
+
+        $previousPlanKey = $existingSubscription?->plan_key;
+
         $planKey = $this->resolvePlanKey($payload, $attributes) ?? 'unknown';
         $status = (string) (data_get($attributes, 'status') ?? 'active');
         $quantity = (int) (data_get($attributes, 'quantity') ?? 1);
@@ -432,8 +442,35 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $owner = $team?->owner;
 
         if ($owner) {
-            // 1. Welcome / Started Notification
-            if ($subscription->status === 'active' && !$subscription->welcome_email_sent_at) {
+            $planChanged = $previousPlanKey
+                && $previousPlanKey !== $planKey
+                && $planKey !== 'unknown';
+
+            if ($planChanged) {
+                $owner->notify(new SubscriptionPlanChangedNotification(
+                    previousPlanName: $this->resolvePlanName($previousPlanKey),
+                    newPlanName: $this->resolvePlanName($planKey),
+                    effectiveDate: $subscription->renews_at?->format('F j, Y'),
+                ));
+            }
+
+            // 1. Trial Started Notification
+            if (($subscription->status === 'trialing' || $subscription->onTrial())
+                && !$subscription->trial_started_email_sent_at
+            ) {
+                $owner->notify(new SubscriptionTrialStartedNotification(
+                    planName: ucfirst($planKey),
+                    trialEndsAt: $subscription->trial_ends_at?->format('F j, Y'),
+                ));
+
+                $subscription->forceFill(['trial_started_email_sent_at' => now()])->save();
+            }
+
+            // 2. Welcome / Started Notification (paid activation)
+            if ($subscription->status === 'active'
+                && !$subscription->onTrial()
+                && !$subscription->welcome_email_sent_at
+            ) {
                 // Try to find amount from order if available in payload, otherwise 0
                 $amount = (int) (data_get($attributes, 'total') ?? 0);
                 $currency = (string) (data_get($attributes, 'currency') ?? 'USD');
@@ -447,7 +484,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                 $subscription->forceFill(['welcome_email_sent_at' => now()])->save();
             }
 
-            // 2. Cancellation Notification
+            // 3. Cancellation Notification
             if ($subscription->status === 'canceled' && !$subscription->cancellation_email_sent_at) {
                 $owner->notify(new \App\Notifications\SubscriptionCancelledNotification(
                     planName: ucfirst($planKey),
@@ -488,7 +525,9 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             ]
         );
 
-        $this->syncInvoiceFromOrder($payload, $attributes, $teamId, $order, $status, $amount, $currency);
+        $invoice = $this->syncInvoiceFromOrder($payload, $attributes, $teamId, $order, $status, $amount, $currency);
+
+        $this->maybeNotifyPaymentFailed($order, $invoice, $status, $eventType);
 
         $this->recordDiscountRedemption(
             $payload,
@@ -604,12 +643,12 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         string $status,
         int $amount,
         string $currency
-    ): void {
+    ): Invoice {
         $normalizedStatus = strtolower($status);
         $paid = in_array($normalizedStatus, ['paid', 'completed', 'settled'], true);
         $urls = data_get($attributes, 'urls', []);
 
-        Invoice::query()->updateOrCreate(
+        $invoice = Invoice::query()->updateOrCreate(
             [
                 'provider' => $this->provider(),
                 'provider_id' => (string) $order->provider_id,
@@ -628,6 +667,43 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                 'metadata' => Arr::only($attributes, ['status', 'total', 'currency', 'price_id', 'discount_code', 'urls']),
             ]
         );
+
+        return $invoice;
+    }
+
+    private function maybeNotifyPaymentFailed(
+        Order $order,
+        Invoice $invoice,
+        string $status,
+        string $eventType
+    ): void {
+        if ($invoice->payment_failed_email_sent_at) {
+            return;
+        }
+
+        $normalizedStatus = strtolower($status);
+        $failedEvent = str_contains($eventType, 'payment_failed');
+        $failedStatus = in_array($normalizedStatus, ['failed', 'unpaid', 'past_due'], true);
+
+        if (!$failedEvent && !$failedStatus) {
+            return;
+        }
+
+        $team = $order->team;
+        $owner = $team?->owner;
+
+        if (!$owner) {
+            return;
+        }
+
+        $owner->notify(new PaymentFailedNotification(
+            planName: $this->resolvePlanName($order->plan_key),
+            amount: $order->amount,
+            currency: $order->currency,
+            failureReason: null,
+        ));
+
+        $invoice->forceFill(['payment_failed_email_sent_at' => now()])->save();
     }
 
     private function recordDiscountRedemption(
@@ -687,6 +763,21 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                 'source' => 'lemonsqueezy_webhook',
             ]
         );
+    }
+
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (!$planKey) {
+            return 'subscription';
+        }
+
+        try {
+            $plan = app(BillingPlanService::class)->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
+        }
     }
 
     private function timestampToDateTime(?string $timestamp): ?\Illuminate\Support\Carbon

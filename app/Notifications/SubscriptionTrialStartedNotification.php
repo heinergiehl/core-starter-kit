@@ -2,23 +2,22 @@
 
 namespace App\Notifications;
 
-use App\Mail\SubscriptionStartedMail;
+use App\Mail\SubscriptionTrialStartedMail;
 use App\Notifications\Concerns\SetsMailRecipient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
- * Notification sent when a subscription is successfully started.
+ * Notification sent when a subscription trial starts.
  */
-class SubscriptionStartedNotification extends Notification implements ShouldQueue
+class SubscriptionTrialStartedNotification extends Notification implements ShouldQueue
 {
     use Queueable, SetsMailRecipient;
 
     public function __construct(
         private readonly ?string $planName = null,
-        private readonly ?int $amount = null,
-        private readonly ?string $currency = null,
+        private readonly ?string $trialEndsAt = null,
         private readonly array $features = [],
     ) {
     }
@@ -28,13 +27,12 @@ class SubscriptionStartedNotification extends Notification implements ShouldQueu
         return ['mail'];
     }
 
-    public function toMail(object $notifiable): SubscriptionStartedMail
+    public function toMail(object $notifiable): SubscriptionTrialStartedMail
     {
-        return $this->setMailRecipient($notifiable, new SubscriptionStartedMail(
+        return $this->setMailRecipient($notifiable, new SubscriptionTrialStartedMail(
             user: $notifiable,
             planName: $this->planName,
-            amount: $this->amount,
-            currency: $this->currency,
+            trialEndsAt: $this->trialEndsAt,
             features: $this->features,
         ));
     }

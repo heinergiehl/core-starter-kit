@@ -87,16 +87,29 @@ class SecurityHeaders
         // but Vite might be serving from saas-kit.test or 127.0.0.1
         $viteDevServer = '';
         $viteWss = '';
+        $formAction = "'self'";
         
         if (app()->isLocal()) {
-            // Common dev hosts to allow
-            $hosts = array_unique([$request->getHost(), 'localhost', '127.0.0.1', 'saas-kit.test']);
+            $hosts = array_unique([
+                $request->getHost(),
+                'localhost',
+                '127.0.0.1',
+                'saas-kit.test',
+            ]);
             
             foreach ($hosts as $h) {
+                if (str_contains($h, ':')) {
+                    // IPv6 literals are rejected by CSP in browsers like Chrome.
+                    continue;
+                }
+
                 // Allow http/https and ws/wss on both ports for maximum compatibility
                 $viteDevServer .= " http://{$h}:5173 http://{$h}:5174 https://{$h}:5173 https://{$h}:5174";
                 $viteWss .= " ws://{$h}:5173 ws://{$h}:5174 wss://{$h}:5173 wss://{$h}:5174";
             }
+
+            // Allow posting to any local http/https origin while developing.
+            $formAction = "'self' http: https:";
         }
         
         $cspDirectives = [
@@ -111,7 +124,7 @@ class SecurityHeaders
             "frame-src 'self' https://*.paddle.com https://js.stripe.com https://hooks.stripe.com",
             "object-src 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            "form-action {$formAction}",
         ];
         $response->headers->set('Content-Security-Policy', implode('; ', $cspDirectives));
 

@@ -30,10 +30,10 @@
     <section class="py-12">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div class="max-w-2xl">
-                <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary mb-4 backdrop-blur-md">
+                <div class="inline-flex items-center gap-2 px-3 py-1 mb-4 text-xs font-semibold border rounded-full border-primary/20 bg-primary/10 text-primary backdrop-blur-md">
                     {{ __('Pricing Plans') }}
                 </div>
-                <h1 class="font-display text-4xl font-bold text-ink sm:text-5xl">{{ __('Plans that scale with your product') }}</h1>
+                <h1 class="text-4xl font-bold font-display text-ink sm:text-5xl">{{ __('Plans that scale with your product') }}</h1>
                 <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data. Switch providers instantly.') }}</p>
             </div>
             
@@ -57,7 +57,7 @@
 
         @if ($providerChoiceEnabled && count($providers) > 1)
             <!-- Provider Info Banner (only shown in multi-provider mode) -->
-            <div class="mt-8 rounded-2xl border border-ink/5 bg-surface-highlight/5 px-6 py-3 text-sm text-ink/60 backdrop-blur flex items-center gap-2">
+            <div class="flex items-center gap-2 px-6 py-3 mt-8 text-sm border rounded-2xl border-ink/5 bg-surface-highlight/5 text-ink/60 backdrop-blur">
                 <svg class="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 <span>
                     <span class="font-semibold text-ink">{{ __('Active Provider:') }}</span>
@@ -73,19 +73,19 @@
         @endif
 
         @if ($errors->has('billing'))
-            <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/10 text-rose-600 px-4 py-3 text-sm backdrop-blur">
+            <div class="px-4 py-3 mt-6 text-sm border rounded-2xl border-rose-200 bg-rose-50/10 text-rose-600 backdrop-blur">
                 {{ $errors->first('billing') }}
             </div>
         @endif
 
         @if ($errors->has('email'))
-            <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/10 text-rose-600 px-4 py-3 text-sm backdrop-blur">
+            <div class="px-4 py-3 mt-6 text-sm border rounded-2xl border-rose-200 bg-rose-50/10 text-rose-600 backdrop-blur">
                 {{ $errors->first('email') }}
             </div>
         @endif
 
         @if ($errors->has('coupon'))
-            <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50/10 text-rose-600 px-4 py-3 text-sm backdrop-blur">
+            <div class="px-4 py-3 mt-6 text-sm border rounded-2xl border-rose-200 bg-rose-50/10 text-rose-600 backdrop-blur">
                 {{ $errors->first('coupon') }}
             </div>
         @endif
@@ -102,22 +102,22 @@
             <!-- Plan Card -->
             <div class="glass-panel rounded-[32px] p-8 flex flex-col relative group {{ $isHighlighted ? 'border-primary/50 shadow-primary/10 ring-1 ring-primary/20' : '' }}">
                 @if ($isHighlighted)
-                    <div class="absolute -top-4 left-1/2 -translate-x-1/2">
-                        <span class="rounded-full bg-gradient-to-r from-primary to-secondary px-4 py-1 text-xs font-bold text-white shadow-lg">{{ __('Most Popular') }}</span>
+                    <div class="absolute -translate-x-1/2 -top-4 left-1/2">
+                        <span class="px-4 py-1 text-xs font-bold text-white rounded-full shadow-lg bg-gradient-to-r from-primary to-secondary">{{ __('Most Popular') }}</span>
                     </div>
                 @endif
 
                 <div class="mb-6">
-                    <p class="text-xs font-bold uppercase tracking-widest text-primary mb-2">{{ $planTypeLabel }}</p>
-                    <h2 class="text-3xl font-display font-bold text-ink">{{ $plan['name'] }}</h2>
+                    <p class="mb-2 text-xs font-bold tracking-widest uppercase text-primary">{{ $planTypeLabel }}</p>
+                    <h2 class="text-3xl font-bold font-display text-ink">{{ $plan['name'] }}</h2>
                     @if (!empty($plan['summary']))
                         <p class="mt-2 text-sm text-ink/60">{{ $plan['summary'] }}</p>
                     @endif
                 </div>
 
-                <div class="space-y-4 flex-grow">
+                <div class="flex-grow space-y-4">
                     @if (empty($plan['prices']))
-                        <div class="rounded-2xl border border-dashed border-ink/20 bg-surface/30 px-6 py-6 text-center text-sm text-ink/60">
+                        <div class="px-6 py-6 text-sm text-center border border-dashed rounded-2xl border-ink/20 bg-surface/30 text-ink/60">
                             {{ __('Add prices in Admin > Prices to show checkout options for this plan.') }}
                         </div>
                     @else
@@ -138,16 +138,16 @@
                             @endphp
                             
                             <!-- Price Option -->
-                            <div class="card-inner p-5 transition hover:border-primary/30">
+                            <div class="p-5 transition card-inner hover:border-primary/30">
                                 <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <p class="text-sm font-semibold text-ink">{{ $label }}</p>
                                         @if ($interval)
-                                            <p class="text-xs text-ink/50 capitalize">{{ $interval }}</p>
+                                            <p class="text-xs capitalize text-ink/50">{{ $interval }}</p>
                                         @endif
                                     </div>
                                     <div class="text-right">
-                                        <span class="text-3xl font-display font-bold text-ink">{{ $amountDisplay }}</span>
+                                        <span class="text-3xl font-bold font-display text-ink">{{ $amountDisplay }}</span>
                                         <span class="text-xs font-medium text-ink/40">{{ $currency }}</span>
                                     </div>
                                 </div>
@@ -155,28 +155,28 @@
                                 <div>
                                     @if (empty($price['is_available']))
                                         @if ($catalog === 'database')
-                                            <p class="text-xs font-medium text-amber-500 bg-amber-500/10 px-2 py-1 rounded-md inline-block">{{ __('Missing Price ID') }}</p>
+                                            <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">{{ __('Missing Price ID') }}</p>
                                         @else
-                                            <p class="text-xs font-medium text-amber-500 bg-amber-500/10 px-2 py-1 rounded-md inline-block">{{ __('Missing Env ID') }}</p>
+                                            <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">{{ __('Missing Env ID') }}</p>
                                         @endif
                                     @elseif ($hasPurchased)
                                         {{-- User already has a purchase - show link to billing instead --}}
-                                        <div class="text-center space-y-2">
+                                        <div class="space-y-2 text-center">
                                             <p class="text-xs font-medium text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
                                                 <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                                                 {{ __('Already purchased') }}
                                             </p>
-                                            <a href="{{ route('billing.index') }}" class="block text-xs text-primary hover:text-primary/80 font-medium">{{ __('View billing →') }}</a>
+                                            <a href="{{ route('billing.index') }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('View billing →') }}</a>
                                         </div>
                                     @elseif ($canCheckout)
-                                        <form method="POST" action="{{ route('billing.checkout') }}">
+                                        <form method="POST" action="{{ route('billing.checkout', [], false) }}">
                                             @csrf
                                             <input type="hidden" name="plan" value="{{ $plan['key'] }}">
                                             <input type="hidden" name="price" value="{{ $price['key'] }}">
                                             <input type="hidden" name="provider" value="{{ $provider }}">
                                             
                                             @if ($couponEnabled)
-                                                <div class="mb-3 relative group/coupon">
+                                                <div class="relative mb-3 group/coupon">
                                                     <input
                                                         type="text"
                                                         name="coupon"
@@ -195,7 +195,7 @@
                                         <div class="space-y-3">
                                             <a
                                                 href="{{ route('checkout.start', ['provider' => $provider, 'plan' => $plan['key'], 'price' => $price['key']]) }}"
-                                                class="flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white transition hover:bg-primary/90"
+                                                class="flex items-center justify-center px-4 py-2 text-xs font-bold text-white transition rounded-xl bg-primary hover:bg-primary/90"
                                             >
                                                 {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
                                             </a>
@@ -204,9 +204,9 @@
                                             </div>
                                         </div>
                                     @elseif (!$team)
-                                        <a href="{{ route('teams.select') }}" class="block w-full text-center rounded-xl bg-secondary/10 px-4 py-2 text-xs font-bold text-secondary transition hover:bg-secondary/20">{{ __('Select Team') }}</a>
+                                        <a href="{{ route('teams.select') }}" class="block w-full px-4 py-2 text-xs font-bold text-center transition rounded-xl bg-secondary/10 text-secondary hover:bg-secondary/20">{{ __('Select Team') }}</a>
                                     @else
-                                        <p class="text-center text-xs text-ink/50 italic">{{ __('Upgrade required') }}</p>
+                                        <p class="text-xs italic text-center text-ink/50">{{ __('Upgrade required') }}</p>
                                     @endif
                                 </div>
                             </div>
@@ -215,7 +215,7 @@
                 </div>
 
                 @if (!empty($plan['features']))
-                    <div class="mt-8 pt-8 border-t border-ink/5">
+                    <div class="pt-8 mt-8 border-t border-ink/5">
                         <ul class="space-y-3">
                             @foreach ($plan['features'] as $feature)
                                 <li class="flex items-start gap-3 text-sm text-ink/70">
@@ -227,8 +227,8 @@
                     </div>
                 @endif
                 
-                <div class="mt-auto pt-6">
-                    <p class="text-xs text-center text-ink/30 font-medium">
+                <div class="pt-6 mt-auto">
+                    <p class="text-xs font-medium text-center text-ink/30">
                         {{ !empty($plan['seat_based'])
                             ? __('Auto-updates based on active members')
                             : __('Flat-rate billing') }}
@@ -241,11 +241,11 @@
     <!-- FAQ / Custom Section -->
     <section class="py-20">
         <div class="glass-panel rounded-[40px] px-8 py-10 md:p-12 relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-r from-secondary/10 to-transparent opacity-50"></div>
-            <div class="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div class="absolute inset-0 opacity-50 bg-gradient-to-r from-secondary/10 to-transparent"></div>
+            <div class="relative z-10 flex flex-col items-center justify-between gap-8 md:flex-row">
                 <div>
-                    <h2 class="font-display text-3xl font-bold text-ink">{{ __('Need something custom?') }}</h2>
-                    <p class="mt-3 text-lg text-ink/60 max-w-xl">{{ __('For large teams and enterprises, we offer custom pricing, SLA guarantees, and dedicated support channels.') }}</p>
+                    <h2 class="text-3xl font-bold font-display text-ink">{{ __('Need something custom?') }}</h2>
+                    <p class="max-w-xl mt-3 text-lg text-ink/60">{{ __('For large teams and enterprises, we offer custom pricing, SLA guarantees, and dedicated support channels.') }}</p>
                 </div>
                 <div class="flex flex-wrap gap-4">
                     @if (config('saas.support.email'))

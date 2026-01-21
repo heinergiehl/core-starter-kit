@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Domain\Organization\Models\TeamInvitation;
 use App\Mail\TeamInvitationMail;
+use App\Notifications\Concerns\SetsMailRecipient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -13,7 +14,7 @@ use Illuminate\Notifications\Notification;
  */
 class TeamInvitationNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SetsMailRecipient;
 
     public function __construct(
         private readonly TeamInvitation $invitation,
@@ -27,6 +28,6 @@ class TeamInvitationNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): TeamInvitationMail
     {
-        return new TeamInvitationMail($this->invitation);
+        return $this->setMailRecipient($notifiable, new TeamInvitationMail($this->invitation));
     }
 }

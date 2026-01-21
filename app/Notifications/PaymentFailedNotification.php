@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Mail\PaymentFailedMail;
+use App\Notifications\Concerns\SetsMailRecipient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
@@ -12,7 +13,7 @@ use Illuminate\Notifications\Notification;
  */
 class PaymentFailedNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SetsMailRecipient;
 
     public function __construct(
         private readonly ?string $planName = null,
@@ -29,12 +30,12 @@ class PaymentFailedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): PaymentFailedMail
     {
-        return new PaymentFailedMail(
+        return $this->setMailRecipient($notifiable, new PaymentFailedMail(
             user: $notifiable,
             planName: $this->planName,
             amount: $this->amount,
             currency: $this->currency,
             failureReason: $this->failureReason,
-        );
+        ));
     }
 }

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\InvalidStateException;
 
 class SocialAuthController extends Controller
 {
@@ -19,18 +20,28 @@ class SocialAuthController extends Controller
     {
         $provider = $this->normalizeProvider($provider);
 
-        $intended = (string) $request->query('intended', '');
-        if ($intended !== '') {
-            $request->session()->put('url.intended', $intended);
-        }
+        $this->storeIntendedRedirect($request);
 
-        return Socialite::driver($provider)->stateless()->redirect();
+        return $this->socialiteDriver($provider)->redirect();
     }
 
     public function callback(string $provider, TeamProvisioner $teams): RedirectResponse
     {
         $provider = $this->normalizeProvider($provider);
-        $socialUser = Socialite::driver($provider)->stateless()->user();
+
+        try {
+            $socialUser = $this->socialiteDriver($provider)->user();
+        } catch (InvalidStateException $exception) {
+            if ($this->shouldUseStateless()) {
+                $socialUser = Socialite::driver($provider)->stateless()->user();
+            } else {
+                report($exception);
+
+                return redirect()
+                    ->route('login')
+                    ->withErrors(['social' => __('The authentication session expired. Please try again.')]);
+            }
+        }
 
         $email = $socialUser->getEmail();
 
@@ -83,6 +94,52 @@ class SocialAuthController extends Controller
         Auth::login($user, true);
 
         return redirect()->intended(route('dashboard', absolute: false));
+    }
+
+    private function socialiteDriver(string $provider)
+    {
+        $driver = Socialite::driver($provider);
+
+        return $this->shouldUseStateless() ? $driver->stateless() : $driver;
+    }
+
+    private function shouldUseStateless(): bool
+    {
+        $stateless = config('saas.auth.socialite_stateless');
+
+        if ($stateless === null || $stateless === '') {
+            return app()->environment('local');
+        }
+
+        return (bool) $stateless;
+    }
+
+    private function storeIntendedRedirect(Request $request): void
+    {
+        $intended = trim((string) $request->query('intended', ''));
+
+        if ($intended === '' || !$this->isSafeRedirectTarget($intended)) {
+            return;
+        }
+
+        $request->session()->put('url.intended', $intended);
+    }
+
+    private function isSafeRedirectTarget(string $target): bool
+    {
+        if (str_starts_with($target, '/')) {
+            return !str_starts_with($target, '//');
+        }
+
+        $host = parse_url($target, PHP_URL_HOST);
+
+        if (!$host) {
+            return false;
+        }
+
+        $appHost = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+        return $appHost && strcasecmp($host, $appHost) === 0;
     }
 
     private function normalizeProvider(string $provider): string

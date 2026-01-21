@@ -6,6 +6,7 @@ use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\BillingProviderManager;
+use App\Notifications\SubscriptionPlanChangedNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -125,7 +126,7 @@ class BillingController
             ]));
         } catch (\Throwable $e) {
             report($e);
-            return back()->with('error', __('Failed to cancel subscription. Please try again or contact support.'));
+            return back()->with('error', $this->formatCancellationError($e));
         }
     }
 
@@ -143,7 +144,7 @@ class BillingController
         // Find subscription pending cancellation (has canceled_at but still active)
         $subscription = Subscription::query()
             ->where('team_id', $team->id)
-            ->whereIn('status', ['active', 'trialing'])
+            ->whereIn('status', ['active', 'trialing', 'past_due', 'canceled'])
             ->whereNotNull('canceled_at')
             ->whereNotNull('ends_at')
             ->where('ends_at', '>', now())
@@ -208,6 +209,8 @@ class BillingController
             return back()->with('error', __('This plan is not available for your current provider.'));
         }
 
+        $previousPlanKey = $subscription->plan_key;
+
         try {
             $this->updateSubscriptionPlan($subscription, $newPriceId, $data['plan']);
 
@@ -215,11 +218,21 @@ class BillingController
                 'plan_key' => $data['plan'],
             ]);
 
-            $newPlan = $this->planService->plan($data['plan']);
+            $previousPlanName = $this->resolvePlanName($previousPlanKey);
+            $newPlanName = $this->resolvePlanName($data['plan']);
+
+            $owner = $team->owner;
+            if ($owner && $previousPlanKey !== $data['plan']) {
+                $owner->notify(new SubscriptionPlanChangedNotification(
+                    previousPlanName: $previousPlanName,
+                    newPlanName: $newPlanName,
+                    effectiveDate: now()->format('F j, Y'),
+                ));
+            }
 
             return redirect()->route('billing.index')
                 ->with('success', __('Your subscription has been updated to :plan.', [
-                    'plan' => $newPlan['name'] ?? ucfirst($data['plan']),
+                    'plan' => $newPlanName,
                 ]));
         } catch (\Throwable $e) {
             report($e);
@@ -278,7 +291,7 @@ class BillingController
             throw new \RuntimeException('Paddle is not configured.');
         }
 
-        $baseUrl = config('services.paddle.env') === 'sandbox'
+        $baseUrl = config('services.paddle.environment') === 'sandbox'
             ? 'https://sandbox-api.paddle.com'
             : 'https://api.paddle.com';
 
@@ -410,6 +423,18 @@ class BillingController
                 'effective_from' => 'next_billing_period',
             ]);
 
+        if (!$response->successful()
+            && data_get($response->json(), 'error.code') === 'subscription_locked_pending_changes'
+        ) {
+            $this->resumePaddleSubscription($subscription);
+
+            $response = Http::withToken($apiKey)
+                ->withHeaders(['Content-Type' => 'application/json'])
+                ->post("{$baseUrl}/subscriptions/{$subscription->provider_id}/cancel", [
+                    'effective_from' => 'next_billing_period',
+                ]);
+        }
+
         if (!$response->successful()) {
             throw new \RuntimeException('Failed to cancel Paddle subscription: ' . $response->body());
         }
@@ -502,5 +527,30 @@ class BillingController
             throw new \RuntimeException('Failed to resume LemonSqueezy subscription: ' . $response->body());
         }
     }
-}
 
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (!$planKey) {
+            return 'subscription';
+        }
+
+        try {
+            $plan = $this->planService->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
+        }
+    }
+
+    private function formatCancellationError(\Throwable $exception): string
+    {
+        $message = $exception->getMessage();
+
+        if (str_contains($message, 'subscription_locked_pending_changes')) {
+            return __('Your subscription already has a pending change with Paddle. Please wait for it to complete or manage it in the billing portal.');
+        }
+
+        return __('Failed to cancel subscription. Please try again or contact support.');
+    }
+}

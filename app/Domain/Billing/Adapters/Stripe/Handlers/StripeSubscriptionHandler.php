@@ -6,6 +6,7 @@ use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+
 use Stripe\StripeClient;
 
 /**
@@ -52,6 +53,13 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         if (!$providerId) {
             return;
         }
+
+        $existingSubscription = Subscription::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $providerId)
+            ->first();
+
+        $previousPlanKey = $existingSubscription?->plan_key;
 
         $teamId = $this->resolveTeamIdFromMetadata($object)
             ?? $this->resolveTeamIdFromCustomerId($customerId);
@@ -103,26 +111,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $owner = $team?->owner;
 
         if ($owner) {
-            // 1. Welcome / Started Notification
-            if ($subscription->status === 'active' && !$subscription->welcome_email_sent_at) {
-                $owner->notify(new \App\Notifications\SubscriptionStartedNotification(
-                    planName: ucfirst($planKey),
-                    amount: (int) data_get($object, 'items.data.0.price.unit_amount', 0),
-                    currency: strtoupper((string) data_get($object, 'currency', 'usd')),
-                ));
-
-                $subscription->forceFill(['welcome_email_sent_at' => now()])->save();
-            }
-
-            // 2. Cancellation Notification
-            if ($subscription->status === 'canceled' && !$subscription->cancellation_email_sent_at) {
-                $owner->notify(new \App\Notifications\SubscriptionCancelledNotification(
-                    planName: ucfirst($planKey),
-                    accessUntil: $subscription->ends_at?->format('F j, Y'),
-                ));
-
-                $subscription->forceFill(['cancellation_email_sent_at' => now()])->save();
-            }
+             // Notifications are now handled by SubscriptionObserver
         }
     }
 
@@ -146,6 +135,21 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
             }
         } catch (\Throwable $exception) {
             // Keep checkout flow resilient; webhook processing will update later.
+        }
+    }
+
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (!$planKey) {
+            return 'subscription';
+        }
+
+        try {
+            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
         }
     }
 }

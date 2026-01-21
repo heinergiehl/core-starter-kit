@@ -42,6 +42,7 @@ class Invoice extends Model
         'pdf_url',
         'pdf_url_expires_at',
         'invoice_pdf', // Deprecated, use pdf_url
+        'payment_failed_email_sent_at',
         'metadata',
     ];
 
@@ -56,6 +57,7 @@ class Invoice extends Model
         'due_at' => 'datetime',
         'paid_at' => 'datetime',
         'pdf_url_expires_at' => 'datetime',
+        'payment_failed_email_sent_at' => 'datetime',
         'metadata' => 'array',
     ];
 

@@ -11,6 +11,7 @@ use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Organization\Models\Team;
 use App\Models\User;
+
 use Illuminate\Support\Arr;
 
 /**
@@ -53,9 +54,29 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
             return null;
         }
 
+        $existingSubscription = Subscription::query()
+            ->where('provider', 'paddle')
+            ->where('provider_id', (string) $subscriptionId)
+            ->first();
+
+        $previousPlanKey = $existingSubscription?->plan_key;
+
         $planKey = $this->resolvePlanKey($data) ?? 'unknown';
         $status = (string) (data_get($data, 'status') ?? data_get($data, 'state') ?? 'active');
         $quantity = (int) (data_get($data, 'quantity') ?? data_get($data, 'items.0.quantity') ?? 1);
+
+        $canceledAt = $this->timestampToDateTime(data_get($data, 'canceled_at'));
+        $scheduledChange = data_get($data, 'scheduled_change');
+        $scheduledAction = data_get($scheduledChange, 'action');
+        $scheduledCancelAt = $scheduledAction === 'cancel'
+            ? $this->timestampToDateTime(data_get($scheduledChange, 'effective_at'))
+            : null;
+
+        if (!$canceledAt && $scheduledCancelAt) {
+            $canceledAt = $existingSubscription?->canceled_at ?? now();
+        }
+
+        $endsAt = $scheduledCancelAt ?? $canceledAt;
 
         $subscription = Subscription::query()->updateOrCreate(
             [
@@ -69,8 +90,8 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                 'quantity' => max($quantity, 1),
                 'trial_ends_at' => $this->timestampToDateTime(data_get($data, 'trial_ends_at')),
                 'renews_at' => $this->timestampToDateTime(data_get($data, 'next_billed_at')),
-                'ends_at' => $this->timestampToDateTime(data_get($data, 'canceled_at')),
-                'canceled_at' => $this->timestampToDateTime(data_get($data, 'canceled_at')),
+                'ends_at' => $endsAt,
+                'canceled_at' => $canceledAt,
                 'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'customer_id', 'customer']),
             ]
         );
@@ -94,30 +115,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         $owner = $team?->owner;
 
         if ($owner) {
-            // 1. Welcome / Started Notification
-            if ($subscription->status === 'active' && !$subscription->welcome_email_sent_at) {
-                // Parse Paddle price/currency which might be in items or custom data
-                $amount = (int) (data_get($data, 'items.0.price.unit_price.amount') ?? 0);
-                $currency = (string) (data_get($data, 'currency_code') ?? 'USD');
-
-                $owner->notify(new \App\Notifications\SubscriptionStartedNotification(
-                    planName: ucfirst($planKey),
-                    amount: $amount,
-                    currency: strtoupper($currency),
-                ));
-
-                $subscription->forceFill(['welcome_email_sent_at' => now()])->save();
-            }
-
-            // 2. Cancellation Notification
-            if ($subscription->status === 'canceled' && !$subscription->cancellation_email_sent_at) {
-                $owner->notify(new \App\Notifications\SubscriptionCancelledNotification(
-                    planName: ucfirst($planKey),
-                    accessUntil: $subscription->ends_at?->format('F j, Y'),
-                ));
-
-                $subscription->forceFill(['cancellation_email_sent_at' => now()])->save();
-            }
+             // Notifications are now handled by SubscriptionObserver
         }
 
         return $subscription;
@@ -207,5 +205,20 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                 'source' => 'paddle_webhook',
             ]
         );
+    }
+
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (!$planKey) {
+            return 'subscription';
+        }
+
+        try {
+            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
+        }
     }
 }

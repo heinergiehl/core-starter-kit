@@ -278,29 +278,20 @@ class CheckoutService
     /**
      * Build checkout URLs with session UUID for secure auth restoration.
      *
-     * @param string $planType The plan type ('subscription' or 'one_time')
      * @return array{success: string, cancel: string}
      */
-    public function buildCheckoutUrls(string $provider, CheckoutSession $session, string $planType = 'subscription'): array
+    public function buildCheckoutUrls(string $provider, CheckoutSession $session): array
     {
         $successUrl = config('saas.billing.success_url');
         $cancelUrl = config('saas.billing.cancel_url');
 
         if (!$successUrl) {
-            // One-time payments skip processing page - payment is already complete
-            // No need to poll for webhook, just show success directly
-            if ($planType === 'one_time') {
-                $successUrl = route('billing.index', [], true);
-            } else {
-                // Subscriptions need to wait for webhook to create subscription record
-                $successUrl = route('billing.processing', [
-                    'session' => $session->uuid,
-                ], true);
+            $successUrl = route('billing.processing', [
+                'session' => $session->uuid,
+            ], true);
 
-                // Stripe needs session_id placeholder
-                if ($provider === 'stripe') {
-                    $successUrl .= '&stripe_session={CHECKOUT_SESSION_ID}';
-                }
+            if ($provider === 'stripe') {
+                $successUrl .= '&stripe_session={CHECKOUT_SESSION_ID}';
             }
         }
 

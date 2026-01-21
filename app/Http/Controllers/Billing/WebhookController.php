@@ -6,7 +6,7 @@ use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingProviderManager;
 use App\Jobs\ProcessWebhookEvent;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\Response;
 use Throwable;
 
 class WebhookController
@@ -36,8 +36,12 @@ class WebhookController
 
             return response()->noContent();
         } catch (Throwable $exception) {
+            report($exception);
+
             return response()->json([
-                'error' => $exception->getMessage(),
+                'error' => app()->environment('local')
+                    ? $exception->getMessage()
+                    : 'Webhook validation failed.',
             ], 400);
         }
     }

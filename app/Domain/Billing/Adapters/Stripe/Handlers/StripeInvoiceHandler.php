@@ -7,6 +7,7 @@ use App\Domain\Billing\Contracts\StripeWebhookHandler;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Notifications\PaymentFailedNotification;
 use Illuminate\Support\Arr;
 
 /**
@@ -44,9 +45,15 @@ class StripeInvoiceHandler implements StripeWebhookHandler
 
         if (in_array($eventType, ['invoice.paid', 'invoice.payment_succeeded'])) {
             $this->handleInvoicePaid($object);
-        } else {
-            $this->syncInvoice($object);
+            return;
         }
+
+        if ($eventType === 'invoice.payment_failed') {
+            $this->handleInvoicePaymentFailed($object);
+            return;
+        }
+
+        $this->syncInvoice($object);
     }
 
     /**
@@ -71,14 +78,50 @@ class StripeInvoiceHandler implements StripeWebhookHandler
     }
 
     /**
+     * Handle failed invoice payment - syncs invoice and notifies the owner.
+     */
+    private function handleInvoicePaymentFailed(array $object): void
+    {
+        $invoice = $this->syncInvoice($object);
+
+        if (!$invoice || $invoice->payment_failed_email_sent_at) {
+            return;
+        }
+
+        $team = $invoice->team;
+        $owner = $team?->owner;
+
+        if (!$owner) {
+            return;
+        }
+
+        $subscription = $invoice->subscription;
+        $planKey = $subscription?->plan_key;
+
+        $failureReason = data_get($object, 'last_finalization_error.message')
+            ?? data_get($object, 'payment_intent.last_payment_error.message')
+            ?? data_get($object, 'status_transitions')
+            ?? null;
+
+        $owner->notify(new PaymentFailedNotification(
+            planName: $this->resolvePlanName($planKey),
+            amount: $invoice->amount_due,
+            currency: $invoice->currency,
+            failureReason: is_string($failureReason) ? $failureReason : null,
+        ));
+
+        $invoice->forceFill(['payment_failed_email_sent_at' => now()])->save();
+    }
+
+    /**
      * Sync invoice data from Stripe webhook.
      */
-    public function syncInvoice(array $object, ?string $overrideStatus = null): void
+    public function syncInvoice(array $object, ?string $overrideStatus = null): ?Invoice
     {
         $providerId = data_get($object, 'id');
 
         if (!$providerId) {
-            return;
+            return null;
         }
 
         $subscriptionId = data_get($object, 'subscription');
@@ -88,7 +131,7 @@ class StripeInvoiceHandler implements StripeWebhookHandler
             ?? $this->resolveTeamIdFromSubscriptionId($subscriptionId);
 
         if (!$teamId) {
-            return;
+            return null;
         }
 
         $subscription = $subscriptionId
@@ -100,7 +143,7 @@ class StripeInvoiceHandler implements StripeWebhookHandler
 
         $status = $overrideStatus ?: (string) data_get($object, 'status', 'open');
 
-        Invoice::query()->updateOrCreate(
+        $invoice = Invoice::query()->updateOrCreate(
             [
                 'provider' => $this->provider(),
                 'provider_id' => (string) $providerId,
@@ -130,5 +173,22 @@ class StripeInvoiceHandler implements StripeWebhookHandler
                 ]),
             ]
         );
+
+        return $invoice;
+    }
+
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (!$planKey) {
+            return 'subscription';
+        }
+
+        try {
+            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
+        }
     }
 }

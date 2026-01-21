@@ -154,7 +154,7 @@ class BillingPlanService
 
     private function useDatabaseCatalog(): bool
     {
-        $catalog = strtolower((string) config('saas.billing.catalog', 'config'));
+        $catalog = strtolower((string) config('saas.billing.catalog', 'database'));
 
         if ($catalog === 'config') {
             return false;
