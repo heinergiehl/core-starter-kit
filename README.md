@@ -5,10 +5,7 @@ A production-grade, SSR-first SaaS starter kit that helps you ship a reliable pr
 Highlights:
 - SSR-first UI (Blade + Filament + Livewire) with minimal JS
 - Auth (email/password + social login)
-- Teams/workspaces + invitations
-- Team-scoped RBAC (roles and permissions)
 - Billing adapters for Stripe, Paddle, Lemon Squeezy
-- Seat-based and flat-rate plans
 - Admin Panel (operators) + App Panel (customers)
 - Product/plan/price catalog in Admin (optional DB-backed)
 - Discount/coupon support (Stripe/Paddle/Lemon checkout)
@@ -17,7 +14,6 @@ Highlights:
 - Blog + SEO (sitemap, OG tags, RSS, OG images)
 - Theming/branding (CSS variables + light/dark)
 - Strong test suite + CI
-- Optional multi-tenancy via add-on package
 
 This README is the quickstart. Detailed docs live in `docs/`.
 
@@ -28,7 +24,6 @@ This README is the quickstart. Detailed docs live in `docs/`.
 - [Billing providers](#billing-providers)
 - [Theming](#theming)
 - [Localization](#localization)
-- [Tenancy](#tenancy)
 - [Deploy](#deploy)
 - [Docs](#docs)
 - [License](#license)
@@ -108,9 +103,6 @@ MAIL_MAILER=log
 
 Billing provider env vars vary; see `docs/billing.md` for exact keys and webhook setup.
 
-Team invitations:
-- `INVITE_EXPIRES_DAYS` controls how long invite links stay valid (default 7 days).
-
 ---
 
 ## Local development
@@ -121,7 +113,7 @@ Team invitations:
 
 ### Filament panels
 - Admin Panel: platform operators
-- App Panel: team owners/admins
+- App Panel: customers
 
 Routes:
 - Admin Panel: `/admin`
@@ -145,7 +137,6 @@ This kit supports:
 - Lemon Squeezy
 
 Billing is webhook-driven. Webhooks must be configured for your environment. See `docs/billing.md`.
-Seat sync is implemented for Stripe, Paddle, and Lemon Squeezy (ensure provider API keys are configured).
 Set plan price IDs in `.env` (see `.env.example`) to enable checkout on the pricing page.
 Use `BILLING_CATALOG=database` to manage products/plans/prices in the Admin Panel.
 
@@ -153,7 +144,7 @@ Use `BILLING_CATALOG=database` to manage products/plans/prices in the Admin Pane
 
 ## Theming
 
-Branding is driven by CSS variables and can be overridden per team (if tenancy is enabled).
+Branding is driven by CSS variables and applies globally.
 See `docs/theming.md`.
 
 ---
@@ -164,13 +155,6 @@ Customer-facing pages (marketing, auth, dashboard, App Panel) are locale-aware v
 The Admin Panel stays in English by default.
 
 See `docs/localization.md`.
-
----
-
-## Tenancy
-
-Multi-tenancy is provided by a separate add-on package to keep the core kit simple.
-See `docs/tenancy.md`.
 
 ---
 
@@ -188,16 +172,14 @@ High level checklist:
 See:
 - `docs/security.md` for hardening
 - `docs/billing.md` for webhooks
-- `docs/tenancy.md` if using the tenancy add-on
- - `docs/versions.md` for pinned dependency versions
+- `docs/versions.md` for pinned dependency versions
 
 ---
 
 ## Docs
 - `docs/architecture.md` - boundaries, entitlements, webhook pipeline
-- `docs/billing.md` - providers, env/config, webhooks, seat sync
+- `docs/billing.md` - providers, env/config, webhooks
 - `docs/features.md` - parity checklist and missing features
-- `docs/tenancy.md` - subdomains/custom domains + verification, isolation rules
 - `docs/theming.md` - design tokens, theming, branding
 - `docs/localization.md` - locale setup and translation workflow
 - `docs/testing.md` - automated + manual QA checklist
