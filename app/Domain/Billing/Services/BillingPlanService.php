@@ -2,10 +2,8 @@
 
 namespace App\Domain\Billing\Services;
 
-use App\Domain\Billing\Models\Price as CatalogPrice;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product as CatalogProduct;
-use App\Domain\Billing\Models\ProductProviderMapping;
 use RuntimeException;
 
 class BillingPlanService
@@ -52,7 +50,7 @@ class BillingPlanService
                 $price['provider_id'] = $this->resolveProviderId($price, $provider);
                 $price['amount'] = $this->resolveProviderValue($price, $provider, 'amounts', 'amount');
                 $price['currency'] = $this->resolveProviderValue($price, $provider, 'currencies', 'currency');
-                $price['is_available'] = !empty($price['provider_id']);
+                $price['is_available'] = ! empty($price['provider_id']);
                 $prices[$priceKey] = $price;
             }
 
@@ -86,7 +84,7 @@ class BillingPlanService
     {
         $plan = $this->plan($planKey);
 
-        if (!isset($plan['prices'][$priceKey])) {
+        if (! isset($plan['prices'][$priceKey])) {
             throw new RuntimeException("Unknown price [{$priceKey}] for plan [{$planKey}].");
         }
 
@@ -103,10 +101,10 @@ class BillingPlanService
                 ->where('provider', strtolower($provider))
                 ->whereHas('price', function ($query) use ($planKey, $priceKey) {
                     $query->whereHas('product', fn ($q) => $q->where('key', $planKey))
-                          ->where(function ($q) use ($priceKey) {
-                                $q->where('key', $priceKey)
-                                  ->orWhere('interval', $priceKey);
-                          });
+                        ->where(function ($q) use ($priceKey) {
+                            $q->where('key', $priceKey)
+                                ->orWhere('interval', $priceKey);
+                        });
                 })
                 ->value('provider_id');
 
@@ -174,7 +172,6 @@ class BillingPlanService
         foreach ($plans as $key => $plan) {
             $plan['key'] = $key;
             $plan['type'] = $plan['type'] ?? 'subscription';
-            $plan['seat_based'] = (bool) ($plan['seat_based'] ?? false);
             $plan['prices'] = $plan['prices'] ?? [];
 
             $normalized[] = $plan;
@@ -211,7 +208,7 @@ class BillingPlanService
             ->where('key', $planKey)
             ->first();
 
-        if (!$plan) {
+        if (! $plan) {
             return null;
         }
 
@@ -225,14 +222,13 @@ class BillingPlanService
     {
         $plans = config('saas.billing.plans', []);
 
-        if (!isset($plans[$planKey])) {
+        if (! isset($plans[$planKey])) {
             throw new RuntimeException("Unknown plan [{$planKey}].");
         }
 
         $plan = $plans[$planKey];
         $plan['key'] = $planKey;
         $plan['type'] = $plan['type'] ?? 'subscription';
-        $plan['seat_based'] = (bool) ($plan['seat_based'] ?? false);
         $plan['prices'] = $plan['prices'] ?? [];
 
         return $plan;
@@ -248,11 +244,11 @@ class BillingPlanService
         foreach ($plan->prices->where('is_active', true) as $price) {
             $priceKey = $price->key ?: $price->interval;
 
-            if (!$priceKey) {
+            if (! $priceKey) {
                 continue;
             }
 
-            if (!isset($prices[$priceKey])) {
+            if (! isset($prices[$priceKey])) {
                 $prices[$priceKey] = [
                     'key' => $priceKey,
                     'label' => $price->label ?: ucfirst($priceKey),
@@ -270,21 +266,15 @@ class BillingPlanService
             }
 
             $prices[$priceKey]['providers'] = $price->mappings->pluck('provider_id', 'provider')->toArray();
-            
+
             // For now, assume amounts/currencies are same across providers or fetched from generic price
             // If we wanted per-provider amounts, we'd need to store them in the mapping or fetch them.
             // But 'Price' model is now the single source of truth for amount/currency.
-            foreach($prices[$priceKey]['providers'] as $prov => $id) {
-                 $prices[$priceKey]['amounts'][$prov] = $price->amount;
-                 $prices[$priceKey]['currencies'][$prov] = $price->currency;
+            foreach ($prices[$priceKey]['providers'] as $prov => $id) {
+                $prices[$priceKey]['amounts'][$prov] = $price->amount;
+                $prices[$priceKey]['currencies'][$prov] = $price->currency;
             }
             // Add self if no mappings? No, mappings are strictly for provider IDs.
-        }
-
-        $entitlements = $plan->entitlements ?? [];
-
-        if ($plan->max_seats !== null) {
-            $entitlements['max_seats'] = $plan->max_seats;
         }
 
         return [
@@ -292,9 +282,8 @@ class BillingPlanService
             'name' => $plan->name,
             'summary' => $plan->summary ?: $plan->description,
             'type' => $plan->type ?: 'subscription',
-            'seat_based' => (bool) $plan->seat_based,
             'highlight' => (bool) $plan->is_featured,
-            'entitlements' => $entitlements,
+            'entitlements' => $plan->entitlements ?? [],
             'features' => $plan->features ?? [],
             'prices' => $prices,
         ];

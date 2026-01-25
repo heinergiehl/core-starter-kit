@@ -16,9 +16,13 @@ class EnsureOnboardingComplete
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (! config('saas.features.onboarding', true)) {
+            return $next($request);
+        }
+
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return $next($request);
         }
 
@@ -35,6 +39,7 @@ class EnsureOnboardingComplete
             // Checkout routes - don't interrupt payment flow
             'checkout.*',
             'billing.checkout',
+            'billing.status',
             'billing.processing',
             'paddle.checkout',
             'webhooks.*',

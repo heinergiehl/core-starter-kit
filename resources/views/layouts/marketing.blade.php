@@ -22,7 +22,7 @@
         @php
             $defaultTitle = $appBrandName ?? config('app.name', 'SaaS Kit');
             $pageTitle = trim($__env->yieldContent('title')) ?: $defaultTitle;
-            $pageDescription = trim($__env->yieldContent('meta_description')) ?: __('Launch a polished SaaS with teams, billing, and clean architecture.');
+            $pageDescription = trim($__env->yieldContent('meta_description')) ?: __('Launch a polished SaaS with billing, auth, and clean architecture.');
             $ogImage = trim($__env->yieldContent('og_image'));
 
             if (!$ogImage) {
@@ -80,7 +80,9 @@
             @include('partials.marketing-nav')
             
             {{-- Site-wide Announcements --}}
-            <x-announcement-banner />
+            @if (config('saas.features.announcements', true))
+                <x-announcement-banner />
+            @endif
 
             <main class="mx-auto max-w-6xl px-6 pb-16">
                 @yield('content')

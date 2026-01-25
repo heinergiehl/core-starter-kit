@@ -20,8 +20,7 @@ class PaymentFailedNotification extends Notification implements ShouldQueue
         private readonly ?int $amount = null,
         private readonly ?string $currency = null,
         private readonly ?string $failureReason = null,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {

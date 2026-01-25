@@ -117,43 +117,68 @@
         </div>
 
         {{-- Posts Grid --}}
-        <div class="mt-8 grid gap-6">
+        <div class="mt-8 grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
             @forelse ($posts as $post)
-                <article class="glass-panel rounded-3xl p-6 relative group transition hover:border-primary/30">
-                    <div class="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.2em] text-ink/50">
-                        <span>{{ optional($post->published_at)->format('M d, Y') }}</span>
-                        @if ($post->reading_time)
-                            <span>•</span>
-                            <span>{{ $post->reading_time }} {{ __('min read') }}</span>
-                        @endif
-                        @if ($post->category)
-                            <a href="{{ route('blog.index', ['category' => $post->category->slug]) }}" 
-                               class="rounded-full bg-primary/10 px-2 py-1 text-primary hover:bg-primary/20 transition">
-                                {{ $post->category->name }}
-                            </a>
+                <article class="glass-panel rounded-3xl p-6 relative group transition hover:border-primary/30 flex flex-col h-full">
+                    
+                    {{-- Featured Image (or placeholder) --}}
+                    <div class="rounded-2xl overflow-hidden mb-6 aspect-video bg-surface relative">
+                        @if($post->featured_image)
+                            <img 
+                                src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($post->featured_image) }}" 
+                                alt="{{ $post->title }}"
+                                class="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                            />
+                        @else
+                            {{-- Placeholder Pattern --}}
+                            <div class="w-full h-full bg-gradient-to-br from-primary/5 to-secondary/5 flex items-center justify-center">
+                                <svg class="w-12 h-12 text-primary/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
+                                </svg>
+                            </div>
                         @endif
                     </div>
-                    <h2 class="mt-4 text-2xl font-semibold text-ink">
-                        <a href="{{ route('blog.show', $post->slug) }}" class="hover:text-primary transition">{{ $post->title }}</a>
-                    </h2>
-                    <p class="mt-2 text-sm text-ink/70">{{ $post->excerpt }}</p>
-                    <div class="mt-4 flex flex-wrap gap-2">
-                        @foreach ($post->tags as $tag)
-                            <a href="{{ route('blog.index', ['tag' => $tag->slug]) }}" 
-                               class="rounded-full border border-ink/10 px-3 py-1 text-xs text-ink/70 bg-surface/50 hover:border-primary/30 hover:text-primary transition">
-                                {{ $tag->name }}
-                            </a>
-                        @endforeach
+
+                    <div class="flex-1 flex flex-col">
+                        <div class="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.2em] text-ink/50 mb-3">
+                            <span>{{ optional($post->published_at)->format('M d, Y') }}</span>
+                            @if ($post->reading_time)
+                                <span>•</span>
+                                <span>{{ $post->reading_time }} {{ __('min') }}</span>
+                            @endif
+                            @if ($post->category)
+                                <a href="{{ route('blog.index', ['category' => $post->category->slug]) }}" 
+                                   class="relative z-10 rounded-full bg-primary/10 px-2 py-1 text-primary hover:bg-primary/20 transition">
+                                    {{ $post->category->name }}
+                                </a>
+                            @endif
+                        </div>
+                        <h2 class="text-xl font-semibold text-ink mb-2">
+                            <a href="{{ route('blog.show', $post->slug) }}" class="hover:text-primary transition before:absolute before:inset-0">{{ $post->title }}</a>
+                        </h2>
+                        <p class="text-sm text-ink/70 line-clamp-3 mb-4">{{ $post->excerpt }}</p>
+                        
+                        <div class="mt-auto flex flex-wrap gap-2 relative z-10">
+                            @foreach ($post->tags->take(3) as $tag)
+                                <a href="{{ route('blog.index', ['tag' => $tag->slug]) }}" 
+                                   class="rounded-full border border-ink/10 px-2.5 py-1 text-[10px] uppercase tracking-wider text-ink/70 bg-surface/50 hover:border-primary/30 hover:text-primary transition">
+                                    {{ $tag->name }}
+                                </a>
+                            @endforeach
+                            @if($post->tags->count() > 3)
+                                <span class="text-[10px] text-ink/50 self-center">+{{ $post->tags->count() - 3 }}</span>
+                            @endif
+                        </div>
                     </div>
                 </article>
             @empty
-                <div class="glass-panel rounded-3xl p-10 text-center">
+                <div class="col-span-full glass-panel rounded-3xl p-10 text-center">
                     <svg class="w-12 h-12 mx-auto text-ink/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     @if ($search || $activeCategory || $activeTag)
                         <p class="text-sm text-ink/70">{{ __('No posts match your filters.') }}</p>
-                        <a href="{{ route('blog.index') }}" class="mt-3 inline-block text-sm text-primary hover:underline">
+                        <a href="{{ route('blog.index') }}" class="mt-3 inline-block text-sm text-primary hover:underline relative z-10">
                             {{ __('Clear filters and view all posts') }}
                         </a>
                     @else

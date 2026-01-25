@@ -37,14 +37,12 @@ class CleanupOrphanUsers extends Command
         // Find users who:
         // 1. Have no verified email
         // 2. Were created before the cutoff
-        // 3. Have no subscription (via their teams)
+        // 3. Have no subscription
         $orphanUsers = User::query()
             ->whereNull('email_verified_at')
             ->where('created_at', '<', $cutoff)
-            ->whereDoesntHave('teams', function ($query) {
-                $query->whereHas('subscriptions', function ($subQuery) {
-                    $subQuery->whereIn('status', ['active', 'trialing', 'past_due']);
-                });
+            ->whereDoesntHave('subscriptions', function ($subQuery) {
+                $subQuery->whereIn('status', ['active', 'trialing', 'past_due']);
             })
             ->get();
 
@@ -52,6 +50,7 @@ class CleanupOrphanUsers extends Command
 
         if ($count === 0) {
             $this->info('No orphan users found.');
+
             return self::SUCCESS;
         }
 
@@ -67,6 +66,7 @@ class CleanupOrphanUsers extends Command
                 ])
             );
             $this->warn('Dry run mode - no users were deleted.');
+
             return self::SUCCESS;
         }
 
@@ -76,10 +76,6 @@ class CleanupOrphanUsers extends Command
         $deleted = 0;
         foreach ($orphanUsers as $user) {
             try {
-                // Delete user's teams first (cascade)
-                foreach ($user->ownedTeams as $team) {
-                    $team->delete();
-                }
                 $user->delete();
                 $deleted++;
             } catch (\Throwable $e) {

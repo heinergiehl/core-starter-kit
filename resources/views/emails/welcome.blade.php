@@ -11,7 +11,7 @@
     
     <ul style="margin: 16px 0; padding-left: 24px; color: #334155;">
         <li style="margin-bottom: 8px;">Complete your profile settings</li>
-        <li style="margin-bottom: 8px;">Create or join a team</li>
+        <li style="margin-bottom: 8px;">Choose a plan that fits your needs</li>
         <li style="margin-bottom: 8px;">Explore our features</li>
     </ul>
     

@@ -6,20 +6,21 @@ use App\Domain\Billing\Models\Price;
 use App\Filament\Admin\Resources\PriceResource\Pages\EditPrice;
 use App\Filament\Admin\Resources\PriceResource\Pages\ListPrices;
 use Filament\Actions\EditAction;
-use Filament\Forms;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-
 
 class PriceResource extends Resource
 {
     protected static ?string $model = Price::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-tag';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Product Management';
+    protected static string|\UnitEnum|null $navigationGroup = 'Product Management';
 
     protected static ?string $navigationLabel = 'Prices';
 
@@ -31,70 +32,69 @@ class PriceResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\Select::make('product_id')
+                Select::make('product_id')
                     ->relationship('product', 'name')
                     ->required()
                     ->searchable()
                     ->preload(),
-                Forms\Components\TextInput::make('key')
+                TextInput::make('key')
                     ->label('Key')
                     ->readOnly()
                     ->maxLength(64)
                     ->helperText('Use keys like monthly, yearly, lifetime.'),
-                Forms\Components\TextInput::make('label')
+                TextInput::make('label')
                     ->maxLength(100),
                 // Provider selection removed for agnostic pricing
-                // Forms\Components\Select::make('provider')
+                // Select::make('provider')
                 //     ->options(self::providerOptions())
                 //     ->required(),
-                // Forms\Components\TextInput::make('provider_id')
+                // TextInput::make('provider_id')
                 //     ->label('Provider ID')
                 //     ->helperText('Optional until you publish the catalog to a provider.')
                 //     ->maxLength(191),
-                Forms\Components\TextInput::make('interval')
+                TextInput::make('interval')
                     ->label('Interval')
                     ->maxLength(32)
                     ->required()
                     ->readOnly()
                     ->helperText('Example: month, year, lifetime.'),
-                Forms\Components\TextInput::make('interval_count')
+                TextInput::make('interval_count')
                     ->label('Interval count')
                     ->numeric()
                     ->minValue(1)
                     ->default(1)
                     ->readOnly(),
-                Forms\Components\TextInput::make('currency')
+                TextInput::make('currency')
                     ->label('Currency')
                     ->maxLength(3)
                     ->required()
                     ->readOnly()
                     ->dehydrateStateUsing(fn (?string $state): ?string => $state ? strtoupper($state) : null),
-                Forms\Components\TextInput::make('amount')
+                TextInput::make('amount')
                     ->numeric()
                     ->minValue(0)
                     ->required()
                     ->readOnly()
                     ->helperText('Stored in minor units (e.g. 2900 for €29.00).'),
-                Forms\Components\Select::make('type')
+                Select::make('type')
                     ->options([
                         'flat' => 'Flat',
-                        'per_seat' => 'Per seat',
                     ])
                     ->default('flat')
                     ->readOnly(),
-                Forms\Components\Toggle::make('has_trial')
+                Toggle::make('has_trial')
                     ->label('Has trial')
                     ->readOnly(),
-                Forms\Components\TextInput::make('trial_interval')
+                TextInput::make('trial_interval')
                     ->label('Trial interval')
                     ->maxLength(32)
                     ->readOnly(),
-                Forms\Components\TextInput::make('trial_interval_count')
+                TextInput::make('trial_interval_count')
                     ->label('Trial interval count')
                     ->numeric()
                     ->minValue(1)
                     ->readOnly(),
-                Forms\Components\Toggle::make('is_active')
+                Toggle::make('is_active')
                     ->label('Active')
                     ->default(false)
                     ->helperText('Controls local visibility only.'),
@@ -106,14 +106,14 @@ class PriceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('product.name')
+                TextColumn::make('product.name')
                     ->label('Product')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('key')
+                TextColumn::make('key')
                     ->badge()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('mappings.provider')
+                TextColumn::make('mappings.provider')
                     ->label('Providers')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -124,9 +124,9 @@ class PriceResource extends Resource
                     })
                     ->formatStateUsing(fn (string $state): string => ucfirst($state))
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('interval')
+                TextColumn::make('interval')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('amount')
+                TextColumn::make('amount')
                     ->formatStateUsing(function ($state, Price $record): string {
                         $currency = strtoupper((string) $record->currency);
                         $formatted = number_format(((int) $state) / 100, 2);
@@ -134,7 +134,7 @@ class PriceResource extends Resource
                         return trim("{$currency} {$formatted}");
                     })
                     ->sortable(),
-                Tables\Columns\TextColumn::make('is_active')
+                TextColumn::make('is_active')
                     ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Active' : 'Inactive')

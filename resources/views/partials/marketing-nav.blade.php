@@ -1,10 +1,9 @@
 {{-- Shared Marketing Navigation --}}
 @php
     $user = auth()->user();
-    $team = $user?->currentTeam;
-    $hasSubscription = $team?->hasActiveSubscription() ?? false;
-    $hasPurchase = $team
-        ? app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($team)
+    $hasSubscription = $user?->hasActiveSubscription() ?? false;
+    $hasPurchase = $user
+        ? app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($user)
         : false;
     $isAdmin = $user?->is_admin ?? false;
 @endphp
@@ -22,8 +21,12 @@
         <a href="/" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->is('/') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
         <a href="/#features" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50">{{ __('Features') }}</a>
         <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
-        <a href="{{ route('roadmap') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
-        <a href="{{ route('blog.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
+        @if (config('saas.features.roadmap', true))
+            <a href="{{ route('roadmap') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
+        @endif
+        @if (config('saas.features.blog', true))
+            <a href="{{ route('blog.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
+        @endif
     </nav>
 
     {{-- Right Side Actions --}}
@@ -140,8 +143,12 @@
         <a href="/" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->is('/') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
         <a href="/#features" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50">{{ __('Features') }}</a>
         <a href="{{ route('pricing') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
-        <a href="{{ route('roadmap') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
-        <a href="{{ route('blog.index') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
+        @if (config('saas.features.roadmap', true))
+            <a href="{{ route('roadmap') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
+        @endif
+        @if (config('saas.features.blog', true))
+            <a href="{{ route('blog.index') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
+        @endif
         
         <div class="pt-2 border-t border-ink/10">
             @auth

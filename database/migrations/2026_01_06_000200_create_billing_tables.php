@@ -10,13 +10,13 @@ return new class extends Migration
     {
         Schema::create('billing_customers', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('provider');
             $table->string('provider_id')->nullable();
             $table->string('email')->nullable();
             $table->timestamps();
 
-            $table->unique(['team_id', 'provider']);
+            $table->unique(['user_id', 'provider']);
             $table->unique(['provider', 'provider_id']);
         });
 
@@ -47,7 +47,7 @@ return new class extends Migration
             $table->string('interval');
             $table->string('currency', 3);
             $table->unsignedInteger('amount');
-            $table->string('type')->default('flat');
+            $table->string('type')->default('recurring');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
@@ -56,7 +56,7 @@ return new class extends Migration
 
         Schema::create('subscriptions', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('provider');
             $table->string('provider_id')->unique();
             $table->string('plan_key');
@@ -69,12 +69,12 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['team_id', 'status']);
+            $table->index(['user_id', 'status']);
         });
 
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('provider');
             $table->string('provider_id')->unique();
             $table->string('plan_key')->nullable();

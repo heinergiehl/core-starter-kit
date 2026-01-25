@@ -2,7 +2,6 @@
 
 namespace App\Domain\Billing\Models;
 
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -14,7 +13,6 @@ class DiscountRedemption extends Model
 
     protected $fillable = [
         'discount_id',
-        'team_id',
         'user_id',
         'provider',
         'provider_id',
@@ -32,11 +30,6 @@ class DiscountRedemption extends Model
     public function discount(): BelongsTo
     {
         return $this->belongsTo(Discount::class);
-    }
-
-    public function team(): BelongsTo
-    {
-        return $this->belongsTo(Team::class);
     }
 
     public function user(): BelongsTo

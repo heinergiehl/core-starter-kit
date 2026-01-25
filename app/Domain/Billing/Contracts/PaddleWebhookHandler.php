@@ -22,8 +22,8 @@ interface PaddleWebhookHandler
     /**
      * Process the webhook event.
      *
-     * @param WebhookEvent $event The persisted webhook event
-     * @param array<string, mixed> $data The event data object
+     * @param  WebhookEvent  $event  The persisted webhook event
+     * @param  array<string, mixed>  $data  The event data object
      */
     public function handle(WebhookEvent $event, array $data): void;
 }

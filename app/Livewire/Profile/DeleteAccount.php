@@ -9,6 +9,7 @@ use Livewire\Component;
 class DeleteAccount extends Component
 {
     public string $password = '';
+
     public bool $showModal = false;
 
     public function openModal(): void
@@ -31,8 +32,9 @@ class DeleteAccount extends Component
 
         $user = Auth::user();
 
-        if (!Hash::check($this->password, $user->password)) {
+        if (! Hash::check($this->password, $user->password)) {
             $this->addError('password', __('The password is incorrect.'));
+
             return;
         }
 

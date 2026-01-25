@@ -23,7 +23,7 @@ trait SetsMailRecipient
         if (method_exists($notifiable, 'routeNotificationFor')) {
             $route = $notifiable->routeNotificationFor('mail', $this);
 
-            if (!empty($route)) {
+            if (! empty($route)) {
                 return $route;
             }
         }

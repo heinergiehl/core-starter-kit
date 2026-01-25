@@ -4,7 +4,6 @@ namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\DiscountRedemption;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,7 +21,7 @@ class DiscountService
         $provider = strtolower($provider);
         $enabledProviders = array_map('strtolower', config('saas.billing.discounts.providers', ['stripe']));
 
-        if (!in_array($provider, $enabledProviders, true)) {
+        if (! in_array($provider, $enabledProviders, true)) {
             throw ValidationException::withMessages([
                 'coupon' => 'Coupons are not supported for this billing provider yet.',
             ]);
@@ -33,13 +32,13 @@ class DiscountService
             ->where('code', $normalizedCode)
             ->first();
 
-        if (!$discount) {
+        if (! $discount) {
             throw ValidationException::withMessages([
                 'coupon' => 'This coupon code is not available.',
             ]);
         }
 
-        if (!$discount->is_active) {
+        if (! $discount->is_active) {
             throw ValidationException::withMessages([
                 'coupon' => 'This coupon is not active.',
             ]);
@@ -63,13 +62,13 @@ class DiscountService
             ]);
         }
 
-        if (!empty($discount->plan_keys) && !in_array($planKey, $discount->plan_keys, true)) {
+        if (! empty($discount->plan_keys) && ! in_array($planKey, $discount->plan_keys, true)) {
             throw ValidationException::withMessages([
                 'coupon' => 'This coupon does not apply to the selected plan.',
             ]);
         }
 
-        if (!empty($discount->price_keys) && !in_array($priceKey, $discount->price_keys, true)) {
+        if (! empty($discount->price_keys) && ! in_array($priceKey, $discount->price_keys, true)) {
             throw ValidationException::withMessages([
                 'coupon' => 'This coupon does not apply to the selected price.',
             ]);
@@ -83,7 +82,7 @@ class DiscountService
             }
         }
 
-        if (!$discount->provider_id) {
+        if (! $discount->provider_id) {
             throw ValidationException::withMessages([
                 'coupon' => 'This coupon is not configured for checkout yet.',
             ]);
@@ -94,7 +93,6 @@ class DiscountService
 
     public function recordRedemption(
         Discount $discount,
-        Team $team,
         ?User $user,
         string $provider,
         string $providerId,
@@ -102,7 +100,7 @@ class DiscountService
         ?string $priceKey,
         array $metadata = []
     ): void {
-        DB::transaction(function () use ($discount, $team, $user, $provider, $providerId, $planKey, $priceKey, $metadata): void {
+        DB::transaction(function () use ($discount, $user, $provider, $providerId, $planKey, $priceKey, $metadata): void {
             $redemption = DiscountRedemption::query()->firstOrCreate(
                 [
                     'discount_id' => $discount->id,
@@ -110,7 +108,6 @@ class DiscountService
                     'provider_id' => $providerId,
                 ],
                 [
-                    'team_id' => $team->id,
                     'user_id' => $user?->id,
                     'plan_key' => $planKey,
                     'price_key' => $priceKey,

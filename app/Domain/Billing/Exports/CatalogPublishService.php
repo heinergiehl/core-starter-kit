@@ -5,9 +5,6 @@ namespace App\Domain\Billing\Exports;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\ProductProviderMapping;
-use App\Domain\Billing\Exports\StripeCatalogPublishAdapter;
-use App\Domain\Billing\Exports\PaddleCatalogPublishAdapter;
-use App\Domain\Billing\Exports\LemonSqueezyCatalogPublishAdapter;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -37,7 +34,7 @@ class CatalogPublishService
         $provider = strtolower($provider);
         $enabled = array_map('strtolower', config('saas.billing.providers', []));
 
-        if (!in_array($provider, $enabled, true)) {
+        if (! in_array($provider, $enabled, true)) {
             throw new RuntimeException("Catalog publish provider [{$provider}] is not enabled.");
         }
 
@@ -80,13 +77,14 @@ class CatalogPublishService
 
                 // For preview mode: still show prices that would be created
                 // For apply mode: need actual product ID
-                if (!$providerProductId && $apply) {
+                if (! $providerProductId && $apply) {
                     $warnings[] = "Product [{$product->key}] could not resolve a {$provider} product id.";
+
                     continue;
                 }
-                
+
                 // Preview mode - use placeholder for price counting
-                if (!$providerProductId && !$apply) {
+                if (! $providerProductId && ! $apply) {
                     $providerProductId = 'preview_placeholder';
                 }
 
@@ -94,6 +92,7 @@ class CatalogPublishService
 
                 if ($productPrices->isEmpty()) {
                     $warnings[] = "Product [{$product->key}] has no prices to publish.";
+
                     continue;
                 }
 
@@ -104,7 +103,7 @@ class CatalogPublishService
                         $summary['prices'][$priceAction]++;
                     }
 
-                    if ($apply && !empty($priceResult['id'])) {
+                    if ($apply && ! empty($priceResult['id'])) {
                         DB::transaction(function () use ($price, $provider, $priceResult) {
                             PriceProviderMapping::updateOrCreate(
                                 ['price_id' => $price->id, 'provider' => $provider],

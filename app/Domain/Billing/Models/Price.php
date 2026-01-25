@@ -36,6 +36,7 @@ class Price extends Model
     protected $casts = [
         'is_active' => 'bool',
         'amount' => 'int',
+        'type' => \App\Enums\PriceType::class,
         'interval_count' => 'int',
         'has_trial' => 'bool',
         'trial_interval_count' => 'int',
@@ -51,4 +52,3 @@ class Price extends Model
         return $this->belongsTo(Product::class);
     }
 }
-

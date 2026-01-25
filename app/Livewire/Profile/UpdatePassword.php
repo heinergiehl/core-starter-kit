@@ -10,7 +10,9 @@ use Livewire\Component;
 class UpdatePassword extends Component
 {
     public string $current_password = '';
+
     public string $password = '';
+
     public string $password_confirmation = '';
 
     public function updatePassword(): void
@@ -42,7 +44,7 @@ class UpdatePassword extends Component
     public function render()
     {
         $user = Auth::user();
-        
+
         return view('livewire.profile.update-password', [
             'hasPassword' => $user->password !== null,
         ]);

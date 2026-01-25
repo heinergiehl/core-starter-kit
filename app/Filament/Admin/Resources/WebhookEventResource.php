@@ -14,16 +14,16 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class WebhookEventResource extends Resource
 {
     protected static ?string $model = WebhookEvent::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-bolt';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-bolt';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Billing';
+    protected static string|\UnitEnum|null $navigationGroup = 'Billing';
 
     protected static ?string $recordTitleAttribute = 'event_id';
 
@@ -59,27 +59,27 @@ class WebhookEventResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('provider')
+                TextColumn::make('provider')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('event_id')
+                TextColumn::make('event_id')
                     ->copyable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('type')
+                TextColumn::make('type')
                     ->limit(30)
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'processed' => 'success',
                         'failed' => 'danger',
                         default => 'warning',
                     }),
-                Tables\Columns\TextColumn::make('received_at')
+                TextColumn::make('received_at')
                     ->label('Received')
                     ->dateTime()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('processed_at')
+                TextColumn::make('processed_at')
                     ->label('Processed')
                     ->dateTime()
                     ->sortable()
@@ -93,6 +93,7 @@ class WebhookEventResource extends Resource
                     ->icon('heroicon-o-arrow-path')
                     ->visible(fn (WebhookEvent $record): bool => $record->status === 'failed')
                     ->requiresConfirmation()
+                    ->disabled(fn (WebhookEvent $record) => $record->status === 'processing') // Optional: status based disabling
                     ->action(function (WebhookEvent $record): void {
                         $record->update([
                             'status' => 'received',

@@ -20,8 +20,7 @@ class SubscriptionPlanChangedMail extends Mailable
         public readonly ?string $previousPlanName = null,
         public readonly ?string $newPlanName = null,
         public readonly ?string $effectiveDate = null,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

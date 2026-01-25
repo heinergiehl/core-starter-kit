@@ -30,7 +30,7 @@ class OnboardingController extends Controller
         return view('onboarding.show', [
             'user' => $user,
             'step' => (int) $step,
-            'totalSteps' => 3,
+            'totalSteps' => 2,
         ]);
     }
 
@@ -49,26 +49,17 @@ class OnboardingController extends Controller
                     'name' => ['required', 'string', 'max:255'],
                 ]);
                 $user->update(['name' => $request->name]);
+
                 return redirect()->route('onboarding.show', ['step' => 2]);
 
             case 2:
-                // Team setup
-                $request->validate([
-                    'team_name' => ['required', 'string', 'max:255'],
-                ]);
-                if ($user->currentTeam) {
-                    $user->currentTeam->update(['name' => $request->team_name]);
-                }
-                return redirect()->route('onboarding.show', ['step' => 3]);
-
-            case 3:
                 // Preferences and complete
                 $request->validate([
                     'locale' => ['nullable', 'string', 'max:10'],
                 ]);
-                
+
                 $user->update([
-                    'locale' => $request->locale ?? $user->locale,
+                    'locale' => \App\Enums\Locale::tryFrom($request->locale) ?? $user->locale,
                     'onboarding_completed_at' => now(),
                 ]);
 

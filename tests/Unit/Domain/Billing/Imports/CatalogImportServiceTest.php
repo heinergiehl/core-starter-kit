@@ -7,8 +7,8 @@ use App\Domain\Billing\Imports\StripeCatalogImportAdapter;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\ProductProviderMapping;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
 use Mockery;
+use Tests\TestCase;
 
 class CatalogImportServiceTest extends TestCase
 {
@@ -40,7 +40,7 @@ class CatalogImportServiceTest extends TestCase
         // Bind mock to container
         $this->instance(StripeCatalogImportAdapter::class, $mockAdapter);
 
-        $service = new CatalogImportService();
+        $service = new CatalogImportService;
 
         // 2. Run the import
         $service->apply('stripe');

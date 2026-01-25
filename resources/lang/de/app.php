@@ -16,7 +16,7 @@ return [
     'hero_badge' => 'v1.0 ist jetzt live',
     'hero_title' => 'Das Boilerplate für',
     'hero_title_highlight' => 'ambitionierte SaaS',
-    'hero_description' => 'Verschwende keine Wochen mehr mit Billing, Auth und Teams. Starte mit einer "Senior Dev" Qualitätsgrundlage.',
+    'hero_description' => 'Verschwende keine Wochen mehr mit Billing, Auth und Onboarding. Starte mit einer "Senior Dev" Qualitätsgrundlage.',
     'hero_tagline' => 'Domain-driven, Event-Sourced, Upgrade-Ready.',
     'hero_cta' => 'Konsole starten',
     'hero_cta_secondary' => 'Demo ansehen',

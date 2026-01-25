@@ -2,11 +2,10 @@
 
 namespace Tests\Unit\Domain\Billing;
 
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\SaasStatsService;
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -19,30 +18,30 @@ class SaasStatsServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new SaasStatsService();
+        $this->service = new SaasStatsService;
     }
 
     public function test_gets_active_subscription_count(): void
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
 
         // Active subscription
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'status' => 'active',
             'canceled_at' => null,
         ]);
 
         // Trialing subscription
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'status' => 'trialing',
             'canceled_at' => null,
         ]);
 
         // Canceled subscription - should not count
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'status' => 'canceled',
             'canceled_at' => now(),
         ]);
@@ -54,17 +53,17 @@ class SaasStatsServiceTest extends TestCase
 
     public function test_gets_new_subscriptions_this_month(): void
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
 
         // This month
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'created_at' => now(),
         ]);
 
         // Last month - should not count
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'created_at' => now()->subMonth(),
         ]);
 
@@ -75,17 +74,17 @@ class SaasStatsServiceTest extends TestCase
 
     public function test_gets_cancellations_this_month(): void
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
 
         // Canceled this month
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'canceled_at' => now(),
         ]);
 
         // Canceled last month - should not count
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'canceled_at' => now()->subMonth(),
         ]);
 
@@ -96,12 +95,12 @@ class SaasStatsServiceTest extends TestCase
 
     public function test_calculates_churn_rate(): void
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
 
         // 10 subscriptions created 60 days ago (starting base)
         for ($i = 0; $i < 10; $i++) {
             Subscription::factory()->create([
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'status' => 'active',
                 'created_at' => now()->subDays(60),
                 'canceled_at' => null,
@@ -111,7 +110,7 @@ class SaasStatsServiceTest extends TestCase
         // 2 canceled in last 30 days
         for ($i = 0; $i < 2; $i++) {
             Subscription::factory()->create([
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'status' => 'canceled',
                 'created_at' => now()->subDays(60),
                 'canceled_at' => now()->subDays(15),
@@ -126,7 +125,7 @@ class SaasStatsServiceTest extends TestCase
 
     public function test_calculates_mrr_with_plans(): void
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
 
         $product = \App\Domain\Billing\Models\Product::factory()->create([
             'key' => 'pro-monthly',
@@ -141,7 +140,7 @@ class SaasStatsServiceTest extends TestCase
         ]);
 
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'plan_key' => 'pro-monthly',
             'status' => 'active',
             'canceled_at' => null,
@@ -154,7 +153,7 @@ class SaasStatsServiceTest extends TestCase
 
     public function test_calculates_arpu(): void
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
 
         $product = \App\Domain\Billing\Models\Product::factory()->create([
             'key' => 'starter',
@@ -170,7 +169,7 @@ class SaasStatsServiceTest extends TestCase
 
         // 2 subscriptions
         Subscription::factory()->count(2)->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'plan_key' => 'starter',
             'status' => 'active',
             'canceled_at' => null,

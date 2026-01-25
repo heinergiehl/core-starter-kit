@@ -3,7 +3,6 @@
 namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripePriceHandler;
-use App\Domain\Billing\Models\Plan;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\WebhookEvent;
@@ -19,7 +18,7 @@ class StripePriceHandlerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->handler = new StripePriceHandler();
+        $this->handler = new StripePriceHandler;
     }
 
     public function test_handles_price_created_event(): void

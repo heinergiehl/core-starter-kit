@@ -44,20 +44,20 @@ class StripeCustomerHandler implements StripeWebhookHandler
         $providerId = data_get($object, 'id');
         $email = data_get($object, 'email');
 
-        if (!$providerId) {
+        if (! $providerId) {
             return;
         }
 
-        $teamId = $this->resolveTeamIdFromMetadata($object);
+        $userId = $this->resolveUserIdFromMetadata($object);
 
         $customer = BillingCustomer::query()
             ->where('provider', $this->provider())
             ->where('provider_id', $providerId)
             ->first();
 
-        if (!$customer && $teamId) {
+        if (! $customer && $userId) {
             BillingCustomer::create([
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'provider' => $this->provider(),
                 'provider_id' => $providerId,
                 'email' => $email,

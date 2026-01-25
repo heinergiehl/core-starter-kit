@@ -19,7 +19,7 @@ return new class extends Migration
             $table->timestamp('enabled_at')->nullable();
             $table->timestamp('confirmed_at')->nullable();
             $table->timestamps();
-            
+
             $table->unique('user_id');
         });
     }

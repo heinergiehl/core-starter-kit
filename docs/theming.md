@@ -5,7 +5,7 @@ This kit provides a theming and branding system designed for SSR + Filament.
 ## 1) Design goals
 - Simple and safe defaults
 - Easy to customize without rewriting Tailwind config
-- Optional per-tenant overrides (tenancy add-on)
+- Global branding overrides via Admin Panel
 
 ---
 
@@ -45,15 +45,10 @@ Store in:
 - config for defaults
 - DB for overrides (recommended), e.g., `settings` table
 
-### 3.2 Team/Tenant overrides (optional)
-If tenancy is enabled:
-- allow per-tenant logo and colors
-- apply tokens based on current tenant context
-
 ---
 
-## 4) Theme editor UI (App Panel)
-Provide a page for team owners/admins:
+## 4) Theme editor UI (Admin Panel)
+Provide a page for admins:
 - upload logo
 - select brand colors
 - preview in a small live area
@@ -82,4 +77,4 @@ Requirements:
 ## 7) Accessibility and testing
 - Check contrast for primary and accent colors
 - Ensure focus states remain visible after theming
-- Feature test: owner can update theme settings, non-owner cannot
+- Feature test: admin can update theme settings

@@ -10,7 +10,11 @@
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-secondary">{{ __('Checkout') }}</p>
                 <h1 class="font-display text-3xl">{{ __('Complete your subscription') }}</h1>
                 <p class="text-sm text-ink/70">
-                    {{ __('Enter your email or sign in to continue to payment.') }}
+                    @auth
+                        {{ __('Confirm your details to continue to payment.') }}
+                    @else
+                        {{ __('Enter your email or sign in to continue to payment.') }}
+                    @endauth
                 </p>
             </div>
 
@@ -36,7 +40,7 @@
                 <div class="card-inner p-6">
                     <h2 class="text-lg font-semibold text-ink">{{ __('Enter your details') }}</h2>
 
-                    @if (!empty($social_providers))
+                    @if (!empty($social_providers) && !auth()->check())
                         <div class="mt-4">
                             <div class="grid gap-2 sm:grid-cols-2">
                                 @foreach ($social_providers as $providerName)
@@ -71,7 +75,7 @@
                             <input
                                 type="email"
                                 name="email"
-                                value="{{ old('email') }}"
+                                value="{{ old('email', auth()->user()?->email) }}"
                                 class="mt-2 w-full rounded-xl border border-ink/10 bg-surface/50 px-4 py-2.5 text-sm text-ink focus:border-primary focus:ring-1 focus:ring-primary"
                                 required
                             >
@@ -82,7 +86,7 @@
                             <input
                                 type="text"
                                 name="name"
-                                value="{{ old('name') }}"
+                                value="{{ old('name', auth()->user()?->name) }}"
                                 class="mt-2 w-full rounded-xl border border-ink/10 bg-surface/50 px-4 py-2.5 text-sm text-ink focus:border-primary focus:ring-1 focus:ring-primary"
                                 placeholder="{{ __('Optional') }}"
                             >

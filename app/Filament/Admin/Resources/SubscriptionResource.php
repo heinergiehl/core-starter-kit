@@ -10,7 +10,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,9 +18,9 @@ class SubscriptionResource extends Resource
 {
     protected static ?string $model = Subscription::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Billing';
+    protected static string|\UnitEnum|null $navigationGroup = 'Billing';
 
     protected static ?string $navigationLabel = 'Subscriptions';
 
@@ -38,7 +38,7 @@ class SubscriptionResource extends Resource
         return $schema->schema([
             Section::make('Subscription')
                 ->schema([
-                    TextEntry::make('team.name')->label('Team'),
+                    TextEntry::make('user.name')->label('Customer'),
                     TextEntry::make('provider')->badge(),
                     TextEntry::make('provider_id')->label('Provider ID'),
                     TextEntry::make('plan_key')->label('Plan'),
@@ -57,31 +57,31 @@ class SubscriptionResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('team.name')
-                    ->label('Team')
+                TextColumn::make('user.name')
+                    ->label('Customer')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('provider')
+                TextColumn::make('provider')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('plan_key')
+                TextColumn::make('plan_key')
                     ->label('Plan')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'active', 'trialing' => 'success',
                         'canceled', 'cancelled' => 'danger',
                         default => 'warning',
                     }),
-                Tables\Columns\TextColumn::make('quantity')
+                TextColumn::make('quantity')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('renews_at')
+                TextColumn::make('renews_at')
                     ->label('Renews')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),

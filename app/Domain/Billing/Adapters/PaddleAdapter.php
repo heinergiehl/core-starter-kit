@@ -8,19 +8,15 @@ use App\Domain\Billing\Adapters\Paddle\Handlers\PaddlePriceHandler;
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleProductHandler;
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleSubscriptionHandler;
 use App\Domain\Billing\Contracts\PaddleWebhookHandler;
+use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
-use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
-use RuntimeException;
 
 /**
  * Paddle billing provider adapter.
@@ -28,7 +24,6 @@ use RuntimeException;
  * This adapter handles all Paddle-related billing operations including:
  * - Webhook parsing and processing
  * - Checkout session creation
- * - Seat quantity synchronization
  *
  * Webhook event processing is delegated to specialized handlers for
  * maintainability and single responsibility.
@@ -66,25 +61,35 @@ class PaddleAdapter implements BillingProviderAdapter
         $secret = config('services.paddle.webhook_secret');
 
         // Verify signature in production
-        if (!app()->environment(['local', 'testing'])) {
-            if (!$secret) {
-                throw new RuntimeException('Paddle webhook secret is not configured.');
+        if (! app()->environment(['local', 'testing'])) {
+            if (! $secret) {
+                throw BillingException::missingConfiguration('Paddle', 'webhook secret');
             }
 
-            if (!$signature) {
-                throw new RuntimeException('Paddle webhook signature header is missing.');
+            if (! $signature) {
+                throw BillingException::webhookValidationFailed('Paddle', 'signature header is missing');
             }
 
-            if (!$this->verifyPaddleSignature($payload, $signature, $secret)) {
-                throw new RuntimeException('Invalid Paddle webhook signature.');
+            if (! $this->verifyPaddleSignature($payload, $signature, $secret)) {
+                throw BillingException::webhookValidationFailed('Paddle', 'invalid signature');
             }
         }
 
-        $data = json_decode($payload, true) ?? [];
+        $data = json_decode($payload, true);
+        if (! is_array($data)) {
+            throw BillingException::webhookValidationFailed('Paddle', 'invalid payload structure');
+        }
+
+        $eventId = $data['event_id'] ?? $data['id'] ?? null;
+        $eventType = $data['event_type'] ?? $data['type'] ?? null;
+
+        if (! $eventId || ! $eventType) {
+            throw BillingException::webhookValidationFailed('Paddle', 'missing event id or type');
+        }
 
         return [
-            'id' => (string) ($data['event_id'] ?? $data['id'] ?? Str::uuid()),
-            'type' => $data['event_type'] ?? $data['type'] ?? null,
+            'id' => (string) $eventId,
+            'type' => $eventType,
             'payload' => $data,
         ];
     }
@@ -106,12 +111,18 @@ class PaddleAdapter implements BillingProviderAdapter
         $timestamp = $parts['ts'] ?? null;
         $hash = $parts['h1'] ?? null;
 
-        if (!$timestamp || !$hash) {
+        if (! $timestamp || ! $hash || ! ctype_digit((string) $timestamp)) {
+            return false;
+        }
+
+        $timestamp = (int) $timestamp;
+        $toleranceSeconds = (int) config('services.paddle.webhook_tolerance_seconds', 300);
+        if ($toleranceSeconds > 0 && abs(time() - $timestamp) > $toleranceSeconds) {
             return false;
         }
 
         // Build signed payload: timestamp:payload
-        $signedPayload = $timestamp . ':' . $payload;
+        $signedPayload = $timestamp.':'.$payload;
         $expectedHash = hash_hmac('sha256', $signedPayload, $secret);
 
         return hash_equals($expectedHash, $hash);
@@ -123,7 +134,7 @@ class PaddleAdapter implements BillingProviderAdapter
         $type = $payload['event_type'] ?? $payload['type'] ?? $event->type;
         $data = $payload['data'] ?? $payload;
 
-        if (!$type || !$data) {
+        if (! $type || ! $data) {
             return;
         }
 
@@ -140,10 +151,10 @@ class PaddleAdapter implements BillingProviderAdapter
     private function registerHandlers(): void
     {
         $handlers = [
-            new PaddleProductHandler(),
-            new PaddlePriceHandler(),
-            new PaddleSubscriptionHandler(),
-            new PaddleOrderHandler(),
+            new PaddleProductHandler,
+            new PaddlePriceHandler,
+            app(PaddleSubscriptionHandler::class),
+            new PaddleOrderHandler,
         ];
 
         foreach ($handlers as $handler) {
@@ -161,49 +172,7 @@ class PaddleAdapter implements BillingProviderAdapter
         return $this->handlers[$eventType] ?? null;
     }
 
-
-    public function syncSeatQuantity(Team $team, int $quantity): void
-    {
-        $subscription = Subscription::query()
-            ->where('team_id', $team->id)
-            ->where('provider', $this->provider())
-            ->whereIn('status', ['active', 'trialing'])
-            ->latest('id')
-            ->first();
-
-        if (!$subscription) {
-            return;
-        }
-
-        $apiKey = config('services.paddle.api_key');
-
-        if (!$apiKey) {
-            throw new RuntimeException('Paddle API key is not configured.');
-        }
-
-        $priceId = $this->resolvePriceId($subscription);
-
-        if (!$priceId) {
-            throw new RuntimeException('Paddle price id is missing for seat sync.');
-        }
-
-        $response = $this->paddleRequest($apiKey)
-            ->patch("/subscriptions/{$subscription->provider_id}", [
-                'items' => [
-                    [
-                        'price_id' => $priceId,
-                        'quantity' => max($quantity, 1),
-                    ],
-                ],
-            ]);
-
-        if (!$response->successful()) {
-            throw new RuntimeException('Paddle seat sync failed: '.$response->body());
-        }
-    }
-
     public function createCheckout(
-        Team $team,
         User $user,
         string $planKey,
         string $priceKey,
@@ -213,7 +182,6 @@ class PaddleAdapter implements BillingProviderAdapter
         ?Discount $discount = null
     ): string {
         $payload = $this->buildTransactionPayload(
-            $team,
             $user,
             $planKey,
             $priceKey,
@@ -230,15 +198,14 @@ class PaddleAdapter implements BillingProviderAdapter
             ?? data_get($data, 'url')
             ?? data_get($data, 'checkout_url');
 
-        if (!$url) {
-            throw new RuntimeException('Paddle checkout URL was not returned.');
+        if (! $url) {
+            throw BillingException::checkoutFailed('Paddle', 'checkout URL was not returned');
         }
 
         return $url;
     }
 
     public function createTransactionId(
-        ?Team $team,
         ?User $user,
         string $planKey,
         string $priceKey,
@@ -250,7 +217,6 @@ class PaddleAdapter implements BillingProviderAdapter
         ?string $customerEmail = null
     ): string {
         $payload = $this->buildTransactionPayload(
-            $team,
             $user,
             $planKey,
             $priceKey,
@@ -266,8 +232,8 @@ class PaddleAdapter implements BillingProviderAdapter
 
         $transactionId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
 
-        if (!$transactionId) {
-            throw new RuntimeException('Paddle transaction id was not returned.');
+        if (! $transactionId) {
+            throw BillingException::checkoutFailed('Paddle', 'transaction id was not returned');
         }
 
         return (string) $transactionId;
@@ -277,7 +243,6 @@ class PaddleAdapter implements BillingProviderAdapter
      * @return array<string, mixed>
      */
     private function buildTransactionPayload(
-        ?Team $team,
         ?User $user,
         string $planKey,
         string $priceKey,
@@ -291,12 +256,11 @@ class PaddleAdapter implements BillingProviderAdapter
         $planService = app(BillingPlanService::class);
         $priceId = $planService->providerPriceId($this->provider(), $planKey, $priceKey);
 
-        if (!$priceId) {
-            throw new RuntimeException("Paddle price id is missing for plan [{$planKey}] and price [{$priceKey}].");
+        if (! $priceId) {
+            throw BillingException::missingPriceId('Paddle', $planKey, $priceKey);
         }
 
         $customData = [
-            'team_id' => $team?->id,
             'user_id' => $user?->id,
             'plan_key' => $planKey,
             'price_key' => $priceKey,
@@ -307,7 +271,7 @@ class PaddleAdapter implements BillingProviderAdapter
             $customData['discount_code'] = $discount->code;
         }
 
-        if (!empty($extraCustomData)) {
+        if (! empty($extraCustomData)) {
             $customData = array_merge($customData, $extraCustomData);
         }
 
@@ -331,9 +295,9 @@ class PaddleAdapter implements BillingProviderAdapter
         ];
 
         $customerId = null;
-        if ($team) {
+        if ($user) {
             $customerId = BillingCustomer::query()
-                ->where('team_id', $team->id)
+                ->where('user_id', $user->id)
                 ->where('provider', $this->provider())
                 ->value('provider_id');
         }
@@ -357,22 +321,22 @@ class PaddleAdapter implements BillingProviderAdapter
     }
 
     /**
-     * @param array<string, mixed> $payload
+     * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
     private function createTransaction(array $payload): array
     {
         $apiKey = config('services.paddle.api_key');
 
-        if (!$apiKey) {
-            throw new RuntimeException('Paddle API key is not configured.');
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration('Paddle', 'api_key');
         }
 
         $response = $this->paddleRequest($apiKey)
             ->post('/transactions', $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Paddle transaction failed: '.$response->body());
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Paddle', 'create transaction', $response->body());
         }
 
         return $response->json('data') ?? [];
@@ -381,8 +345,8 @@ class PaddleAdapter implements BillingProviderAdapter
     public function createDiscount(Discount $discount): string
     {
         $apiKey = config('services.paddle.api_key');
-        if (!$apiKey) {
-            throw new RuntimeException('Paddle API key is not configured.');
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration('Paddle', 'api_key');
         }
 
         $payload = [
@@ -392,11 +356,11 @@ class PaddleAdapter implements BillingProviderAdapter
             'currency_code' => $discount->currency ?? 'USD',
             'code' => $discount->code,
         ];
-        
+
         if ($discount->max_redemptions) {
             $payload['usage_limit'] = $discount->max_redemptions;
         }
-        
+
         if ($discount->ends_at) {
             $payload['expires_at'] = $discount->ends_at->toIso8601String();
         }
@@ -404,46 +368,12 @@ class PaddleAdapter implements BillingProviderAdapter
         $response = $this->paddleRequest($apiKey)
             ->post('/discounts', $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Paddle discount creation failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Paddle', 'create discount', $response->body());
         }
 
         return $response->json('data.id');
     }
-
-
-
-    private function resolvePriceId(Subscription $subscription): ?string
-    {
-        $metadata = $subscription->metadata ?? [];
-        $priceId = data_get($metadata, 'items.0.price_id')
-            ?? data_get($metadata, 'items.0.price.id')
-            ?? data_get($metadata, 'price_id');
-
-        if ($priceId) {
-            return (string) $priceId;
-        }
-
-        $planKey = $subscription->plan_key;
-
-        if (!$planKey) {
-            return null;
-        }
-
-        $plans = app(BillingPlanService::class)->plansForProvider($this->provider());
-        $plan = collect($plans)->firstWhere('key', $planKey);
-        $prices = $plan['prices'] ?? [];
-
-        foreach ($prices as $price) {
-            if (!empty($price['provider_id'])) {
-                return (string) $price['provider_id'];
-            }
-        }
-
-        return null;
-    }
-
-
 
     private function paddleRequest(string $apiKey): PendingRequest
     {
@@ -478,7 +408,7 @@ class PaddleAdapter implements BillingProviderAdapter
     {
         if ($exception instanceof \Illuminate\Http\Client\RequestException) {
             $response = $exception->response;
-            if (!$response) {
+            if (! $response) {
                 return true;
             }
 
@@ -488,5 +418,79 @@ class PaddleAdapter implements BillingProviderAdapter
         }
 
         return true;
+    }
+
+    public function updateSubscription(\App\Domain\Billing\Models\Subscription $subscription, string $newPriceId): void
+    {
+        $apiKey = config('services.paddle.api_key');
+
+        // Get current subscription to find quantity
+        $quantity = $subscription->quantity ?? 1;
+
+        // Update subscription with new price
+        $response = $this->paddleRequest($apiKey)
+            ->patch("/subscriptions/{$subscription->provider_id}", [
+                'items' => [
+                    [
+                        'price_id' => $newPriceId,
+                        'quantity' => $quantity,
+                    ],
+                ],
+                'proration_billing_mode' => 'prorated_immediately',
+            ]);
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Paddle', 'update subscription', $response->body());
+        }
+    }
+
+    public function cancelSubscription(\App\Domain\Billing\Models\Subscription $subscription): \Carbon\Carbon
+    {
+        $apiKey = config('services.paddle.api_key');
+
+        // Cancel at next billing date (graceful cancellation)
+        $response = $this->paddleRequest($apiKey)
+            ->post("/subscriptions/{$subscription->provider_id}/cancel", [
+                'effective_from' => 'next_billing_period',
+            ]);
+
+        // Handle case where locked pending changes exist (try resuming first then cancelling again)
+        if (! $response->successful()
+            && data_get($response->json(), 'error.code') === 'subscription_locked_pending_changes'
+        ) {
+            $this->resumeSubscription($subscription);
+
+            $response = $this->paddleRequest($apiKey)
+                ->post("/subscriptions/{$subscription->provider_id}/cancel", [
+                    'effective_from' => 'next_billing_period',
+                ]);
+        }
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Paddle', 'cancel subscription', $response->body());
+        }
+
+        // Get the scheduled cancel date
+        $scheduledChange = $response->json('data.scheduled_change');
+        $endsAt = $scheduledChange['effective_at'] ?? null;
+
+        return $endsAt
+            ? \Carbon\Carbon::parse($endsAt)
+            : ($subscription->renews_at ?? now()->addMonth());
+    }
+
+    public function resumeSubscription(\App\Domain\Billing\Models\Subscription $subscription): void
+    {
+        $apiKey = config('services.paddle.api_key');
+
+        // Remove scheduled cancellation by setting scheduled_change to null
+        $response = $this->paddleRequest($apiKey)
+            ->patch("/subscriptions/{$subscription->provider_id}", [
+                'scheduled_change' => null,
+            ]);
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Paddle', 'resume subscription', $response->body());
+        }
     }
 }

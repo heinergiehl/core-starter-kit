@@ -22,8 +22,8 @@ interface StripeWebhookHandler
     /**
      * Process the webhook event.
      *
-     * @param WebhookEvent $event The persisted webhook event
-     * @param array<string, mixed> $object The event data object
+     * @param  WebhookEvent  $event  The persisted webhook event
+     * @param  array<string, mixed>  $object  The event data object
      */
     public function handle(WebhookEvent $event, array $object): void;
 }

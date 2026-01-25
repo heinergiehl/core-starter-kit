@@ -23,7 +23,7 @@ class BlogController
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->whereRaw('title ILIKE ?', ["%{$search}%"])
-                      ->orWhereRaw('excerpt ILIKE ?', ["%{$search}%"]);
+                        ->orWhereRaw('excerpt ILIKE ?', ["%{$search}%"]);
                 });
             })
             // Category filter

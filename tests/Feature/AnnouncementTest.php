@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Domain\Content\Models\Announcement;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -12,22 +11,15 @@ class AnnouncementTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected function createUserWithTeam(): User
+    protected function createUserWithSubscription(): User
     {
         $user = User::factory()->create([
             'onboarding_completed_at' => now(),
         ]);
 
-        $team = Team::factory()->create([
-            'owner_id' => $user->id,
-        ]);
-
-        // Set current team
-        $user->update(['current_team_id' => $team->id]);
-
         // Create active subscription
         \App\Domain\Billing\Models\Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'status' => 'active',
         ]);
 
@@ -36,7 +28,7 @@ class AnnouncementTest extends TestCase
 
     public function test_active_announcement_is_displayed_on_dashboard(): void
     {
-        $user = $this->createUserWithTeam();
+        $user = $this->createUserWithSubscription();
 
         Announcement::factory()->create([
             'title' => 'Test Dashboard Announcement XYZ123',
@@ -54,7 +46,7 @@ class AnnouncementTest extends TestCase
 
     public function test_inactive_announcement_is_not_displayed(): void
     {
-        $user = $this->createUserWithTeam();
+        $user = $this->createUserWithSubscription();
 
         Announcement::factory()->create([
             'title' => 'HIDDEN_UNIQUE_ANNOUNCEMENT_12345',
@@ -69,7 +61,7 @@ class AnnouncementTest extends TestCase
 
     public function test_scheduled_announcement_respects_dates(): void
     {
-        $user = $this->createUserWithTeam();
+        $user = $this->createUserWithSubscription();
 
         // Announcement that hasn't started yet
         Announcement::factory()->create([

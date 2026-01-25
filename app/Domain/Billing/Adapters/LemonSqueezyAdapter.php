@@ -2,6 +2,7 @@
 
 namespace App\Domain\Billing\Adapters;
 
+use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
@@ -12,22 +13,23 @@ use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\ProductProviderMapping;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
-use App\Domain\Billing\Services\BillingPlanService;
-use App\Domain\Billing\Services\DiscountService;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
-use App\Notifications\SubscriptionPlanChangedNotification;
-use App\Notifications\SubscriptionTrialStartedNotification;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
-use RuntimeException;
 
 class LemonSqueezyAdapter implements BillingProviderAdapter
 {
+    public function __construct(
+        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService,
+        protected \App\Domain\Billing\Services\DiscountService $discountService,
+        protected \App\Domain\Billing\Services\BillingPlanService $planService,
+        protected \App\Domain\Billing\Services\CheckoutService $checkoutService
+    ) {}
+
     public function provider(): string
     {
         return 'lemonsqueezy';
@@ -40,27 +42,30 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $secret = config('services.lemonsqueezy.webhook_secret');
 
         // Verify signature in production
-        if (!app()->environment(['local', 'testing'])) {
-            if (!$secret) {
-                throw new RuntimeException('Lemon Squeezy webhook secret is not configured.');
+        if (! app()->environment(['local', 'testing'])) {
+            if (! $secret) {
+                throw BillingException::missingConfiguration('Lemon Squeezy', 'webhook secret');
             }
 
-            if (!$signature) {
-                throw new RuntimeException('Lemon Squeezy webhook signature header is missing.');
+            if (! $signature) {
+                throw BillingException::webhookValidationFailed('Lemon Squeezy', 'signature header is missing');
             }
 
             $expectedSignature = hash_hmac('sha256', $payload, $secret);
 
-            if (!hash_equals($expectedSignature, $signature)) {
-                throw new RuntimeException('Invalid Lemon Squeezy webhook signature.');
+            if (! hash_equals($expectedSignature, $signature)) {
+                throw BillingException::webhookValidationFailed('Lemon Squeezy', 'invalid signature');
             }
         }
 
         $data = json_decode($payload, true) ?? [];
         $eventId = (string) ($data['meta']['webhook_id'] ?? $data['id'] ?? '');
+        if ($eventId === '') {
+            $eventId = hash('sha256', $payload);
+        }
 
         return [
-            'id' => $eventId !== '' ? $eventId : (string) ($data['meta']['event_name'] ?? Str::uuid()),
+            'id' => $eventId,
             'type' => $data['meta']['event_name'] ?? null,
             'payload' => $data,
         ];
@@ -72,7 +77,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $type = data_get($payload, 'meta.event_name') ?? $payload['event_type'] ?? $payload['type'] ?? $event->type;
         $attributes = data_get($payload, 'data.attributes', []);
 
-        if (!$type || !$attributes) {
+        if (! $type || ! $attributes) {
             return;
         }
 
@@ -102,7 +107,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $productId = data_get($payload, 'data.id');
         $name = $attributes['name'] ?? null;
 
-        if (!$productId) {
+        if (! $productId) {
             return;
         }
 
@@ -113,12 +118,12 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             ->where('provider_id', (string) $productId)
             ->first();
 
-        if ($mapping && !$mapping->product && !config('saas.billing.allow_import_deleted', false)) {
+        if ($mapping && ! $mapping->product && ! config('saas.billing.allow_import_deleted', false)) {
             return;
         }
 
         $status = $attributes['status'] ?? 'published';
-        if (!$mapping && $status !== 'published') {
+        if (! $mapping && $status !== 'published') {
             return;
         }
 
@@ -132,6 +137,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
         if ($mapping) {
             $mapping->product->update($productData);
+
             return;
         }
 
@@ -149,18 +155,18 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $variantId = data_get($payload, 'data.id');
         $productId = data_get($payload, 'data.relationships.product.data.id');
 
-        if (!$variantId) {
+        if (! $variantId) {
             return;
         }
 
         $product = Product::query()
             ->whereHas('providerMappings', function ($q) use ($productId) {
                 $q->where('provider', $this->provider())
-                  ->where('provider_id', $productId);
+                    ->where('provider_id', $productId);
             })
             ->first();
 
-        if (!$product) {
+        if (! $product) {
             return;
         }
 
@@ -174,12 +180,12 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             ->where('provider_id', (string) $variantId)
             ->first();
 
-        if ($mapping && !$mapping->price && !config('saas.billing.allow_import_deleted', false)) {
+        if ($mapping && ! $mapping->price && ! config('saas.billing.allow_import_deleted', false)) {
             return;
         }
 
         $status = $attributes['status'] ?? 'published';
-        if (!$mapping && $status !== 'published') {
+        if (! $mapping && $status !== 'published') {
             return;
         }
 
@@ -191,12 +197,13 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             'interval_count' => $intervalCount,
             'currency' => 'USD',
             'amount' => (int) ($attributes['price'] ?? 0),
-            'type' => 'flat',
+            'type' => $isSubscription ? \App\Enums\PriceType::Recurring : \App\Enums\PriceType::OneTime,
             'is_active' => $status === 'published',
         ];
 
         if ($mapping) {
             $mapping->price->update($priceData);
+
             return;
         }
 
@@ -209,67 +216,31 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         ]);
     }
 
-    public function syncSeatQuantity(Team $team, int $quantity): void
-    {
-        $subscription = Subscription::query()
-            ->where('team_id', $team->id)
-            ->where('provider', $this->provider())
-            ->whereIn('status', ['active', 'trialing'])
-            ->latest('id')
-            ->first();
-
-        if (!$subscription) {
-            return;
-        }
-
-        $apiKey = config('services.lemonsqueezy.api_key');
-
-        if (!$apiKey) {
-            throw new RuntimeException('Lemon Squeezy API key is not configured.');
-        }
-
-        $response = $this->lemonSqueezyRequest($apiKey)
-            ->withBody(json_encode([
-                'data' => [
-                    'type' => 'subscriptions',
-                    'id' => (string) $subscription->provider_id,
-                    'attributes' => [
-                        'quantity' => max($quantity, 1),
-                    ],
-                ],
-            ]), 'application/vnd.api+json')
-            ->patch("/subscriptions/{$subscription->provider_id}");
-
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy seat sync failed: ' . $response->body());
-        }
-    }
-
     public function createDiscount(Discount $discount): string
     {
         $apiKey = config('services.lemonsqueezy.api_key');
         $storeId = config('services.lemonsqueezy.store_id');
 
-        if (!$apiKey || !$storeId) {
-            throw new RuntimeException('Lemon Squeezy API key or store id is not configured.');
+        if (! $apiKey || ! $storeId) {
+            throw BillingException::missingConfiguration('Lemon Squeezy', 'api_key or store_id');
         }
-        
+
         $attributes = [
             'name' => $discount->name,
             'code' => $discount->code,
             'amount' => (int) $discount->amount,
             'amount_type' => $discount->type === 'percent' ? 'percent' : 'fixed',
         ];
-        
+
         if ($discount->max_redemptions) {
             $attributes['is_limited_redemptions'] = true;
             $attributes['max_redemptions'] = $discount->max_redemptions;
         }
-        
+
         if ($discount->starts_at) {
             $attributes['starts_at'] = $discount->starts_at->toIso8601String();
         }
-        
+
         if ($discount->ends_at) {
             $attributes['expires_at'] = $discount->ends_at->toIso8601String();
         }
@@ -293,15 +264,14 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             ->withBody(json_encode($payload), 'application/vnd.api+json')
             ->post('/discounts');
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy discount creation failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Lemon Squeezy', 'create discount', $response->body());
         }
 
         return $response->json('data.id');
     }
 
     public function createCheckout(
-        Team $team,
         User $user,
         string $planKey,
         string $priceKey,
@@ -313,15 +283,14 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $apiKey = config('services.lemonsqueezy.api_key');
         $storeId = config('services.lemonsqueezy.store_id');
 
-        if (!$apiKey || !$storeId) {
-            throw new RuntimeException('Lemon Squeezy API key or store id is not configured.');
+        if (! $apiKey || ! $storeId) {
+            throw BillingException::missingConfiguration('Lemon Squeezy', 'api_key or store_id');
         }
 
-        $planService = app(BillingPlanService::class);
-        $variantId = $planService->providerPriceId($this->provider(), $planKey, $priceKey);
+        $variantId = $this->planService->providerPriceId($this->provider(), $planKey, $priceKey);
 
-        if (!$variantId) {
-            throw new RuntimeException("Lemon Squeezy variant id is missing for plan [{$planKey}] and price [{$priceKey}].");
+        if (! $variantId) {
+            throw BillingException::missingPriceId('Lemon Squeezy', $planKey, $priceKey);
         }
 
         $payload = [
@@ -331,7 +300,6 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                     'checkout_data' => [
                         'email' => $user->email,
                         'custom' => [
-                            'team_id' => (string) $team->id,
                             'user_id' => (string) $user->id,
                             'plan_key' => $planKey,
                             'price_key' => $priceKey,
@@ -376,14 +344,14 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
         $response = $this->postCheckout($apiKey, $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy checkout failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw BillingException::checkoutFailed('Lemon Squeezy', $response->body());
         }
 
         $url = data_get($response->json(), 'data.attributes.url');
 
-        if (!$url) {
-            throw new RuntimeException('Lemon Squeezy checkout URL was not returned.');
+        if (! $url) {
+            throw BillingException::checkoutFailed('Lemon Squeezy', 'checkout URL was not returned');
         }
 
         return $url;
@@ -392,116 +360,57 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
     private function syncSubscription(array $payload, array $attributes, string $eventType): void
     {
         $subscriptionId = data_get($payload, 'data.id') ?? data_get($attributes, 'subscription_id');
-        $teamId = $this->resolveTeamId($payload, $attributes);
+        $userId = $this->resolveUserId($payload, $attributes);
 
-        if (!$subscriptionId || !$teamId) {
+        if (! $subscriptionId || ! $userId) {
             return;
         }
 
-        $existingSubscription = Subscription::query()
-            ->where('provider', $this->provider())
-            ->where('provider_id', (string) $subscriptionId)
-            ->first();
-
-        $previousPlanKey = $existingSubscription?->plan_key;
+        if (! $subscriptionId || ! $userId) {
+            return;
+        }
 
         $planKey = $this->resolvePlanKey($payload, $attributes) ?? 'unknown';
         $status = (string) (data_get($attributes, 'status') ?? 'active');
         $quantity = (int) (data_get($attributes, 'quantity') ?? 1);
 
-        $subscription = Subscription::query()->updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => (string) $subscriptionId,
-            ],
-            [
-                'team_id' => $teamId,
-                'plan_key' => $planKey,
-                'status' => $status,
-                'quantity' => max($quantity, 1),
+        $subscription = $this->subscriptionService->syncFromProvider(
+            provider: $this->provider(),
+            providerId: (string) $subscriptionId,
+            userId: $userId,
+            planKey: $planKey,
+            status: $status,
+            quantity: max($quantity, 1),
+            dates: [
                 'trial_ends_at' => $this->timestampToDateTime(data_get($attributes, 'trial_ends_at')),
                 'renews_at' => $this->timestampToDateTime(data_get($attributes, 'renews_at')),
                 'ends_at' => $this->timestampToDateTime(data_get($attributes, 'ends_at')),
                 'canceled_at' => $this->timestampToDateTime(data_get($attributes, 'cancelled_at')),
-                'metadata' => Arr::only($attributes, ['status', 'quantity', 'urls', 'price_id', 'variant_id']),
-            ]
+            ],
+            metadata: Arr::only($attributes, ['status', 'quantity', 'urls', 'price_id', 'variant_id'])
         );
 
-        $this->syncBillingCustomer($teamId, data_get($attributes, 'customer_id'), data_get($attributes, 'user_email'));
+        $this->syncBillingCustomer($userId, data_get($attributes, 'customer_id'), data_get($attributes, 'user_email'));
 
         $this->recordDiscountRedemption(
             $payload,
             $attributes,
-            $teamId,
+            $userId,
             $planKey,
             data_get($payload, 'meta.custom_data.price_key')
         );
 
-        // Dispatch Notifications
-        $team = $subscription->team;
-        $owner = $team?->owner;
-
-        if ($owner) {
-            $planChanged = $previousPlanKey
-                && $previousPlanKey !== $planKey
-                && $planKey !== 'unknown';
-
-            if ($planChanged) {
-                $owner->notify(new SubscriptionPlanChangedNotification(
-                    previousPlanName: $this->resolvePlanName($previousPlanKey),
-                    newPlanName: $this->resolvePlanName($planKey),
-                    effectiveDate: $subscription->renews_at?->format('F j, Y'),
-                ));
-            }
-
-            // 1. Trial Started Notification
-            if (($subscription->status === 'trialing' || $subscription->onTrial())
-                && !$subscription->trial_started_email_sent_at
-            ) {
-                $owner->notify(new SubscriptionTrialStartedNotification(
-                    planName: ucfirst($planKey),
-                    trialEndsAt: $subscription->trial_ends_at?->format('F j, Y'),
-                ));
-
-                $subscription->forceFill(['trial_started_email_sent_at' => now()])->save();
-            }
-
-            // 2. Welcome / Started Notification (paid activation)
-            if ($subscription->status === 'active'
-                && !$subscription->onTrial()
-                && !$subscription->welcome_email_sent_at
-            ) {
-                // Try to find amount from order if available in payload, otherwise 0
-                $amount = (int) (data_get($attributes, 'total') ?? 0);
-                $currency = (string) (data_get($attributes, 'currency') ?? 'USD');
-
-                $owner->notify(new \App\Notifications\SubscriptionStartedNotification(
-                    planName: ucfirst($planKey),
-                    amount: $amount,
-                    currency: strtoupper($currency),
-                ));
-
-                $subscription->forceFill(['welcome_email_sent_at' => now()])->save();
-            }
-
-            // 3. Cancellation Notification
-            if ($subscription->status === 'canceled' && !$subscription->cancellation_email_sent_at) {
-                $owner->notify(new \App\Notifications\SubscriptionCancelledNotification(
-                    planName: ucfirst($planKey),
-                    accessUntil: $subscription->ends_at?->format('F j, Y'),
-                ));
-
-                $subscription->forceFill(['cancellation_email_sent_at' => now()])->save();
-            }
+        if ($status === 'active') {
+            $this->checkoutService->verifyUserAfterPayment($userId);
         }
     }
 
     private function syncOrder(array $payload, array $attributes, string $eventType): void
     {
         $orderId = data_get($payload, 'data.id') ?? data_get($attributes, 'order_id');
-        $teamId = $this->resolveTeamId($payload, $attributes);
+        $userId = $this->resolveUserId($payload, $attributes);
 
-        if (!$orderId || !$teamId) {
+        if (! $orderId || ! $userId) {
             return;
         }
 
@@ -515,7 +424,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                 'provider_id' => (string) $orderId,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'plan_key' => $this->resolvePlanKey($payload, $attributes),
                 'status' => $status,
                 'amount' => $amount,
@@ -525,26 +434,30 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
             ]
         );
 
-        $invoice = $this->syncInvoiceFromOrder($payload, $attributes, $teamId, $order, $status, $amount, $currency);
+        $invoice = $this->syncInvoiceFromOrder($payload, $attributes, $userId, $order, $status, $amount, $currency);
 
         $this->maybeNotifyPaymentFailed($order, $invoice, $status, $eventType);
 
         $this->recordDiscountRedemption(
             $payload,
             $attributes,
-            $teamId,
+            $userId,
             $order->plan_key,
             data_get($payload, 'meta.custom_data.price_key')
         );
+
+        if (in_array(strtolower($status), ['paid', 'completed', 'settled'], true)) {
+            $this->checkoutService->verifyUserAfterPayment($userId);
+        }
     }
 
-    private function resolveTeamId(array $payload, array $attributes): ?int
+    private function resolveUserId(array $payload, array $attributes): ?int
     {
-        $teamId = data_get($payload, 'meta.custom_data.team_id')
-            ?? data_get($payload, 'meta.custom.team_id')
-            ?? data_get($attributes, 'team_id');
+        $userId = data_get($payload, 'meta.custom_data.user_id')
+            ?? data_get($payload, 'meta.custom.user_id')
+            ?? data_get($attributes, 'user_id');
 
-        return $teamId ? (int) $teamId : null;
+        return $userId ? (int) $userId : null;
     }
 
     private function resolvePlanKey(array $payload, array $attributes): ?string
@@ -559,30 +472,30 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
         $priceId = data_get($attributes, 'price_id');
 
-        if (!$priceId) {
+        if (! $priceId) {
             return null;
         }
 
-        return app(BillingPlanService::class)
-            ->resolvePlanKeyByProviderId($this->provider(), $priceId);
+        return $this->planService->resolvePlanKeyByProviderId($this->provider(), $priceId);
     }
 
-    private function syncBillingCustomer(int $teamId, ?string $providerId, ?string $email): void
+    private function syncBillingCustomer(int $userId, ?string $providerId, ?string $email): void
     {
         $customer = BillingCustomer::query()
-            ->where('team_id', $teamId)
+            ->where('user_id', $userId)
             ->where('provider', $this->provider())
             ->first();
 
         $payload = [
-            'team_id' => $teamId,
+            'user_id' => $userId,
             'provider' => $this->provider(),
             'provider_id' => $providerId,
             'email' => $email,
         ];
 
         if ($customer) {
-            $customer->update(array_filter($payload, fn($value) => $value !== null));
+            $customer->update(array_filter($payload, fn ($value) => $value !== null));
+
             return;
         }
 
@@ -623,7 +536,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
     {
         if ($exception instanceof \Illuminate\Http\Client\RequestException) {
             $response = $exception->response;
-            if (!$response) {
+            if (! $response) {
                 return true;
             }
 
@@ -638,7 +551,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
     private function syncInvoiceFromOrder(
         array $payload,
         array $attributes,
-        int $teamId,
+        int $userId,
         Order $order,
         string $status,
         int $amount,
@@ -654,7 +567,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                 'provider_id' => (string) $order->provider_id,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'order_id' => $order->id,
                 'status' => $normalizedStatus,
                 'amount_due' => $amount,
@@ -685,14 +598,13 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $failedEvent = str_contains($eventType, 'payment_failed');
         $failedStatus = in_array($normalizedStatus, ['failed', 'unpaid', 'past_due'], true);
 
-        if (!$failedEvent && !$failedStatus) {
+        if (! $failedEvent && ! $failedStatus) {
             return;
         }
 
-        $team = $order->team;
-        $owner = $team?->owner;
+        $owner = $order->user;
 
-        if (!$owner) {
+        if (! $owner) {
             return;
         }
 
@@ -709,7 +621,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
     private function recordDiscountRedemption(
         array $payload,
         array $attributes,
-        int $teamId,
+        int $userId,
         ?string $planKey,
         ?string $priceKey
     ): void {
@@ -718,7 +630,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         $discountId = $customData['discount_id'] ?? data_get($attributes, 'discount_id');
         $discountCode = $customData['discount_code'] ?? data_get($attributes, 'discount_code');
 
-        if (!$discountId && !$discountCode) {
+        if (! $discountId && ! $discountCode) {
             return;
         }
 
@@ -733,27 +645,19 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
                 ->first();
         }
 
-        if (!$discount) {
+        if (! $discount) {
             return;
         }
 
-        $team = Team::find($teamId);
-
-        if (!$team) {
-            return;
-        }
-
-        $userId = $customData['user_id'] ?? null;
-        $user = $userId ? User::find($userId) : null;
+        $user = User::find($userId);
         $providerId = (string) (data_get($attributes, 'order_id') ?? data_get($payload, 'data.id') ?? '');
 
-        if (!$providerId) {
+        if (! $providerId) {
             return;
         }
 
-        app(DiscountService::class)->recordRedemption(
+        $this->discountService->recordRedemption(
             $discount,
-            $team,
             $user,
             $this->provider(),
             $providerId,
@@ -767,12 +671,12 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
     private function resolvePlanName(?string $planKey): string
     {
-        if (!$planKey) {
+        if (! $planKey) {
             return 'subscription';
         }
 
         try {
-            $plan = app(BillingPlanService::class)->plan($planKey);
+            $plan = $this->planService->plan($planKey);
 
             return $plan['name'] ?? ucfirst($planKey);
         } catch (\Throwable) {
@@ -782,7 +686,7 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
 
     private function timestampToDateTime(?string $timestamp): ?\Illuminate\Support\Carbon
     {
-        if (!$timestamp) {
+        if (! $timestamp) {
             return null;
         }
 
@@ -791,5 +695,78 @@ class LemonSqueezyAdapter implements BillingProviderAdapter
         }
 
         return \Illuminate\Support\Carbon::parse($timestamp);
+    }
+
+    public function updateSubscription(\App\Domain\Billing\Models\Subscription $subscription, string $newPriceId): void
+    {
+        $apiKey = config('services.lemonsqueezy.api_key');
+
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration('Lemon Squeezy', 'api_key');
+        }
+
+        // LemonSqueezy uses variant_id for plan changes
+        $response = $this->lemonSqueezyRequest($apiKey)
+            ->patch("/subscriptions/{$subscription->provider_id}", [
+                'data' => [
+                    'type' => 'subscriptions',
+                    'id' => $subscription->provider_id,
+                    'attributes' => [
+                        'variant_id' => (int) $newPriceId,
+                    ],
+                ],
+            ]);
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Lemon Squeezy', 'update subscription', $response->body());
+        }
+    }
+
+    public function cancelSubscription(\App\Domain\Billing\Models\Subscription $subscription): \Carbon\Carbon
+    {
+        $apiKey = config('services.lemonsqueezy.api_key');
+
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration('Lemon Squeezy', 'api_key');
+        }
+
+        $response = $this->lemonSqueezyRequest($apiKey)
+            ->delete("/subscriptions/{$subscription->provider_id}");
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Lemon Squeezy', 'cancel subscription', $response->body());
+        }
+
+        // Get ends_at from response or use renews_at
+        $endsAt = $response->json('data.attributes.ends_at');
+
+        return $endsAt
+            ? \Illuminate\Support\Carbon::parse($endsAt)
+            : ($subscription->renews_at ?? now()->addMonth());
+    }
+
+    public function resumeSubscription(\App\Domain\Billing\Models\Subscription $subscription): void
+    {
+        $apiKey = config('services.lemonsqueezy.api_key');
+
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration('Lemon Squeezy', 'api_key');
+        }
+
+        // LemonSqueezy uses PATCH to update subscription status
+        $response = $this->lemonSqueezyRequest($apiKey)
+            ->patch("/subscriptions/{$subscription->provider_id}", [
+                'data' => [
+                    'type' => 'subscriptions',
+                    'id' => $subscription->provider_id,
+                    'attributes' => [
+                        'cancelled' => false,
+                    ],
+                ],
+            ]);
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction('Lemon Squeezy', 'resume subscription', $response->body());
+        }
     }
 }

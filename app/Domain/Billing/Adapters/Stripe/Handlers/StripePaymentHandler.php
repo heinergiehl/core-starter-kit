@@ -49,17 +49,26 @@ class StripePaymentHandler implements StripeWebhookHandler
     {
         $providerId = data_get($object, 'id');
 
-        if (!$providerId) {
+        if (! $providerId) {
             return;
         }
 
-        Order::query()
+        $order = Order::query()
             ->where('provider', $this->provider())
             ->where('provider_id', $providerId)
-            ->update([
-                'status' => 'paid',
-                'paid_at' => now(),
-            ]);
+            ->first();
+
+        if (! $order) {
+            return;
+        }
+
+        $order->update([
+            'status' => 'paid',
+            'paid_at' => now(),
+        ]);
+
+        app(\App\Domain\Billing\Services\CheckoutService::class)
+            ->verifyUserAfterPayment((int) $order->user_id);
     }
 
     /**
@@ -70,7 +79,7 @@ class StripePaymentHandler implements StripeWebhookHandler
         $paymentIntent = data_get($object, 'payment_intent');
         $providerId = $paymentIntent ?: data_get($object, 'id');
 
-        if (!$providerId) {
+        if (! $providerId) {
             return;
         }
 

@@ -27,7 +27,7 @@
             @if($post->featured_image)
                 <div class="rounded-2xl overflow-hidden mb-8 -mx-2 sm:-mx-4">
                     <img 
-                        src="{{ asset('storage/' . $post->featured_image) }}" 
+                        src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($post->featured_image) }}" 
                         alt="{{ $post->title }}"
                         class="w-full h-64 sm:h-80 object-cover"
                     />

@@ -21,4 +21,3 @@ interface CatalogPublishAdapter
      */
     public function ensurePrice(Product $product, Price $price, string $providerProductId, bool $apply, bool $updateExisting): array;
 }
-

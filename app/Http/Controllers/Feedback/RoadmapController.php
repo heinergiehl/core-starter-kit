@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Feedback;
 
 use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
+use App\Enums\FeatureCategory;
+use App\Enums\FeatureStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class RoadmapController
@@ -40,7 +43,7 @@ class RoadmapController
             'requests' => $requests,
             'status' => $status,
             'votedIds' => $votedIds,
-            'statuses' => ['planned', 'in_progress', 'complete'],
+            'statuses' => [FeatureStatus::Planned->value, FeatureStatus::InProgress->value, FeatureStatus::Completed->value],
         ]);
     }
 
@@ -49,11 +52,10 @@ class RoadmapController
         $data = $request->validate([
             'title' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'category' => ['nullable', 'string', 'max:80'],
+            'category' => ['required', Rule::enum(FeatureCategory::class)],
         ]);
 
         $user = $request->user();
-        $teamId = $user?->current_team_id;
 
         $baseSlug = Str::slug($data['title']) ?: Str::random(8);
         $slug = $baseSlug;
@@ -66,13 +68,12 @@ class RoadmapController
 
         FeatureRequest::query()->create([
             'user_id' => $user?->id,
-            'team_id' => $teamId,
             'title' => $data['title'],
             'slug' => $slug,
             'description' => $data['description'] ?? null,
-            'category' => $data['category'] ?? null,
-            'status' => 'planned',
-            'is_public' => true,
+            'category' => $data['category'],
+            'status' => FeatureStatus::Pending,
+            'is_public' => false,
         ]);
 
         return redirect()->route('roadmap')->with('status', 'Thanks for the feedback!');
@@ -80,13 +81,13 @@ class RoadmapController
 
     public function vote(Request $request, FeatureRequest $feature): RedirectResponse
     {
-        if (!$feature->is_public) {
+        if (! $feature->is_public) {
             abort(404);
         }
 
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             abort(403);
         }
 
@@ -99,6 +100,7 @@ class RoadmapController
             if ($vote) {
                 $vote->delete();
                 $feature->decrement('votes_count');
+
                 return;
             }
 

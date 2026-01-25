@@ -23,7 +23,7 @@
                         {{ __('Open App') }}
                     </x-nav-link>
                     
-                    @if(auth()->user()?->currentTeam?->hasActiveSubscription())
+                    @if(auth()->user()?->hasActiveSubscription())
                          <x-nav-link :href="route('billing.index')" :active="request()->routeIs('billing*')" class="text-ink/60 hover:text-ink">
                             {{ __('Billing') }}
                         </x-nav-link>
@@ -67,7 +67,7 @@
                             {{ __('Profile') }}
                         </x-dropdown-link>
 
-                        @if(auth()->user()?->currentTeam?->hasActiveSubscription())
+                        @if(auth()->user()?->hasActiveSubscription())
                             <x-dropdown-link :href="route('billing.index')">
                                 {{ __('Billing') }}
                             </x-dropdown-link>
@@ -113,7 +113,7 @@
                 {{ __('Open App') }}
             </x-responsive-nav-link>
 
-            @if(auth()->user()?->currentTeam?->hasActiveSubscription())
+            @if(auth()->user()?->hasActiveSubscription())
                 <x-responsive-nav-link :href="route('billing.index')" :active="request()->routeIs('billing*')" class="text-ink/70 hover:text-ink hover:bg-surface/5">
                     {{ __('Billing') }}
                 </x-responsive-nav-link>

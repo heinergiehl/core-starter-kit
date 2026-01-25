@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\Billing\Services\EntitlementService;
+use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\Billing\BillingCheckoutController;
 use App\Http\Controllers\Billing\BillingPortalController;
 use App\Http\Controllers\Billing\BillingProcessingController;
@@ -17,52 +17,45 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Feedback\RoadmapController;
 use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\LocaleController;
-use App\Http\Controllers\Organization\TeamInvitationController;
-use App\Http\Controllers\Organization\TeamController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\TwoFactorController;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn() => view('welcome'))->name('home');
+Route::get('/', fn () => view('welcome'))->name('home');
 
 Route::get('/pricing', PricingController::class)->name('pricing');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
 Route::get('/roadmap', [RoadmapController::class, 'index'])->name('roadmap');
 Route::post('/locale', LocaleController::class)->name('locale.update');
-Route::post('/announcements/{announcement}/dismiss', function (\App\Domain\Content\Models\Announcement $announcement) {
-    $dismissed = session('dismissed_announcements', []);
-    $dismissed[] = $announcement->id;
-    session(['dismissed_announcements' => array_unique($dismissed)]);
-    return response()->json(['success' => true]);
-})->name('announcements.dismiss');
+Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])
+    ->name('announcements.dismiss');
 
 Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 Route::get('/rss.xml', RssController::class)->name('rss');
 Route::get('/og', OgImageController::class)->name('og');
 Route::get('/og/blog/{slug}', [OgImageController::class, 'blog'])->name('og.blog');
 
-Route::get('/invitations/{token}', [TeamInvitationController::class, 'show'])->name('invitations.accept');
-Route::post('/invitations/{token}', [TeamInvitationController::class, 'store'])->name('invitations.store');
-Route::post('/invitations/{token}/register', [TeamInvitationController::class, 'register'])->name('invitations.register');
-
-// Webhook route - explicitly bypass tenancy middleware
+// Webhook route - explicitly bypass CSRF protection
 Route::post('/webhooks/{provider}', WebhookController::class)
     ->withoutMiddleware([
         VerifyCsrfToken::class,
-        \Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class,
-        \App\Http\Middleware\ResolveTeamByDomain::class,
     ])
+    ->middleware('throttle:120,1')
     ->name('webhooks.handle');
 
 Route::post('/billing/checkout', [BillingCheckoutController::class, 'store'])
+    ->middleware('redirect_if_subscribed')
     ->name('billing.checkout');
 Route::get('/billing/processing', BillingProcessingController::class)
     ->middleware(\App\Http\Middleware\RestoreCheckoutSession::class)
     ->name('billing.processing');
 Route::get('/checkout/start', CheckoutStartController::class)
+    ->middleware('redirect_if_subscribed')
     ->name('checkout.start');
 Route::get('/paddle/checkout', PaddleCheckoutController::class)
+    ->middleware('redirect_if_subscribed')
     ->name('paddle.checkout');
 
 Route::get('/dashboard', DashboardController::class)
@@ -81,31 +74,21 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('/teams/select', [TeamController::class, 'select'])->name('teams.select');
-    Route::post('/teams/{team}/switch', [TeamController::class, 'switch'])->name('teams.switch');
-
     Route::get('/billing', [\App\Http\Controllers\Billing\BillingController::class, 'index'])
-        ->middleware('team')
         ->name('billing.index');
     Route::post('/billing/cancel', [\App\Http\Controllers\Billing\BillingController::class, 'cancel'])
-        ->middleware('team')
         ->name('billing.cancel');
     Route::post('/billing/resume', [\App\Http\Controllers\Billing\BillingController::class, 'resume'])
-        ->middleware('team')
         ->name('billing.resume');
     Route::post('/billing/change-plan', [\App\Http\Controllers\Billing\BillingController::class, 'changePlan'])
-        ->middleware('team')
         ->name('billing.change-plan');
     Route::get('/billing/portal/{provider?}', BillingPortalController::class)
-        ->middleware('team')
         ->name('billing.portal');
 
     Route::get('/app/orders/{order}/invoice', [\App\Http\Controllers\Billing\InvoiceController::class, 'download'])
-        ->middleware('team')
         ->name('invoices.download');
 
     Route::get('/app/invoices/{invoice}/pdf', [\App\Http\Controllers\Billing\InvoiceController::class, 'downloadInvoice'])
-        ->middleware('team')
         ->name('invoices.download_invoice');
 });
 
@@ -116,12 +99,16 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::post('/two-factor/enable', [TwoFactorController::class, 'enable'])->name('two-factor.enable');
+    Route::delete('/two-factor/disable', [TwoFactorController::class, 'disable'])->name('two-factor.disable');
 });
 
 // Impersonation (admin only)
 Route::middleware('auth')->group(function () {
-    Route::get('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
     Route::post('/impersonate/stop', [ImpersonationController::class, 'stop'])->name('impersonate.stop');
+    Route::post('/impersonate/{user}', [ImpersonationController::class, 'start'])->name('impersonate.start');
 });
 
 require __DIR__.'/auth.php';

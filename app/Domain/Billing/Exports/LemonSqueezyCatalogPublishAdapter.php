@@ -11,11 +11,15 @@ use RuntimeException;
 class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
 {
     private ?string $apiKey = null;
+
     private ?string $storeId = null;
+
     /** @var array<string, array> */
     private array $productsByKey = [];
+
     /** @var array<string, array> */
     private array $variantsByLookupKey = [];
+
     /** @var array<string, array> */
     private array $unmappedVariantsByProductId = [];
 
@@ -29,11 +33,11 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
         $this->apiKey = config('services.lemonsqueezy.api_key');
         $this->storeId = config('services.lemonsqueezy.store_id');
 
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             throw new RuntimeException('Lemon Squeezy API key is not configured.');
         }
 
-        if (!$this->storeId) {
+        if (! $this->storeId) {
             throw new RuntimeException('Lemon Squeezy store ID is not configured.');
         }
 
@@ -97,15 +101,15 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'skip', 'id' => (string) $existing['id']];
         }
 
-        if (!$apply) {
+        if (! $apply) {
             return ['action' => 'create', 'id' => null];
         }
 
         $payload = $this->productCreatePayload($product);
         $response = $this->apiPost('/products', $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy product creation failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw new RuntimeException('Lemon Squeezy product creation failed: '.$response->body());
         }
 
         $created = $response->json('data');
@@ -143,9 +147,9 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
 
         // If not matched by key, check if we can claim an existing unmapped variant
         // (This typically happens for the "Default" variant created automatically by Lemon Squeezy)
-        if (!$matched && !$mappedPriceId) {
+        if (! $matched && ! $mappedPriceId) {
             $unmapped = $this->unmappedVariantsByProductId[$providerProductId] ?? [];
-            if (!empty($unmapped)) {
+            if (! empty($unmapped)) {
                 // We'll take the first unmapped variant that matches our subscription/one-time type if possible
                 // For now, just taking the first one is usually correct for the "Default" variant case
                 // Use array_shift to REMOVE it from unmapped, preventing double-claim
@@ -166,13 +170,14 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
                         // Update cache if needed
                     }
                 }
+
                 return ['action' => 'update', 'id' => (string) $remoteId];
             }
 
             return ['action' => 'link', 'id' => (string) $remoteId];
         }
 
-        if (!$apply) {
+        if (! $apply) {
             return ['action' => 'create', 'id' => null];
         }
 
@@ -181,8 +186,8 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
         $payload = $this->variantCreatePayload($product, $price, $providerProductId);
         $response = $this->apiPost('/variants', $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Lemon Squeezy variant creation failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw new RuntimeException('Lemon Squeezy variant creation failed: '.$response->body());
         }
 
         $created = $response->json('data');
@@ -315,7 +320,7 @@ class LemonSqueezyCatalogPublishAdapter implements CatalogPublishAdapter
             $mapping = $price->mappings()->where('provider', $this->provider())->first();
         }
 
-        if (!$mapping || !$mapping->provider_id) {
+        if (! $mapping || ! $mapping->provider_id) {
             return null;
         }
 

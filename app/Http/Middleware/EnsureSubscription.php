@@ -17,17 +17,20 @@ class EnsureSubscription
     {
         $user = $request->user();
 
-        if (!$user) {
+        if (! $user) {
             return redirect()->route('login');
         }
+        $hasSubscription = $user->hasActiveSubscription();
 
-        $team = $user->currentTeam;
+        $hasOrder = \App\Domain\Billing\Models\Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [
+                \App\Enums\OrderStatus::Paid->value,
+                \App\Enums\OrderStatus::Completed->value,
+            ])
+            ->exists();
 
-        if (!$team) {
-            return redirect()->route('teams.select');
-        }
-
-        if (!$team->hasActiveSubscription()) {
+        if (! $hasSubscription && ! $hasOrder) {
             return redirect()
                 ->route('pricing')
                 ->with('warning', __('Please complete your subscription to access the app.'));

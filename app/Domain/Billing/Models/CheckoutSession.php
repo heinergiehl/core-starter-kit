@@ -2,7 +2,6 @@
 
 namespace App\Domain\Billing\Models;
 
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +12,6 @@ class CheckoutSession extends Model
     protected $fillable = [
         'uuid',
         'user_id',
-        'team_id',
         'provider',
         'provider_session_id',
         'plan_key',
@@ -27,17 +25,22 @@ class CheckoutSession extends Model
     protected $casts = [
         'expires_at' => 'datetime',
         'completed_at' => 'datetime',
+        'status' => \App\Enums\CheckoutStatus::class,
     ];
 
     protected static function booted(): void
     {
         static::creating(function (CheckoutSession $session) {
-            if (!$session->uuid) {
+            if (! $session->uuid) {
                 $session->uuid = (string) Str::uuid();
             }
-            
-            if (!$session->expires_at) {
+
+            if (! $session->expires_at) {
                 $session->expires_at = now()->addHour();
+            }
+
+            if (! $session->status) {
+                $session->status = \App\Enums\CheckoutStatus::Pending;
             }
         });
     }
@@ -48,14 +51,6 @@ class CheckoutSession extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    /**
-     * Get the team that owns the checkout session.
-     */
-    public function team(): BelongsTo
-    {
-        return $this->belongsTo(Team::class);
     }
 
     /**
@@ -71,7 +66,7 @@ class CheckoutSession extends Model
      */
     public function isValid(): bool
     {
-        return $this->status === 'pending' && !$this->isExpired();
+        return $this->status === \App\Enums\CheckoutStatus::Pending && ! $this->isExpired();
     }
 
     /**
@@ -80,7 +75,7 @@ class CheckoutSession extends Model
     public function markCompleted(): void
     {
         $this->update([
-            'status' => 'completed',
+            'status' => \App\Enums\CheckoutStatus::Completed,
             'completed_at' => now(),
         ]);
     }
@@ -91,7 +86,7 @@ class CheckoutSession extends Model
     public function markCanceled(): void
     {
         $this->update([
-            'status' => 'canceled',
+            'status' => \App\Enums\CheckoutStatus::Canceled,
         ]);
     }
 
@@ -100,7 +95,7 @@ class CheckoutSession extends Model
      */
     public function scopeValid($query)
     {
-        return $query->where('status', 'pending')
+        return $query->where('status', \App\Enums\CheckoutStatus::Pending)
             ->where('expires_at', '>', now());
     }
 }

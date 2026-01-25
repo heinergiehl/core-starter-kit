@@ -9,8 +9,7 @@ class SitemapController
 {
     public function __invoke(): Response
     {
-        $posts = BlogPost::query()
-            ->where('is_published', true)
+        $posts = BlogPost::published()
             ->orderByDesc('published_at')
             ->get(['slug', 'updated_at', 'published_at']);
 

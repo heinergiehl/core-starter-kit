@@ -19,19 +19,6 @@
                 <x-input-error :messages="$errors->get('name')" class="mt-2" />
             </div>
 
-            {{-- Team Name --}}
-            <div class="mt-4">
-                <x-input-label for="team_name" :value="__('Workspace name')" />
-                <x-text-input 
-                    wire:model="team_name" 
-                    id="team_name" 
-                    class="block mt-1 w-full" 
-                    type="text" 
-                    autocomplete="organization" 
-                />
-                <x-input-error :messages="$errors->get('team_name')" class="mt-2" />
-            </div>
-
             {{-- Email Address --}}
             <div class="mt-4">
                 <x-input-label for="email" :value="__('Email')" />

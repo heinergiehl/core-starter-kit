@@ -4,10 +4,11 @@ namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\EntitlementService;
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class EntitlementServiceTest extends TestCase
@@ -22,11 +23,11 @@ class EntitlementServiceTest extends TestCase
         $this->service = app(EntitlementService::class);
     }
 
-    /** @test */
+    #[Test]
     public function it_caches_entitlements()
     {
-        $team = Team::factory()->create();
-        $cacheKey = "entitlements:team:{$team->id}";
+        $user = User::factory()->create();
+        $cacheKey = "entitlements:user:{$user->id}";
         $dummyEntitlements = new \App\Domain\Billing\Services\Entitlements([]);
 
         Cache::shouldReceive('remember')
@@ -34,23 +35,23 @@ class EntitlementServiceTest extends TestCase
             ->with($cacheKey, \Mockery::any(), \Mockery::any())
             ->andReturn($dummyEntitlements);
 
-        $result = $this->service->forTeam($team);
-        
+        $result = $this->service->forUser($user);
+
         $this->assertSame($dummyEntitlements, $result);
     }
-    
-    /** @test */
+
+    #[Test]
     public function it_returns_active_entitlements_for_active_subscription()
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
         // Setup config for a plan
         Config::set('saas.billing.plans.basic', [
             'name' => 'Basic',
-            'entitlements' => ['max_seats' => 5],
+            'entitlements' => ['storage_limit_mb' => 512],
         ]);
 
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'plan_key' => 'basic',
             'status' => 'active',
         ]);
@@ -59,23 +60,23 @@ class EntitlementServiceTest extends TestCase
         Cache::shouldReceive('remember')
             ->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
 
-        $entitlements = $this->service->forTeam($team);
-        
-        $this->assertEquals(5, $entitlements->max_seats);
+        $entitlements = $this->service->forUser($user);
+
+        $this->assertEquals(512, $entitlements->storage_limit_mb);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_grace_period_for_past_due_subscription()
     {
-        $team = Team::factory()->create();
+        $user = User::factory()->create();
         Config::set('saas.billing.grace_period_days', 5);
         Config::set('saas.billing.plans.pro', [
             'name' => 'Pro',
-            'entitlements' => ['max_seats' => 10],
+            'entitlements' => ['storage_limit_mb' => 2048],
         ]);
 
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'plan_key' => 'pro',
             'status' => 'past_due',
         ]);
@@ -85,18 +86,18 @@ class EntitlementServiceTest extends TestCase
 
         // Travel 2 days forward - still in grace period
         $this->travel(2)->days();
-        
-        $entitlements = $this->service->forTeam($team);
-        $this->assertEquals(10, $entitlements->max_seats);
+
+        $entitlements = $this->service->forUser($user);
+        $this->assertEquals(2048, $entitlements->storage_limit_mb);
 
         // Travel 6 days forward (total) - expired
         $this->travel(4)->days(); // 2+4 = 6
 
         // Clear cache manually (conceptually, though we mocked remember to execute always)
-        
-        $entitlements = $this->service->forTeam($team);
-        
+
+        $entitlements = $this->service->forUser($user);
+
         // Should fallback
-        $this->assertNotEquals(10, $entitlements->max_seats);
+        $this->assertNull($entitlements->storage_limit_mb);
     }
 }

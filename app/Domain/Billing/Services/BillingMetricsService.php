@@ -16,7 +16,7 @@ class BillingMetricsService
         $mrr = $subscriptions->sum(fn (Subscription $subscription): float => $this->monthlyAmount($subscription));
         $activeCount = $subscriptions->count();
         $trialingCount = $subscriptions->where('status', 'trialing')->count();
-        $teamCount = $subscriptions->pluck('team_id')->unique()->count();
+        $userCount = $subscriptions->pluck('user_id')->unique()->count();
 
         $canceledLast30 = Subscription::query()
             ->whereNotNull('canceled_at')
@@ -24,14 +24,14 @@ class BillingMetricsService
             ->count();
 
         $churnRate = $activeCount > 0 ? ($canceledLast30 / $activeCount) * 100 : 0.0;
-        $arpu = $teamCount > 0 ? $mrr / $teamCount : 0.0;
+        $arpu = $userCount > 0 ? $mrr / $userCount : 0.0;
 
         return [
             'mrr' => $mrr,
             'arr' => $mrr * 12,
             'active_subscriptions' => $activeCount,
             'trialing_subscriptions' => $trialingCount,
-            'active_customers' => $teamCount,
+            'active_customers' => $userCount,
             'churn_rate' => $churnRate,
             'arpu' => $arpu,
         ];
@@ -42,7 +42,7 @@ class BillingMetricsService
         $planService = app(BillingPlanService::class);
         $planKey = $subscription->plan_key;
 
-        if (!$planKey) {
+        if (! $planKey) {
             return 0.0;
         }
 
@@ -58,13 +58,13 @@ class BillingMetricsService
 
         $price = $this->priceForSubscription($subscription, $plan);
 
-        if (!$price) {
+        if (! $price) {
             return 0.0;
         }
 
         $amount = (float) ($price['amount'] ?? 0);
 
-        if (!empty($price['amount_is_minor'])) {
+        if (! empty($price['amount_is_minor'])) {
             $amount /= 100;
         }
 
@@ -79,16 +79,12 @@ class BillingMetricsService
             default => $amount / $intervalCount,
         };
 
-        if (!empty($plan['seat_based'])) {
-            $monthly *= max((int) $subscription->quantity, 1);
-        }
-
         return $monthly;
     }
 
     private function priceForSubscription(Subscription $subscription, array $plan): ?array
     {
-        $provider = strtolower((string) $subscription->provider);
+        $provider = strtolower((string) $subscription->provider->value);
         $prices = $this->pricesForProvider($provider, $plan['key'] ?? '');
 
         if (empty($prices)) {

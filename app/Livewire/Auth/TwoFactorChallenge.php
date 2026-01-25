@@ -9,19 +9,21 @@ use Livewire\Component;
 class TwoFactorChallenge extends Component
 {
     public string $code = '';
+
     public string $recovery_code = '';
+
     public bool $useRecoveryCode = false;
 
     public function mount(): void
     {
-        if (!session('2fa_user_id')) {
+        if (! session('2fa_user_id')) {
             $this->redirect(route('login'));
         }
     }
 
     public function toggleRecoveryCode(): void
     {
-        $this->useRecoveryCode = !$this->useRecoveryCode;
+        $this->useRecoveryCode = ! $this->useRecoveryCode;
         $this->code = '';
         $this->recovery_code = '';
         $this->resetErrorBag();
@@ -43,8 +45,9 @@ class TwoFactorChallenge extends Component
         $user = User::find($userId);
         $twoFactor = $user?->twoFactorAuth;
 
-        if (!$user || !$twoFactor?->isEnabled()) {
+        if (! $user || ! $twoFactor?->isEnabled()) {
             $this->redirect(route('login'));
+
             return;
         }
 
@@ -56,13 +59,14 @@ class TwoFactorChallenge extends Component
             $valid = $twoFactor->verify($this->code);
         }
 
-        if (!$valid) {
+        if (! $valid) {
             if ($this->useRecoveryCode) {
                 $this->addError('recovery_code', __('The provided recovery code is invalid.'));
             } else {
                 $this->addError('code', __('The provided code is invalid.'));
             }
             $this->dispatch('verify-failed');
+
             return;
         }
 

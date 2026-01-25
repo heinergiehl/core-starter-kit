@@ -2,8 +2,9 @@
 
 namespace App\Domain\Billing\Adapters\Paddle\Concerns;
 
+use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Services\BillingPlanService;
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -13,30 +14,42 @@ use Illuminate\Support\Facades\Log;
 trait ResolvesPaddleData
 {
     /**
-     * Resolve team ID from webhook data.
+     * Resolve user ID from webhook data.
      */
-    protected function resolveTeamId(array $data): ?int
+    protected function resolveUserId(array $data): ?int
     {
-        $teamId = data_get($data, 'custom_data.team_id')
-            ?? data_get($data, 'metadata.team_id')
-            ?? data_get($data, 'team_id');
+        $userId = data_get($data, 'custom_data.user_id')
+            ?? data_get($data, 'metadata.user_id')
+            ?? data_get($data, 'user_id');
 
-        if (!$teamId) {
+        if (! $userId) {
+            $customerId = data_get($data, 'customer_id') ?? data_get($data, 'customer.id');
+            if ($customerId) {
+                $mappedUserId = BillingCustomer::query()
+                    ->where('provider', 'paddle')
+                    ->where('provider_id', (string) $customerId)
+                    ->value('user_id');
+
+                if ($mappedUserId) {
+                    return (int) $mappedUserId;
+                }
+            }
+
             return null;
         }
 
-        $teamId = (int) $teamId;
+        $userId = (int) $userId;
 
-        if (!Team::query()->whereKey($teamId)->exists()) {
-            Log::warning('Paddle webhook references missing team', [
-                'team_id' => $teamId,
+        if (! User::query()->whereKey($userId)->exists()) {
+            Log::warning('Paddle webhook references missing user', [
+                'user_id' => $userId,
                 'event_id' => data_get($data, 'id') ?? data_get($data, 'subscription_id') ?? data_get($data, 'transaction_id'),
             ]);
 
             return null;
         }
 
-        return $teamId;
+        return $userId;
     }
 
     /**
@@ -54,7 +67,7 @@ trait ResolvesPaddleData
 
         $priceId = data_get($data, 'items.0.price_id') ?? data_get($data, 'price_id');
 
-        if (!$priceId) {
+        if (! $priceId) {
             return null;
         }
 
@@ -67,7 +80,7 @@ trait ResolvesPaddleData
      */
     protected function timestampToDateTime(?string $timestamp): ?Carbon
     {
-        if (!$timestamp) {
+        if (! $timestamp) {
             return null;
         }
 

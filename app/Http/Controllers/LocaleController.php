@@ -11,16 +11,16 @@ class LocaleController extends Controller
     public function __invoke(Request $request): RedirectResponse
     {
         $locale = (string) $request->input('locale');
-        $supported = array_keys(config('saas.locales.supported', ['en' => 'English']));
+        $localeEnum = \App\Enums\Locale::tryFrom($locale);
 
-        if (!in_array($locale, $supported, true)) {
+        if (! $localeEnum) {
             return redirect()->back();
         }
 
         $request->session()->put('locale', $locale);
 
         if ($request->user() && Schema::hasColumn('users', 'locale')) {
-            $request->user()->update(['locale' => $locale]);
+            $request->user()->update(['locale' => $localeEnum]);
         }
 
         $redirect = (string) $request->input('redirect');

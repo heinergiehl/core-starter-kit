@@ -11,10 +11,10 @@ namespace App\Domain\Billing\Data;
 readonly class WebhookPayload
 {
     /**
-     * @param string $id Unique event ID from the provider
-     * @param string|null $type Event type (e.g., 'checkout.session.completed')
-     * @param array<string, mixed> $payload Raw event data from provider
-     * @param string $provider The billing provider name
+     * @param  string  $id  Unique event ID from the provider
+     * @param  string|null  $type  Event type (e.g., 'checkout.session.completed')
+     * @param  array<string, mixed>  $payload  Raw event data from provider
+     * @param  string  $provider  The billing provider name
      */
     public function __construct(
         public string $id,

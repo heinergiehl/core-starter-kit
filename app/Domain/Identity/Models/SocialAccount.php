@@ -24,6 +24,7 @@ class SocialAccount extends Model
 
     protected $casts = [
         'expires_at' => 'datetime',
+        'provider' => \App\Enums\OAuthProvider::class,
     ];
 
     public function user(): BelongsTo

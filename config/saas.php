@@ -36,7 +36,7 @@ return [
         ],
         'success_url' => env('BILLING_SUCCESS_URL'),
         'cancel_url' => env('BILLING_CANCEL_URL'),
-        
+
         // Pricing page display options
         'pricing' => [
             // Allow customers to choose their preferred payment provider
@@ -44,7 +44,7 @@ return [
             // payment methods (PayPal via Paddle, local methods, etc.)
             // Set to false to use only the default_provider
             'provider_choice_enabled' => env('BILLING_PROVIDER_CHOICE_ENABLED', true),
-            
+
             // Provider display labels (customer-friendly names)
             // Customize these based on what payment methods you've enabled
             'provider_labels' => [
@@ -53,9 +53,6 @@ return [
                 'lemonsqueezy' => 'Lemon Squeezy',
             ],
         ],
-    ],
-    'seats' => [
-        'count_pending_invites' => false,
     ],
     'support' => [
         'email' => env('SUPPORT_EMAIL'),
@@ -71,32 +68,9 @@ return [
             'sans' => env('BRAND_FONT_SANS', 'Instrument Sans'),
             'display' => env('BRAND_FONT_DISPLAY', 'Instrument Serif'),
         ],
-        'colors' => [
-            'primary' => env('BRAND_COLOR_PRIMARY', '14 116 144'),
-            'secondary' => env('BRAND_COLOR_SECONDARY', '245 158 11'),
-            'accent' => env('BRAND_COLOR_ACCENT', '239 68 68'),
-            'bg' => env('BRAND_COLOR_BG', '250 250 249'),
-            'fg' => env('BRAND_COLOR_FG', '15 23 42'),
-        ],
-    ],
-    'tenancy' => [
-        'base_domain' => env('TENANCY_BASE_DOMAIN'),
-        'reserved_subdomains' => [
-            'www',
-            'app',
-            'admin',
-            'api',
-            'billing',
-            'dashboard',
-            'login',
-            'logout',
-            'register',
-            'support',
-            'www1',
-            'mail',
-            'smtp',
-            'pop',
-            'imap',
+        'email' => [
+            'primary' => env('BRAND_EMAIL_PRIMARY', '#4F46E5'),
+            'secondary' => env('BRAND_EMAIL_SECONDARY', '#A855F7'),
         ],
     ],
     'auth' => [
@@ -108,6 +82,22 @@ return [
         'supported' => [
             'en' => 'English',
             'de' => 'Deutsch',
+        ],
+    ],
+    'features' => [
+        'blog' => true,
+        'roadmap' => true,
+        'announcements' => true,
+        'onboarding' => true,
+    ],
+    'security' => [
+        'csp_domains' => [
+            'script' => ['https://*.paddle.com', 'https://cdn.paddle.com', 'https://js.stripe.com'],
+            'style' => ['https://fonts.googleapis.com'],
+            'font' => ['https://fonts.gstatic.com', 'data:'],
+            'img' => ['data:', 'https:', 'blob:'],
+            'connect' => ['https://*.paddle.com', 'https://api.stripe.com', 'wss:'],
+            'frame' => ['https://*.paddle.com', 'https://js.stripe.com', 'https://hooks.stripe.com'],
         ],
     ],
 ];

@@ -29,7 +29,7 @@ class TwoFactorAuthTest extends TestCase
         $this->assertDatabaseHas('two_factor_secrets', [
             'user_id' => $user->id,
         ]);
-        
+
         // Verify secret is set but not confirmed
         $twoFactor = $user->refresh()->twoFactorAuth;
         $this->assertNotNull($twoFactor->enabled_at);
@@ -39,7 +39,7 @@ class TwoFactorAuthTest extends TestCase
     public function test_user_cannot_enable_when_already_enabled(): void
     {
         $user = $this->createUser();
-        
+
         TwoFactorAuth::create([
             'user_id' => $user->id,
             'secret' => Crypt::encryptString('TESTSECRET'),
@@ -58,7 +58,7 @@ class TwoFactorAuthTest extends TestCase
         $user = $this->createUser([
             'password' => bcrypt('password'),
         ]);
-        
+
         TwoFactorAuth::create([
             'user_id' => $user->id,
             'secret' => Crypt::encryptString('TESTSECRET'),
@@ -79,10 +79,10 @@ class TwoFactorAuthTest extends TestCase
     public function test_two_factor_model_verifies_code(): void
     {
         $user = $this->createUser();
-        
+
         // Use a known secret that generates predictable codes
         $secret = TwoFactorAuth::generateSecret();
-        
+
         $twoFactor = TwoFactorAuth::create([
             'user_id' => $user->id,
             'secret' => Crypt::encryptString($secret),
@@ -108,7 +108,7 @@ class TwoFactorAuthTest extends TestCase
     {
         $user = $this->createUser();
         $codes = ['TESTCODE1', 'TESTCODE2'];
-        
+
         $twoFactor = TwoFactorAuth::create([
             'user_id' => $user->id,
             'secret' => Crypt::encryptString('TESTSECRET'),
@@ -130,7 +130,7 @@ class TwoFactorAuthTest extends TestCase
     public function test_is_enabled_returns_correct_status(): void
     {
         $user = $this->createUser();
-        
+
         // Not confirmed
         $twoFactor = TwoFactorAuth::create([
             'user_id' => $user->id,

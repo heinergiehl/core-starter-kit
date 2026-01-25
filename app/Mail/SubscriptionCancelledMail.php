@@ -19,8 +19,7 @@ class SubscriptionCancelledMail extends Mailable
         public readonly object $user,
         public readonly ?string $planName = null,
         public readonly ?string $accessUntil = null,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

@@ -30,10 +30,15 @@ class ArchiveAllProducts extends Command
     protected $description = 'Archive all products (and optionally prices) from billing providers';
 
     private bool $dryRun = false;
+
     private int $batchSize = 10;
+
     private int $delayMs = 500;
+
     private int $archivedCount = 0;
+
     private int $skippedCount = 0;
+
     private int $errorCount = 0;
 
     public function handle(): int
@@ -52,8 +57,9 @@ class ArchiveAllProducts extends Command
         $this->warn('   Archived products will not sync to local database.');
         $this->newLine();
 
-        if (!$this->dryRun && !$this->confirm('Are you sure you want to continue?')) {
+        if (! $this->dryRun && ! $this->confirm('Are you sure you want to continue?')) {
             $this->info('Cancelled.');
+
             return self::SUCCESS;
         }
 
@@ -72,7 +78,7 @@ class ArchiveAllProducts extends Command
         }
 
         $this->newLine();
-        $this->info("📊 Summary:");
+        $this->info('📊 Summary:');
         $this->info("   Archived: {$this->archivedCount}");
         $this->info("   Skipped:  {$this->skippedCount}");
         if ($this->errorCount > 0) {
@@ -91,8 +97,9 @@ class ArchiveAllProducts extends Command
 
         $secret = config('services.stripe.secret');
 
-        if (!$secret) {
+        if (! $secret) {
             $this->error('  ❌ Stripe secret not configured');
+
             return false;
         }
 
@@ -138,9 +145,11 @@ class ArchiveAllProducts extends Command
             }
 
             $this->info('  ✓ Stripe archiving complete');
+
             return true;
         } catch (\Throwable $e) {
             $this->error("  ❌ Stripe error: {$e->getMessage()}");
+
             return false;
         }
     }
@@ -150,6 +159,7 @@ class ArchiveAllProducts extends Command
         if ($this->dryRun) {
             $this->line("    Would archive: {$product->name} ({$product->id})");
             $this->archivedCount++;
+
             return;
         }
 
@@ -168,6 +178,7 @@ class ArchiveAllProducts extends Command
         if ($this->dryRun) {
             $this->line("    Would archive: {$price->id}");
             $this->archivedCount++;
+
             return;
         }
 
@@ -192,8 +203,9 @@ class ArchiveAllProducts extends Command
         $environment = config('services.paddle.environment', 'production');
         $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             $this->error('  ❌ Paddle API key not configured');
+
             return false;
         }
 
@@ -209,20 +221,20 @@ class ArchiveAllProducts extends Command
                     ->timeout(30)
                     ->get($nextUrl);
 
-                if (!$response->successful()) {
-                    throw new \RuntimeException('Failed to fetch products: ' . $response->body());
+                if (! $response->successful()) {
+                    throw new \RuntimeException('Failed to fetch products: '.$response->body());
                 }
 
                 $data = $response->json();
                 $pageProducts = $data['data'] ?? [];
-                
+
                 if (count($pageProducts) === 0) {
                     break;
                 }
-                
+
                 $products = array_merge($products, $pageProducts);
                 $nextUrl = $data['meta']['pagination']['next'] ?? null;
-                
+
                 usleep(500000); // Rate limit protection
             } while ($nextUrl);
 
@@ -231,6 +243,7 @@ class ArchiveAllProducts extends Command
 
             if ($productCount === 0) {
                 $this->info('  ✓ No active products to archive');
+
                 return true;
             }
 
@@ -257,20 +270,20 @@ class ArchiveAllProducts extends Command
                     ->timeout(30)
                     ->get($nextUrl);
 
-                if (!$response->successful()) {
-                    throw new \RuntimeException('Failed to fetch prices: ' . $response->body());
+                if (! $response->successful()) {
+                    throw new \RuntimeException('Failed to fetch prices: '.$response->body());
                 }
 
                 $data = $response->json();
                 $pagePrices = $data['data'] ?? [];
-                
+
                 if (count($pagePrices) === 0) {
                     break;
                 }
-                
+
                 $prices = array_merge($prices, $pagePrices);
                 $nextUrl = $data['meta']['pagination']['next'] ?? null;
-                
+
                 usleep(500000);
             } while ($nextUrl);
 
@@ -292,9 +305,11 @@ class ArchiveAllProducts extends Command
             }
 
             $this->info('  ✓ Paddle archiving complete');
+
             return true;
         } catch (\Throwable $e) {
             $this->error("  ❌ Paddle error: {$e->getMessage()}");
+
             return false;
         }
     }
@@ -307,6 +322,7 @@ class ArchiveAllProducts extends Command
         if ($this->dryRun) {
             $this->line("    Would archive: {$name} ({$id})");
             $this->archivedCount++;
+
             return;
         }
 
@@ -336,6 +352,7 @@ class ArchiveAllProducts extends Command
         if ($this->dryRun) {
             $this->line("    Would archive: {$id}");
             $this->archivedCount++;
+
             return;
         }
 
@@ -368,8 +385,9 @@ class ArchiveAllProducts extends Command
         $apiKey = config('services.lemonsqueezy.api_key');
         $storeId = config('services.lemonsqueezy.store_id');
 
-        if (!$apiKey || !$storeId) {
+        if (! $apiKey || ! $storeId) {
             $this->error('  ❌ LemonSqueezy API key or store ID not configured');
+
             return false;
         }
 
@@ -377,7 +395,7 @@ class ArchiveAllProducts extends Command
         // Products must be archived via their dashboard
         $this->warn('  ⚠ LemonSqueezy does not support archiving products via API.');
         $this->warn('  ⚠ Please archive products manually in the LemonSqueezy dashboard.');
-        
+
         return true;
     }
 }

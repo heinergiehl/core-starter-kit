@@ -2,8 +2,15 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "saas-kit/saas-kit",
     "type": "project",
-    "description": "SSR-first Laravel SaaS starter kit with teams, billing, and admin tooling.",
-    "keywords": ["laravel", "saas", "starter-kit", "billing", "filament", "teams"],
+    "description": "SSR-first Laravel SaaS starter kit with B2C billing and admin tooling.",
+    "keywords": [
+        "laravel",
+        "saas",
+        "starter-kit",
+        "billing",
+        "filament",
+        "b2c"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.2",
@@ -14,7 +21,8 @@
         "laravel/socialite": "^5.20",
         "laravel/tinker": "^2.10.1",
         "pragmarx/google2fa-laravel": "^2.3",
-        "stancl/tenancy": "^3.9",
+        "spatie/laravel-data": "^4.19",
+        "spatie/laravel-permission": "^6.24",
         "stripe/stripe-php": "^19.1"
     },
     "require-dev": {
@@ -53,11 +61,11 @@
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:work --tries=3 --timeout=90 --sleep=3 --max-time=3600\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fb7185,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"php artisan pail --timeout=0\" \"npm run dev\" --names=server,queue,logs,vite"
         ],
         "dev:windows": [
             "Composer\\Config::disableProcessTimeout",
-            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:work --tries=3 --timeout=90 --sleep=3 --max-time=3600\" \"npm run dev\" --names=server,queue,vite"
+            "npx concurrently -c \"#93c5fd,#c4b5fd,#fdba74\" \"php artisan serve\" \"php artisan queue:listen --tries=1\" \"npm run dev\" --names=server,queue,vite"
         ],
         "dev:web": [
             "Composer\\Config::disableProcessTimeout",
@@ -65,7 +73,7 @@
         ],
         "dev:queue": [
             "Composer\\Config::disableProcessTimeout",
-            "php artisan queue:work --tries=3 --timeout=90 --sleep=3 --max-time=3600"
+            "php artisan queue:listen --tries=1"
         ],
         "test": [
             "@php artisan config:clear --ansi",

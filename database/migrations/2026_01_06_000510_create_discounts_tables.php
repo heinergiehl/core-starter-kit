@@ -36,7 +36,6 @@ return new class extends Migration
         Schema::create('discount_redemptions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('discount_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('provider');
             $table->string('provider_id');
@@ -47,7 +46,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['discount_id', 'provider', 'provider_id']);
-            $table->index(['team_id', 'discount_id']);
+            $table->index(['user_id', 'discount_id']);
         });
     }
 

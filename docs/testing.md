@@ -46,9 +46,8 @@ npm run build
 - Reload and confirm the choice persists.
 
 ### App Panel (`/app`)
-- Select or create a team.
-- Invite a member.
-- Confirm seat limits update correctly.
+- Confirm account details render for the signed-in user.
+- Verify entitlements are reflected in the UI.
 
 ### Admin Panel (`/admin`)
 - Create products, plans, and prices.

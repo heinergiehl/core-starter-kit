@@ -8,8 +8,8 @@ use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\WebhookEvent;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Stripe\StripeClient;
 
 /**
@@ -46,6 +46,7 @@ class StripePriceHandler implements StripeWebhookHandler
 
         if ($eventType === 'price.deleted') {
             $this->deactivatePrice($object);
+
             return;
         }
 
@@ -60,31 +61,31 @@ class StripePriceHandler implements StripeWebhookHandler
         $priceId = data_get($object, 'id');
         $productId = data_get($object, 'product');
 
-        if (!$priceId) {
+        if (! $priceId) {
             return null;
         }
 
         // Find or create the product for this price
         $product = $this->resolveOrCreateProduct($productId);
 
-        if (!$product) {
+        if (! $product) {
             return null;
         }
 
         $active = data_get($object, 'active', true);
         $recurring = data_get($object, 'recurring', []);
-        
+
         $mapping = PriceProviderMapping::where('provider', 'stripe')
             ->where('provider_id', $priceId)
             ->first();
 
-        if ($mapping && !$mapping->price) {
-            if (!config('saas.billing.allow_import_deleted', false)) {
+        if ($mapping && ! $mapping->price) {
+            if (! config('saas.billing.allow_import_deleted', false)) {
                 return null;
             }
         }
 
-        if (!$mapping && !$active && !config('saas.billing.allow_import_deleted', false)) {
+        if (! $mapping && ! $active && ! config('saas.billing.allow_import_deleted', false)) {
             return null;
         }
 
@@ -97,29 +98,30 @@ class StripePriceHandler implements StripeWebhookHandler
             'currency' => strtoupper(data_get($object, 'currency', 'USD')),
             'amount' => data_get($object, 'unit_amount', 0),
             'type' => data_get($object, 'type', 'recurring'),
-            'has_trial' => !empty($recurring['trial_period_days']),
-            'trial_interval' => !empty($recurring['trial_period_days']) ? 'day' : null,
+            'has_trial' => ! empty($recurring['trial_period_days']),
+            'trial_interval' => ! empty($recurring['trial_period_days']) ? 'day' : null,
             'trial_interval_count' => $recurring['trial_period_days'] ?? null,
             'is_active' => $active,
         ];
-        
+
         if ($mapping) {
-             if (!$mapping->price) {
-                 $key = $this->generatePriceKey($object, $priceId);
-                 $priceData['key'] = $key;
-                 $price = Price::create($priceData);
-                 $mapping->update(['price_id' => $price->id]);
+            if (! $mapping->price) {
+                $key = $this->generatePriceKey($object, $priceId);
+                $priceData['key'] = $key;
+                $price = Price::create($priceData);
+                $mapping->update(['price_id' => $price->id]);
 
-                 return $price;
-             }
+                return $price;
+            }
 
-             $mapping->price->update($priceData);
-             return $mapping->price;
+            $mapping->price->update($priceData);
+
+            return $mapping->price;
         }
 
         $key = $this->generatePriceKey($object, $priceId);
         $priceData['key'] = $key;
-        
+
         // The Price::create call is not a duplicate, it's for creating a new price
         // when no existing mapping is found.
         // The instruction "Remove duplicate Price::create call" might be a misunderstanding
@@ -133,9 +135,9 @@ class StripePriceHandler implements StripeWebhookHandler
         // I will keep it as it is essential for new price creation.
         // If the instruction meant to refactor to updateOrCreate, that's a different change.
         // For now, I will assume the instruction was based on a misunderstanding of this specific line.
-        
+
         $price = Price::create($priceData);
-        
+
         try {
             PriceProviderMapping::create([
                 'price_id' => $price->id,
@@ -143,14 +145,14 @@ class StripePriceHandler implements StripeWebhookHandler
                 'provider_id' => $priceId,
             ]);
         } catch (\Exception $e) {
-            Log::error("Failed to create Stripe Price Provider Mapping: " . $e->getMessage(), [
+            Log::error('Failed to create Stripe Price Provider Mapping: '.$e->getMessage(), [
                 'price_id' => $price->id,
                 'provider_id' => $priceId,
                 'trace' => $e->getTraceAsString(),
             ]);
             throw $e;
         }
-        
+
         return $price;
     }
 
@@ -161,14 +163,14 @@ class StripePriceHandler implements StripeWebhookHandler
     {
         $priceId = data_get($object, 'id');
 
-        if (!$priceId) {
+        if (! $priceId) {
             return;
         }
 
         Price::query()
             ->whereHas('mappings', function ($q) use ($priceId) {
                 $q->where('provider', 'stripe')
-                  ->where('provider_id', $priceId);
+                    ->where('provider_id', $priceId);
             })
             ->update(['is_active' => false]);
     }
@@ -178,7 +180,7 @@ class StripePriceHandler implements StripeWebhookHandler
      */
     private function resolveOrCreateProduct(?string $productId): ?Product
     {
-        if (!$productId) {
+        if (! $productId) {
             return null;
         }
 
@@ -186,16 +188,16 @@ class StripePriceHandler implements StripeWebhookHandler
         $product = Product::query()
             ->whereHas('providerMappings', function ($q) use ($productId) {
                 $q->where('provider', 'stripe')
-                  ->where('provider_id', $productId);
+                    ->where('provider_id', $productId);
             })
             ->first();
 
-        if (!$product) {
+        if (! $product) {
             // Fetch product from Stripe and sync it
             $product = $this->syncProductFromStripe($productId);
         }
 
-        if (!$product) {
+        if (! $product) {
             return null;
         }
 
@@ -209,7 +211,7 @@ class StripePriceHandler implements StripeWebhookHandler
     {
         $secret = config('services.stripe.secret');
 
-        if (!$secret) {
+        if (! $secret) {
             return null;
         }
 
@@ -217,7 +219,8 @@ class StripePriceHandler implements StripeWebhookHandler
             $client = new StripeClient($secret);
             $stripeProduct = $client->products->retrieve($productId, []);
 
-            $handler = new StripeProductHandler();
+            $handler = new StripeProductHandler;
+
             return $handler->syncProduct($stripeProduct->toArray());
         } catch (\Throwable) {
             return null;
@@ -233,7 +236,7 @@ class StripePriceHandler implements StripeWebhookHandler
         $existingMapping = PriceProviderMapping::where('provider', 'stripe')
             ->where('provider_id', $priceId)
             ->first();
-        
+
         $existing = $existingMapping?->price;
 
         if ($existing && $existing->key) {
@@ -256,12 +259,12 @@ class StripePriceHandler implements StripeWebhookHandler
         $interval = $recurring['interval'] ?? null;
         $count = $recurring['interval_count'] ?? 1;
 
-        if (!$interval) {
+        if (! $interval) {
             return 'One-time';
         }
 
         if ($count === 1) {
-            return ucfirst($interval) . 'ly';
+            return ucfirst($interval).'ly';
         }
 
         return "Every {$count} {$interval}s";

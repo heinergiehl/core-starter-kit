@@ -15,7 +15,7 @@
 
         @php
             $pageTitle = $appBrandName ?? config('app.name', 'SaaS Kit');
-            $pageDescription = __('Ship a polished SaaS with teams, billing, and a domain-first architecture.');
+            $pageDescription = __('Ship a polished SaaS with billing, auth, and a clean architecture.');
         @endphp
 
         <title>{{ $pageTitle }}</title>
@@ -91,8 +91,8 @@
                             <!-- Feature 1: Large Span -->
                             <div class="glass-panel rounded-[32px] md:col-span-2 p-10 relative overflow-hidden group">
                                 <div class="relative z-10">
-                                    <h3 class="mb-2 text-2xl font-bold text-ink">{{ __('Multi-Tenant Architecture') }}</h3>
-                                    <p class="max-w-md text-ink/60">{{ __('Built for scale. Teams, members, and roles are first-class citizens. Data is strictly scoped.') }}</p>
+                                    <h3 class="mb-2 text-2xl font-bold text-ink">{{ __('Customer-First Accounts') }}</h3>
+                                    <p class="max-w-md text-ink/60">{{ __('Designed for B2C. Clean user accounts, secure data isolation, and fast onboarding.') }}</p>
                                 </div>
                                 <div class="absolute right-0 bottom-0 w-2/3 h-2/3 bg-gradient-to-tl from-primary/20 to-transparent rounded-tl-[32px] border-t border-l border-ink/5 transition-transform group-hover:scale-105 duration-500">
                                     <!-- Pseudo UI Mockup -->

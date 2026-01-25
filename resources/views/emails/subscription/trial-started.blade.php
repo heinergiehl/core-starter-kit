@@ -27,8 +27,8 @@
             @endforeach
         @else
             <li style="margin-bottom: 8px;">Explore all premium features</li>
-            <li style="margin-bottom: 8px;">Set up your workspace</li>
-            <li style="margin-bottom: 8px;">Invite your team</li>
+            <li style="margin-bottom: 8px;">Complete your profile</li>
+            <li style="margin-bottom: 8px;">Start using the app</li>
         @endif
     </ul>
 

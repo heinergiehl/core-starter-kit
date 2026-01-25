@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Session;
 class ImpersonationService
 {
     public const SESSION_KEY = 'impersonator_id';
+
     public const IMPERSONATED_KEY = 'impersonated_user_id';
 
     /**
@@ -17,8 +18,8 @@ class ImpersonationService
      */
     public function impersonate(User $impersonator, User $target): bool
     {
-        // Admin-only: Check if impersonator has permission
-        if (!$this->canImpersonate($impersonator)) {
+        // Check if impersonator has permission
+        if (! $this->canImpersonate($impersonator, $target)) {
             return false;
         }
 
@@ -56,14 +57,15 @@ class ImpersonationService
     {
         $impersonatorId = Session::get(self::SESSION_KEY);
 
-        if (!$impersonatorId) {
+        if (! $impersonatorId) {
             return false;
         }
 
         $impersonator = User::find($impersonatorId);
 
-        if (!$impersonator) {
+        if (! $impersonator) {
             $this->clearSession();
+
             return false;
         }
 
@@ -100,16 +102,23 @@ class ImpersonationService
     public function getImpersonator(): ?User
     {
         $id = Session::get(self::SESSION_KEY);
+
         return $id ? User::find($id) : null;
     }
 
     /**
      * Check if a user can impersonate others.
      */
-    public function canImpersonate(User $user): bool
+    public function canImpersonate(User $user, ?User $target = null): bool
     {
-        // Only admins can impersonate
-        return $user->is_admin ?? false;
+        // Use the Gate defined in AuthServiceProvider (or Policy)
+        // This allows for flexible configuration (e.g. support staff)
+        if ($target) {
+            return \Illuminate\Support\Facades\Gate::forUser($user)->allows('impersonate', $target);
+        }
+
+        // General check if they have permission to try impersonating
+        return \Illuminate\Support\Facades\Gate::forUser($user)->allows('impersonate');
     }
 
     /**

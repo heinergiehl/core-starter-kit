@@ -34,12 +34,12 @@
                         'canceled' => 'text-rose-600 bg-rose-500/10 border-rose-500/20',
                         'paused' => 'text-gray-600 bg-gray-500/10 border-gray-500/20',
                     ];
-                    $statusColor = $statusColors[$subscription->status] ?? 'text-ink/60 bg-surface/10 border-ink/10';
+                    $statusColor = $statusColors[$subscription->status->value] ?? 'text-ink/60 bg-surface/10 border-ink/10';
                     // Pending cancellation = has canceled_at but still active status and ends_at in future
                     $isPendingCancellation = $subscription->canceled_at && $subscription->ends_at && $subscription->ends_at->isFuture();
-                    $supportsLocalCancel = in_array($subscription->provider, ['stripe', 'lemonsqueezy', 'paddle'], true);
+                    $supportsLocalCancel = in_array($subscription->provider->value, ['stripe', 'lemonsqueezy', 'paddle'], true);
                     $canResume = $supportsLocalCancel && $isPendingCancellation;
-                    $canCancel = $supportsLocalCancel && !$isPendingCancellation && in_array($subscription->status, ['active', 'trialing'], true);
+                    $canCancel = $supportsLocalCancel && !$isPendingCancellation && in_array($subscription->status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing], true);
                 @endphp
 
                 <!-- Current Plan Card -->
@@ -52,16 +52,13 @@
                             </h2>
                             <div class="mt-3 inline-flex items-center gap-2">
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border {{ $statusColor }}">
-                                    {{ ucfirst($subscription->status) }}
+                                    {{ $subscription->status->getLabel() }}
                                 </span>
-                                @if ($subscription->quantity > 1)
-                                    <span class="text-sm text-ink/50">{{ $subscription->quantity }} {{ __('seats') }}</span>
-                                @endif
                             </div>
                         </div>
                         <div class="text-right">
                             <p class="text-xs font-medium text-ink/40 uppercase tracking-wide">{{ __('Provider') }}</p>
-                            <p class="mt-1 text-sm font-semibold text-ink">{{ ucfirst($subscription->provider) }}</p>
+                            <p class="mt-1 text-sm font-semibold text-ink">{{ $subscription->provider->getLabel() }}</p>
                         </div>
                     </div>
 
@@ -101,7 +98,7 @@
                             {{ __('Manage Payment Method') }}
                         </a>
 
-                        @if (!$isPendingCancellation && in_array($subscription->status, ['active', 'trialing'], true))
+                        @if (!$isPendingCancellation && in_array($subscription->status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing], true))
                             <a href="{{ route('pricing') }}?current_plan={{ $subscription->plan_key }}" class="btn-secondary">
                                 {{ __('Change Plan') }}
                             </a>
@@ -157,10 +154,14 @@
                                             {{ __('View') }} &rarr;
                                         </a>
                                     @endif
-                                    @if ($invoice->id)
+                                    @if ($invoice->id && $invoice->amount_paid > 0)
                                         <a href="{{ route('invoices.download_invoice', $invoice) }}" class="ml-4 text-sm font-medium text-ink/60 hover:text-ink">
                                             {{ __('Download PDF') }}
                                         </a>
+                                    @elseif($invoice->amount_paid <= 0)
+                                        <span class="ml-4 text-sm text-ink/40 cursor-help" title="{{ __('No invoice available for trial/free periods') }}">
+                                            {{ __('Trial Start') }}
+                                        </span>
                                     @endif
                                 </div>
                             @endforeach

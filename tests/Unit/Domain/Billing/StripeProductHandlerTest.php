@@ -17,7 +17,7 @@ class StripeProductHandlerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->handler = new StripeProductHandler();
+        $this->handler = new StripeProductHandler;
     }
 
     public function test_handles_product_created_event(): void

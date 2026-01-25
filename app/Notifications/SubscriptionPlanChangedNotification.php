@@ -19,8 +19,7 @@ class SubscriptionPlanChangedNotification extends Notification implements Should
         private readonly ?string $previousPlanName = null,
         private readonly ?string $newPlanName = null,
         private readonly ?string $effectiveDate = null,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {

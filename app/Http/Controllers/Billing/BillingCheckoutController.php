@@ -44,7 +44,7 @@ class BillingCheckoutController
         }
 
         $discount = null;
-        if (!empty($data['coupon'])) {
+        if (! empty($data['coupon'])) {
             $discount = $discounts->validateForCheckout(
                 $data['coupon'],
                 $provider,
@@ -56,50 +56,46 @@ class BillingCheckoutController
 
         $providerPriceId = $plans->providerPriceId($provider, $data['plan'], $data['price']);
 
-        if (!$providerPriceId) {
+        if (! $providerPriceId) {
             return back()
                 ->withErrors([
-                    'billing' => 'This price is not configured for ' . ucfirst($provider) . '.',
+                    'billing' => 'This price is not configured for '.ucfirst($provider).'.',
                 ])
                 ->withInput();
         }
 
-        $resolved = $checkoutService->resolveOrCreateUser(
-            $request,
-            $data['email'] ?? null,
-            $data['name'] ?? null
-        );
+        try {
+            $resolved = $checkoutService->resolveOrCreateUser(
+                $request,
+                $data['email'] ?? null,
+                $data['name'] ?? null
+            );
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                ->withErrors($e->errors())
+                ->withInput();
+        } catch (\App\Domain\Billing\Exceptions\BillingException $e) {
+            error_log($e->getMessage()); // Or check error code if implemented
+            // Assuming this is the user exists error
+            session(['url.intended' => route('checkout.start', $request->only(['provider', 'plan', 'price']))]);
 
-        if ($resolved instanceof RedirectResponse) {
-            return $resolved;
+            return redirect()->route('login')
+                ->with('info', __('An account with this email already exists. Please log in to continue.'));
         }
 
         $user = $resolved['user'];
-        $team = $checkoutService->resolveTeam($user, $resolved['team']);
-
-        if ($team instanceof RedirectResponse) {
-            return $team;
-        }
-
-        abort_unless($user->can('billing', $team), 403);
 
         $planType = (string) ($plan['type'] ?? 'subscription');
 
-        if ($planType === 'one_time' && $checkoutService->hasAnyPurchase($team)) {
+        if ($planType === 'one_time' && $checkoutService->hasAnyPurchase($user)) {
             return redirect()->route('billing.index')
                 ->with('info', __('You already have an active plan or purchase. Manage it in billing.'));
         }
 
-        if ($planType !== 'one_time' && $checkoutService->hasActiveSubscription($team)) {
-            return redirect()->route('billing.portal')
-                ->with('info', __('You already have an active subscription. Manage it in the billing portal.'));
-        }
-
-        $quantity = $checkoutService->calculateQuantity($plan, $team);
+        $quantity = $checkoutService->calculateQuantity($plan);
 
         $checkoutSession = $checkoutService->createCheckoutSession(
             $user,
-            $team,
             $provider,
             $data['plan'],
             $data['price'],
@@ -112,7 +108,6 @@ class BillingCheckoutController
 
         if ($provider === 'paddle') {
             $transactionId = $checkoutService->createPaddleTransaction(
-                $team,
                 $user,
                 $data['plan'],
                 $data['price'],
@@ -126,6 +121,7 @@ class BillingCheckoutController
 
             if ($transactionId instanceof RedirectResponse) {
                 $checkoutSession->markCanceled();
+
                 return $transactionId;
             }
 
@@ -144,7 +140,6 @@ class BillingCheckoutController
                 $providerPriceId,
                 $transactionId,
                 $user,
-                $team,
                 $discount
             );
             $paddleSession['success_url'] = $successUrl;
@@ -157,7 +152,6 @@ class BillingCheckoutController
 
         try {
             $checkoutUrl = $providers->adapter($provider)->createCheckout(
-                $team,
                 $user,
                 $data['plan'],
                 $data['price'],
@@ -169,6 +163,7 @@ class BillingCheckoutController
         } catch (Throwable $exception) {
             report($exception);
             $checkoutSession->markCanceled();
+
             return $checkoutService->handleCheckoutError($exception);
         }
 

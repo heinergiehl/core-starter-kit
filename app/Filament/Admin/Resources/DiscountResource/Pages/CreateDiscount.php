@@ -30,18 +30,23 @@ class CreateDiscount extends CreateRecord
             } catch (\Exception $e) {
                 // We rely on the transaction rollback to undo the local creation
                 // if we re-throw.
-                
+
                 \Filament\Notifications\Notification::make()
-                    ->title('Failed to sync discount to ' . ucfirst($provider))
+                    ->title('Failed to sync discount to '.ucfirst($provider))
                     ->body($e->getMessage())
                     ->danger()
                     ->persistent()
                     ->send();
-                
+
                 throw $e;
             }
 
             return $discount;
         });
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('edit', ['record' => $this->record]);
     }
 }

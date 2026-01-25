@@ -45,9 +45,9 @@ class CatalogImportService
             foreach ($items as $item) {
                 $productPayload = $item['product'] ?? [];
                 $planPayload = $item['plan'] ?? [];
-                if (!empty($planPayload)) {
+                if (! empty($planPayload)) {
                     $productPayload = array_merge($productPayload, $planPayload);
-                    if (!empty($planPayload['key'])) {
+                    if (! empty($planPayload['key'])) {
                         $productPayload['key'] = $planPayload['key'];
                     }
                 }
@@ -55,11 +55,12 @@ class CatalogImportService
 
                 if (empty($productPayload['key'])) {
                     $summary['products']['skip']++;
+
                     continue;
                 }
 
                 $product = $productCache[$productPayload['key']] ?? null;
-                if (!$product) {
+                if (! $product) {
                     $product = Product::query()
                         ->where('key', $productPayload['key'])
                         ->first();
@@ -80,7 +81,7 @@ class CatalogImportService
                     $productCache[$productPayload['key']] = $product;
 
                     // Sync mapping if provider_id is present
-                    if ($apply && !empty($productPayload['provider_id'])) {
+                    if ($apply && ! empty($productPayload['provider_id'])) {
                         ProductProviderMapping::updateOrCreate(
                             [
                                 'provider' => $provider,
@@ -94,8 +95,9 @@ class CatalogImportService
                 }
 
                 foreach ($pricePayloads as $pricePayload) {
-                    if (empty($pricePayload['provider_id']) || !array_key_exists('amount', $pricePayload) || $pricePayload['amount'] === null) {
+                    if (empty($pricePayload['provider_id']) || ! array_key_exists('amount', $pricePayload) || $pricePayload['amount'] === null) {
                         $summary['prices']['skipped']++;
+
                         continue;
                     }
 
@@ -106,7 +108,7 @@ class CatalogImportService
                         ->where('provider', $provider)
                         ->where('provider_id', $providerId)
                         ->first();
-                    
+
                     // Note: We do NOT skip if mapping exists but has no price_id (tombstone).
                     // We want to re-link it if found/created.
 
@@ -166,11 +168,11 @@ class CatalogImportService
 
     private function resolveAction(?object $model, array $payload, bool $updateExisting): string
     {
-        if (!$model) {
+        if (! $model) {
             return 'create';
         }
 
-        if (!$updateExisting) {
+        if (! $updateExisting) {
             return 'skip';
         }
 

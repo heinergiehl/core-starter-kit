@@ -20,8 +20,7 @@ class SubscriptionStartedNotification extends Notification implements ShouldQueu
         private readonly ?int $amount = null,
         private readonly ?string $currency = null,
         private readonly array $features = [],
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {

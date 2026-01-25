@@ -2,52 +2,78 @@
 
 namespace App\Domain\Settings\Services;
 
-use App\Domain\Organization\Models\Team;
 use App\Domain\Settings\Models\BrandSetting;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 
 class BrandingService
 {
+    private const CACHE_TTL_MINUTES = 5;
 
-
-    public function appNameFor(?Team $team): string
+    public function appName(): string
     {
-        $setting = $this->settingFor($team);
+        $setting = $this->globalSetting();
 
         if ($setting?->app_name) {
             return $setting->app_name;
         }
 
-        if ($team?->name) {
-            return $team->name;
-        }
-
         return config('saas.branding.app_name', config('app.name'));
     }
 
-    public function logoPathFor(?Team $team): ?string
+    public function logoPath(): ?string
     {
-        return $this->settingFor($team)?->logo_path ?: config('saas.branding.logo_path');
+        return $this->globalSetting()?->logo_path ?: config('saas.branding.logo_path');
     }
 
     public function templateForGuest(): string
     {
-        $globalTemplate = BrandSetting::query()->whereNull('team_id')->value('template');
+        $globalTemplate = $this->globalSetting()?->template;
 
         return $globalTemplate ?: config('template.active', 'default');
     }
 
-    private function settingFor(?Team $team): ?BrandSetting
+    public function emailPrimaryColor(): string
     {
-        if ($team) {
-            $teamSetting = BrandSetting::query()->where('team_id', $team->id)->first();
+        $setting = $this->globalSetting();
 
-            if ($teamSetting) {
-                return $teamSetting;
-            }
+        if ($setting?->email_primary_color) {
+            return $setting->email_primary_color;
         }
 
-        return BrandSetting::query()->whereNull('team_id')->first();
+        return config('saas.branding.email.primary', '#4F46E5');
     }
 
+    public function emailSecondaryColor(): string
+    {
+        $setting = $this->globalSetting();
 
+        if ($setting?->email_secondary_color) {
+            return $setting->email_secondary_color;
+        }
+
+        return config('saas.branding.email.secondary', '#A855F7');
+    }
+
+    private function globalSetting(): ?BrandSetting
+    {
+        if (! $this->brandingTableReady()) {
+            return null;
+        }
+
+        return Cache::remember(
+            'branding.global',
+            now()->addMinutes(self::CACHE_TTL_MINUTES),
+            fn () => BrandSetting::query()->find(BrandSetting::GLOBAL_ID)
+        );
+    }
+
+    private function brandingTableReady(): bool
+    {
+        return (bool) Cache::remember(
+            'branding.table_ready',
+            now()->addMinutes(self::CACHE_TTL_MINUTES),
+            fn () => Schema::hasTable('brand_settings')
+        );
+    }
 }

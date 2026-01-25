@@ -20,8 +20,7 @@ class SubscriptionTrialStartedMail extends Mailable
         public readonly ?string $planName = null,
         public readonly ?string $trialEndsAt = null,
         public readonly array $features = [],
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

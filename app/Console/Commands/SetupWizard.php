@@ -29,7 +29,9 @@ class SetupWizard extends Command
     protected $description = 'Interactive setup wizard for new SaaS Kit installations';
 
     private string $envPath;
+
     private array $envValues = [];
+
     private array $status = [];
 
     public function handle(): int
@@ -40,8 +42,9 @@ class SetupWizard extends Command
         $this->components->info('🚀 Welcome to SaaS Kit Setup Wizard!');
         $this->newLine();
 
-        if (!File::exists($this->envPath)) {
+        if (! File::exists($this->envPath)) {
             $this->components->error('.env file not found. Run: cp .env.example .env');
+
             return self::FAILURE;
         }
 
@@ -52,7 +55,7 @@ class SetupWizard extends Command
         $this->detectStatus();
 
         // If already configured and not forced, show menu
-        if ($this->isConfigured() && !$this->option('force')) {
+        if ($this->isConfigured() && ! $this->option('force')) {
             return $this->showConfiguredMenu();
         }
 
@@ -67,7 +70,7 @@ class SetupWizard extends Command
     {
         $this->status = [
             'app_name' => $this->envValues['APP_NAME'] ?? null,
-            'app_key' => !empty($this->envValues['APP_KEY']) && $this->envValues['APP_KEY'] !== 'base64:',
+            'app_key' => ! empty($this->envValues['APP_KEY']) && $this->envValues['APP_KEY'] !== 'base64:',
             'database' => $this->isDatabaseReady(),
             'provider' => $this->envValues['BILLING_DEFAULT_PROVIDER'] ?? null,
             'provider_configured' => $this->isProviderConfigured(),
@@ -83,8 +86,8 @@ class SetupWizard extends Command
      */
     private function isConfigured(): bool
     {
-        return $this->status['app_key'] 
-            && $this->status['database'] 
+        return $this->status['app_key']
+            && $this->status['database']
             && $this->status['admin_exists'];
     }
 
@@ -97,7 +100,7 @@ class SetupWizard extends Command
         $this->showStatus();
 
         $this->newLine();
-        
+
         $action = $this->choice(
             'What would you like to do?',
             [
@@ -145,13 +148,13 @@ class SetupWizard extends Command
         $this->setupBillingProvider();
         $this->writeEnv();
         $this->clearCaches();
-        
+
         $this->components->success('✓ Billing provider updated!');
-        
+
         if ($this->confirm('Sync products from new provider?', true)) {
             return $this->menuSyncProducts();
         }
-        
+
         return self::SUCCESS;
     }
 
@@ -162,6 +165,7 @@ class SetupWizard extends Command
     {
         $this->setupAdminUser();
         $this->components->success('✓ Admin user created!');
+
         return self::SUCCESS;
     }
 
@@ -171,13 +175,15 @@ class SetupWizard extends Command
     private function menuSyncProducts(): int
     {
         $provider = $this->status['provider'] ?? 'stripe';
-        
+
         $this->components->task("Syncing products from {$provider}", function () use ($provider) {
             Artisan::call('billing:sync', ['--provider' => $provider]);
+
             return true;
         });
-        
+
         $this->components->success('✓ Products synced!');
+
         return self::SUCCESS;
     }
 
@@ -193,7 +199,7 @@ class SetupWizard extends Command
         $this->setupBillingProvider();
 
         // Step 3: Database
-        if (!$this->option('skip-db')) {
+        if (! $this->option('skip-db')) {
             $this->setupDatabase();
         }
 
@@ -201,7 +207,7 @@ class SetupWizard extends Command
         $this->setupAdminUser();
 
         // Step 5: Optional Demo Data
-        if (!$this->option('skip-seed')) {
+        if (! $this->option('skip-seed')) {
             $this->setupDemoData();
         }
 
@@ -214,7 +220,7 @@ class SetupWizard extends Command
         $this->newLine();
         $this->components->success('🎉 Setup complete!');
         $this->newLine();
-        
+
         $appUrl = $this->envValues['APP_URL'] ?? 'http://localhost:8000';
         $this->components->info("Visit your app: {$appUrl}");
         $this->components->info("Admin panel:   {$appUrl}/admin");
@@ -239,11 +245,11 @@ class SetupWizard extends Command
     private function isProviderConfigured(): bool
     {
         $provider = $this->envValues['BILLING_DEFAULT_PROVIDER'] ?? 'stripe';
-        
+
         return match ($provider) {
-            'stripe' => !empty($this->envValues['STRIPE_SECRET']),
-            'paddle' => !empty($this->envValues['PADDLE_API_KEY']),
-            'lemonsqueezy' => !empty($this->envValues['LEMONSQUEEZY_API_KEY']),
+            'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
+            'paddle' => ! empty($this->envValues['PADDLE_API_KEY']),
+            'lemonsqueezy' => ! empty($this->envValues['LEMONSQUEEZY_API_KEY']),
             default => false,
         };
     }
@@ -251,9 +257,10 @@ class SetupWizard extends Command
     private function adminExists(): bool
     {
         try {
-            if (!Schema::hasTable('users')) {
+            if (! Schema::hasTable('users')) {
                 return false;
             }
+
             return DB::table('users')->where('is_admin', true)->exists();
         } catch (\Throwable) {
             return false;
@@ -263,9 +270,10 @@ class SetupWizard extends Command
     private function getAdminEmail(): ?string
     {
         try {
-            if (!Schema::hasTable('users')) {
+            if (! Schema::hasTable('users')) {
                 return null;
             }
+
             return DB::table('users')->where('is_admin', true)->value('email');
         } catch (\Throwable) {
             return null;
@@ -275,9 +283,10 @@ class SetupWizard extends Command
     private function getUserCount(): int
     {
         try {
-            if (!Schema::hasTable('users')) {
+            if (! Schema::hasTable('users')) {
                 return 0;
             }
+
             return DB::table('users')->count();
         } catch (\Throwable) {
             return 0;
@@ -287,9 +296,10 @@ class SetupWizard extends Command
     private function getProductCount(): int
     {
         try {
-            if (!Schema::hasTable('products')) {
+            if (! Schema::hasTable('products')) {
                 return 0;
             }
+
             return DB::table('products')->where('is_active', true)->count();
         } catch (\Throwable) {
             return 0;
@@ -303,13 +313,13 @@ class SetupWizard extends Command
     private function loadEnv(): void
     {
         $content = File::get($this->envPath);
-        
+
         foreach (explode("\n", $content) as $line) {
             $line = trim($line);
             if (empty($line) || str_starts_with($line, '#')) {
                 continue;
             }
-            
+
             if (str_contains($line, '=')) {
                 [$key, $value] = explode('=', $line, 2);
                 $this->envValues[trim($key)] = trim($value, '"\'');
@@ -336,6 +346,7 @@ class SetupWizard extends Command
         if (empty($this->envValues['APP_KEY']) || $this->envValues['APP_KEY'] === 'base64:') {
             $this->components->task('Generating application key', function () {
                 Artisan::call('key:generate', ['--force' => true]);
+
                 return true;
             });
         }
@@ -380,10 +391,10 @@ class SetupWizard extends Command
     private function setupStripe(): void
     {
         $this->components->info('  → Stripe Configuration');
-        
+
         $currentSecret = $this->envValues['STRIPE_SECRET'] ?? '';
         $masked = $currentSecret ? Str::mask($currentSecret, '*', 7, -4) : '(not set)';
-        
+
         if ($this->confirm("Configure Stripe API keys? Current: {$masked}", empty($currentSecret))) {
             $secret = $this->secret('Stripe Secret Key (sk_...)');
             if ($secret) {
@@ -405,7 +416,7 @@ class SetupWizard extends Command
     private function setupPaddle(): void
     {
         $this->components->info('  → Paddle Configuration');
-        
+
         $environment = $this->choice(
             'Paddle environment?',
             ['sandbox' => 'Sandbox (testing)', 'production' => 'Production'],
@@ -415,7 +426,7 @@ class SetupWizard extends Command
 
         $currentKey = $this->envValues['PADDLE_API_KEY'] ?? '';
         $masked = $currentKey ? Str::mask($currentKey, '*', 7, -4) : '(not set)';
-        
+
         if ($this->confirm("Configure Paddle API keys? Current: {$masked}", empty($currentKey))) {
             $apiKey = $this->secret('Paddle API Key');
             if ($apiKey) {
@@ -437,10 +448,10 @@ class SetupWizard extends Command
     private function setupLemonSqueezy(): void
     {
         $this->components->info('  → Lemon Squeezy Configuration');
-        
+
         $currentKey = $this->envValues['LEMONSQUEEZY_API_KEY'] ?? '';
         $masked = $currentKey ? Str::mask($currentKey, '*', 7, -4) : '(not set)';
-        
+
         if ($this->confirm("Configure Lemon Squeezy API keys? Current: {$masked}", empty($currentKey))) {
             $apiKey = $this->secret('Lemon Squeezy API Key');
             if ($apiKey) {
@@ -469,6 +480,7 @@ class SetupWizard extends Command
         if ($runMigrations) {
             $this->components->task('Running migrations', function () {
                 Artisan::call('migrate', ['--force' => true]);
+
                 return true;
             });
         }
@@ -481,7 +493,7 @@ class SetupWizard extends Command
         $this->components->info('👤 Admin User');
         $this->newLine();
 
-        if (!$this->confirm('Create an admin user?', true)) {
+        if (! $this->confirm('Create an admin user?', true)) {
             return;
         }
 
@@ -489,14 +501,15 @@ class SetupWizard extends Command
         $email = $this->ask('Admin email', 'admin@example.com');
         $password = $this->secret('Admin password (min 8 characters)');
 
-        if (!$password || strlen($password) < 8) {
+        if (! $password || strlen($password) < 8) {
             $this->components->warn('Password must be at least 8 characters. Skipping admin creation.');
+
             return;
         }
 
         $this->components->task('Creating admin user', function () use ($name, $email, $password) {
             $userClass = config('auth.providers.users.model', \App\Models\User::class);
-            
+
             $user = $userClass::updateOrCreate(
                 ['email' => $email],
                 [
@@ -518,12 +531,13 @@ class SetupWizard extends Command
         $this->components->info('🎭 Demo Data');
         $this->newLine();
 
-        if (!$this->confirm('Seed demo data? (teams, sample content)', false)) {
+        if (! $this->confirm('Seed demo data? (sample content)', false)) {
             return;
         }
 
         $this->components->task('Seeding demo data', function () {
             Artisan::call('db:seed', ['--force' => true]);
+
             return true;
         });
 
@@ -551,6 +565,7 @@ class SetupWizard extends Command
             }
 
             File::put($this->envPath, $content);
+
             return true;
         });
     }
@@ -566,21 +581,23 @@ class SetupWizard extends Command
         $this->components->task('Clearing caches', function () {
             $this->clearCaches();
             Artisan::call('view:clear');
+
             return true;
         });
 
         // Sync products if provider is configured
         $provider = $this->envValues['BILLING_DEFAULT_PROVIDER'] ?? 'stripe';
         $hasKey = match ($provider) {
-            'stripe' => !empty($this->envValues['STRIPE_SECRET']),
-            'paddle' => !empty($this->envValues['PADDLE_API_KEY']),
-            'lemonsqueezy' => !empty($this->envValues['LEMONSQUEEZY_API_KEY']),
+            'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
+            'paddle' => ! empty($this->envValues['PADDLE_API_KEY']),
+            'lemonsqueezy' => ! empty($this->envValues['LEMONSQUEEZY_API_KEY']),
             default => false,
         };
 
         if ($hasKey && $this->confirm('Sync products from billing provider?', true)) {
             $this->components->task('Syncing products', function () use ($provider) {
                 Artisan::call('billing:sync', ['--provider' => $provider]);
+
                 return true;
             });
         }

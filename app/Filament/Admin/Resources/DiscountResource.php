@@ -11,21 +11,25 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TagsInput;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Validation\Rule;
 
 class DiscountResource extends Resource
 {
     protected static ?string $model = Discount::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-ticket';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-ticket';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Product Management';
+    protected static string|\UnitEnum|null $navigationGroup = 'Product Management';
 
     protected static ?string $navigationLabel = 'Discounts';
 
@@ -37,11 +41,11 @@ class DiscountResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\Select::make('provider')
+                Select::make('provider')
                     ->options(self::providerOptions())
                     ->required()
                     ->live(),
-                Forms\Components\TextInput::make('code')
+                TextInput::make('code')
                     ->label('Code')
                     ->required()
                     ->maxLength(50)
@@ -50,58 +54,58 @@ class DiscountResource extends Resource
                             ->where('provider', $get('provider'))
                             ->ignore($record?->id),
                     ]),
-                Forms\Components\TextInput::make('name')
+                TextInput::make('name')
                     ->maxLength(255),
-                Forms\Components\Textarea::make('description')
+                Textarea::make('description')
                     ->rows(3)
                     ->columnSpanFull(),
-                Forms\Components\Select::make('type')
+                Select::make('type')
                     ->options([
                         'percent' => 'Percent',
                         'fixed' => 'Fixed',
                     ])
                     ->required()
                     ->default('percent'),
-                Forms\Components\TextInput::make('amount')
+                TextInput::make('amount')
                     ->numeric()
                     ->minValue(0)
                     ->required()
                     ->helperText('Percent: 1-100, Fixed: minor units (cents).'),
-                Forms\Components\TextInput::make('currency')
+                TextInput::make('currency')
                     ->maxLength(3)
                     ->required(fn (Get $get): bool => $get('type') === 'fixed')
                     ->dehydrateStateUsing(fn (?string $state): ?string => $state ? strtoupper($state) : null),
-                Forms\Components\Select::make('provider_type')
+                Select::make('provider_type')
                     ->label('Provider type')
                     ->options([
                         'coupon' => 'Coupon',
                         'promotion_code' => 'Promotion code',
                     ])
                     ->default('coupon'),
-                Forms\Components\TextInput::make('provider_id')
+                TextInput::make('provider_id')
                     ->label('Provider ID')
                     ->maxLength(191)
                     ->disabled()
                     ->dehydrated()
                     ->visible(fn (string $operation): bool => $operation === 'edit'),
-                Forms\Components\TextInput::make('max_redemptions')
+                TextInput::make('max_redemptions')
                     ->numeric()
                     ->minValue(1)
                     ->helperText('Leave empty for unlimited redemptions.'),
-                Forms\Components\DateTimePicker::make('starts_at')
+                DateTimePicker::make('starts_at')
                     ->label('Starts at'),
-                Forms\Components\DateTimePicker::make('ends_at')
+                DateTimePicker::make('ends_at')
                     ->label('Ends at'),
-                Forms\Components\Toggle::make('is_active')
+                Toggle::make('is_active')
                     ->label('Active')
                     ->default(true),
-                Forms\Components\TagsInput::make('plan_keys')
+                TagsInput::make('plan_keys')
                     ->label('Plan keys')
-                    ->placeholder('starter, team'),
-                Forms\Components\TagsInput::make('price_keys')
+                    ->placeholder('starter, growth'),
+                TagsInput::make('price_keys')
                     ->label('Price keys')
                     ->placeholder('monthly, yearly'),
-                Forms\Components\TextInput::make('redeemed_count')
+                TextInput::make('redeemed_count')
                     ->label('Redeemed count')
                     ->disabled()
                     ->dehydrated(false),
@@ -113,16 +117,16 @@ class DiscountResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('code')
+                TextColumn::make('code')
                     ->badge()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('provider')
+                TextColumn::make('provider')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('type')
+                TextColumn::make('type')
                     ->badge()
                     ->color(fn (string $state): string => $state === 'fixed' ? 'warning' : 'primary'),
-                Tables\Columns\TextColumn::make('amount')
+                TextColumn::make('amount')
                     ->formatStateUsing(function ($state, Discount $record): string {
                         if ($record->type === 'percent') {
                             return "{$state}%";
@@ -133,19 +137,19 @@ class DiscountResource extends Resource
 
                         return trim("{$currency} {$formatted}");
                     }),
-                Tables\Columns\TextColumn::make('redeemed_count')
+                TextColumn::make('redeemed_count')
                     ->label('Used')
                     ->sortable(),
-                Tables\Columns\TextColumn::make('max_redemptions')
+                TextColumn::make('max_redemptions')
                     ->label('Limit')
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('is_active')
+                TextColumn::make('is_active')
                     ->label('Status')
                     ->badge()
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Active' : 'Inactive')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
-                Tables\Columns\TextColumn::make('ends_at')
+                TextColumn::make('ends_at')
                     ->dateTime()
                     ->toggleable(),
             ])

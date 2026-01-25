@@ -12,7 +12,7 @@ class PricingController
     {
         $providers = $plans->providers();
         $defaultProvider = $plans->defaultProvider();
-        if (!in_array($defaultProvider, $providers, true)) {
+        if (! in_array($defaultProvider, $providers, true)) {
             $defaultProvider = $providers[0] ?? 'stripe';
         }
 

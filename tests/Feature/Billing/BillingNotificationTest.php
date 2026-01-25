@@ -8,7 +8,6 @@ use App\Domain\Billing\Adapters\Stripe\Handlers\StripeSubscriptionHandler;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
 use App\Notifications\SubscriptionCancelledNotification;
@@ -28,15 +27,9 @@ class BillingNotificationTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
-        $team = Team::factory()->create([
-             'owner_id' => $user->id,
-        ]);
-        
-        $user->current_team_id = $team->id;
-        $user->save();
 
         // Simulate Stripe webhook payload for new subscription
-        $handler = new StripeSubscriptionHandler();
+        $handler = app(StripeSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_123',
             'customer' => 'cus_123',
@@ -50,14 +43,14 @@ class BillingNotificationTest extends TestCase
                             'unit_amount' => 2900,
                         ],
                         'quantity' => 1,
-                    ]
-                ]
+                    ],
+                ],
             ],
             'currency' => 'usd',
             'metadata' => [
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'plan_key' => 'pro',
-            ]
+            ],
         ];
 
         // 1. Initial Sync - Should send notification
@@ -74,7 +67,7 @@ class BillingNotificationTest extends TestCase
         // Verify database state
         $subscription = Subscription::where('provider_id', 'sub_123')->first();
         $this->assertNotNull($subscription->welcome_email_sent_at);
-        
+
         // Clear recorded notifications
         Notification::fake();
 
@@ -89,24 +82,23 @@ class BillingNotificationTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
-        $team = Team::factory()->create(['owner_id' => $user->id]);
 
-        $handler = new PaddleSubscriptionHandler();
+        $handler = app(PaddleSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_paddle_123',
             'status' => 'active',
             'custom_data' => [
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'plan_key' => 'pro',
             ],
             'items' => [
                 [
                     'price' => [
-                        'unit_price' => ['amount' => 4900]
-                    ]
-                ]
+                        'unit_price' => ['amount' => 4900],
+                    ],
+                ],
             ],
-            'currency_code' => 'USD'
+            'currency_code' => 'USD',
         ];
 
         // 1. Initial Sync
@@ -126,15 +118,14 @@ class BillingNotificationTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
-        $team = Team::factory()->create(['owner_id' => $user->id]);
 
-        $handler = new PaddleSubscriptionHandler();
+        $handler = app(PaddleSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_paddle_trial_123',
             'status' => 'trialing',
             'trial_ends_at' => now()->addDays(7)->timestamp,
             'custom_data' => [
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'plan_key' => 'pro',
             ],
         ];
@@ -156,35 +147,34 @@ class BillingNotificationTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
-        $team = Team::factory()->create(['owner_id' => $user->id]);
-        
+
         // Create active subscription
         $subscription = Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'provider' => 'stripe',
             'provider_id' => 'sub_cancel_test',
             'status' => 'active',
             // Simulate welcome email already sent
-            'welcome_email_sent_at' => now(), 
+            'welcome_email_sent_at' => now(),
         ]);
 
-        $handler = new StripeSubscriptionHandler();
+        $handler = app(StripeSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_cancel_test',
             'customer' => 'cus_123',
             'status' => 'canceled',
             'canceled_at' => now()->timestamp,
             'metadata' => [
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'plan_key' => 'pro',
-            ]
+            ],
         ];
 
         // 1. Sync Cancellation
         $handler->syncSubscription($payload, 'customer.subscription.deleted');
 
         Notification::assertSentTo($user, SubscriptionCancelledNotification::class);
-        
+
         $subscription->refresh();
         $this->assertNotNull($subscription->cancellation_email_sent_at);
         $this->assertEquals('canceled', $subscription->status);
@@ -200,17 +190,16 @@ class BillingNotificationTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
-        $team = Team::factory()->create(['owner_id' => $user->id]);
 
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'provider' => 'stripe',
             'provider_id' => 'sub_plan_change',
             'plan_key' => 'starter',
             'status' => 'active',
         ]);
 
-        $handler = new StripeSubscriptionHandler();
+        $handler = app(StripeSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_plan_change',
             'customer' => 'cus_456',
@@ -222,11 +211,11 @@ class BillingNotificationTest extends TestCase
                         'price' => [
                             'id' => 'price_456',
                         ],
-                    ]
-                ]
+                    ],
+                ],
             ],
             'metadata' => [
-                'team_id' => $team->id,
+                'user_id' => $user->id,
                 'plan_key' => 'pro',
             ],
         ];
@@ -246,17 +235,16 @@ class BillingNotificationTest extends TestCase
         Notification::fake();
 
         $user = User::factory()->create();
-        $team = Team::factory()->create(['owner_id' => $user->id]);
 
         Subscription::factory()->create([
-            'team_id' => $team->id,
+            'user_id' => $user->id,
             'provider' => 'stripe',
             'provider_id' => 'sub_fail_123',
             'plan_key' => 'pro',
             'status' => 'active',
         ]);
 
-        $handler = new StripeInvoiceHandler();
+        $handler = new StripeInvoiceHandler;
         $event = new WebhookEvent([
             'type' => 'invoice.payment_failed',
         ]);
@@ -268,7 +256,7 @@ class BillingNotificationTest extends TestCase
             'amount_due' => 2900,
             'currency' => 'usd',
             'metadata' => [
-                'team_id' => $team->id,
+                'user_id' => $user->id,
             ],
         ];
 
@@ -292,19 +280,19 @@ class BillingNotificationTest extends TestCase
     {
         $user = User::factory()->create(['email' => 'customer@example.com']);
 
-        $startedMail = (new SubscriptionStartedNotification())->toMail($user);
+        $startedMail = (new SubscriptionStartedNotification)->toMail($user);
         $this->assertTrue($startedMail->hasTo('customer@example.com'));
 
-        $cancelledMail = (new SubscriptionCancelledNotification())->toMail($user);
+        $cancelledMail = (new SubscriptionCancelledNotification)->toMail($user);
         $this->assertTrue($cancelledMail->hasTo('customer@example.com'));
 
-        $planChangedMail = (new SubscriptionPlanChangedNotification())->toMail($user);
+        $planChangedMail = (new SubscriptionPlanChangedNotification)->toMail($user);
         $this->assertTrue($planChangedMail->hasTo('customer@example.com'));
 
-        $failedMail = (new PaymentFailedNotification())->toMail($user);
+        $failedMail = (new PaymentFailedNotification)->toMail($user);
         $this->assertTrue($failedMail->hasTo('customer@example.com'));
 
-        $trialMail = (new SubscriptionTrialStartedNotification())->toMail($user);
+        $trialMail = (new SubscriptionTrialStartedNotification)->toMail($user);
         $this->assertTrue($trialMail->hasTo('customer@example.com'));
     }
 }

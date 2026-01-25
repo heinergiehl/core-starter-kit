@@ -19,8 +19,7 @@ class SubscriptionTrialStartedNotification extends Notification implements Shoul
         private readonly ?string $planName = null,
         private readonly ?string $trialEndsAt = null,
         private readonly array $features = [],
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {

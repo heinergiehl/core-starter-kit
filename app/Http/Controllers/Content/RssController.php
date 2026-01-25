@@ -9,8 +9,7 @@ class RssController
 {
     public function __invoke(): Response
     {
-        $posts = BlogPost::query()
-            ->where('is_published', true)
+        $posts = BlogPost::published()
             ->orderByDesc('published_at')
             ->take(20)
             ->get(['slug', 'title', 'excerpt', 'published_at', 'updated_at']);

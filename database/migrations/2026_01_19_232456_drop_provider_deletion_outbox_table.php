@@ -15,7 +15,7 @@ return new class extends Migration
 
     /**
      * Reverse the migrations.
-     * 
+     *
      * Note: This table is no longer used with the provider-first architecture.
      * If you need to restore it, recreate with appropriate schema.
      */

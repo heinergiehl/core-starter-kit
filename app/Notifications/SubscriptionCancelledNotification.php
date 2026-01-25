@@ -18,8 +18,7 @@ class SubscriptionCancelledNotification extends Notification implements ShouldQu
     public function __construct(
         private readonly ?string $planName = null,
         private readonly ?string $accessUntil = null,
-    ) {
-    }
+    ) {}
 
     public function via(object $notifiable): array
     {

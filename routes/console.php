@@ -37,11 +37,11 @@ Artisan::command('billing:import-catalog {provider=stripe} {--apply} {--update}'
         $summary['prices']['skipped'] ?? 0
     ));
 
-    if (!$apply) {
+    if (! $apply) {
         $this->comment('Run with --apply to persist changes. Use --update to overwrite existing records.');
     }
 
-    if (!empty($warnings)) {
+    if (! empty($warnings)) {
         $this->warn('Warnings:');
         foreach ($warnings as $warning) {
             $this->line("- {$warning}");
@@ -77,11 +77,11 @@ Artisan::command('billing:publish-catalog {provider=stripe} {--apply} {--update}
         $summary['prices']['skip'] ?? 0
     ));
 
-    if (!$apply) {
+    if (! $apply) {
         $this->comment('Run with --apply to persist changes. Use --update to push updates for existing products.');
     }
 
-    if (!empty($warnings)) {
+    if (! empty($warnings)) {
         $this->warn('Warnings:');
         foreach ($warnings as $warning) {
             $this->line("- {$warning}");

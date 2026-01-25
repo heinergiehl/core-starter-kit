@@ -111,17 +111,6 @@ class BillingException extends RuntimeException
     }
 
     /**
-     * Create exception for seat sync failure.
-     */
-    public static function seatSyncFailed(string $provider, string $reason): self
-    {
-        return new self(
-            "Failed to sync seats with {$provider}: {$reason}",
-            'BILLING_SEAT_SYNC_FAILED'
-        );
-    }
-
-    /**
      * Create exception for provider action failure.
      */
     public static function failedAction(string $provider, string $action, string $reason): self
@@ -129,6 +118,28 @@ class BillingException extends RuntimeException
         return new self(
             "{$provider} failed to {$action}: {$reason}",
             'BILLING_ACTION_FAILED'
+        );
+    }
+
+    /**
+     * Create exception for seat sync failure.
+     */
+    public static function seatSyncFailed(string $provider, string $reason): self
+    {
+        return new self(
+            "{$provider} seat sync failed: {$reason}",
+            'BILLING_SEAT_SYNC_FAILED'
+        );
+    }
+
+    /**
+     * Create exception for existing user.
+     */
+    public static function userAlreadyExists(string $email): self
+    {
+        return new self(
+            "User with email [{$email}] already exists.",
+            'BILLING_USER_ALREADY_EXISTS'
         );
     }
 }

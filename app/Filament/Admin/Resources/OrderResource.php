@@ -10,7 +10,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,9 +18,9 @@ class OrderResource extends Resource
 {
     protected static ?string $model = Order::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-shopping-bag';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shopping-bag';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Billing';
+    protected static string|\UnitEnum|null $navigationGroup = 'Billing';
 
     protected static ?string $navigationLabel = 'Orders';
 
@@ -38,14 +38,14 @@ class OrderResource extends Resource
         return $schema->schema([
             Section::make('Order')
                 ->schema([
-                    TextEntry::make('team.name')->label('Team'),
+                    TextEntry::make('user.name')->label('Customer'),
                     TextEntry::make('provider')->badge(),
                     TextEntry::make('provider_id')->label('Provider ID'),
                     TextEntry::make('plan_key')->label('Plan'),
                     TextEntry::make('status')->badge(),
                     TextEntry::make('amount')
                         ->formatStateUsing(fn ($state, Order $record): string => $record->currency
-                            ? strtoupper($record->currency) . ' ' . number_format(((int) $state) / 100, 2)
+                            ? strtoupper($record->currency).' '.number_format(((int) $state) / 100, 2)
                             : (string) $state),
                     TextEntry::make('paid_at')->dateTime(),
                     TextEntry::make('refunded_at')->dateTime(),
@@ -65,21 +65,21 @@ class OrderResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('team.name')
-                    ->label('Team')
+                TextColumn::make('user.name')
+                    ->label('Customer')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('provider')
+                TextColumn::make('provider')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'paid' => 'success',
                         'refunded' => 'danger',
                         default => 'warning',
                     }),
-                Tables\Columns\TextColumn::make('amount')
+                TextColumn::make('amount')
                     ->formatStateUsing(function ($state, Order $record): string {
                         $currency = strtoupper((string) $record->currency);
                         $formatted = number_format(((int) $state) / 100, 2);
@@ -87,11 +87,11 @@ class OrderResource extends Resource
                         return trim("{$currency} {$formatted}");
                     })
                     ->sortable(),
-                Tables\Columns\TextColumn::make('paid_at')
+                TextColumn::make('paid_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),

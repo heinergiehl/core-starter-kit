@@ -1,11 +1,11 @@
 @php
     use Illuminate\Support\Str;
 
-    $primary = $colors['primary'] ?? '14 116 144';
-    $secondary = $colors['secondary'] ?? '245 158 11';
-    $accent = $colors['accent'] ?? '239 68 68';
-    $bg = $colors['bg'] ?? '250 250 249';
-    $fg = $colors['fg'] ?? '15 23 42';
+    $primary = '14 116 144';
+    $secondary = '245 158 11';
+    $accent = '239 68 68';
+    $bg = '250 250 249';
+    $fg = '15 23 42';
     $fontSans = $fonts['sans'] ?? 'Instrument Sans';
     $fontDisplay = $fonts['display'] ?? 'Instrument Serif';
     $fgComma = str_replace(' ', ', ', $fg);

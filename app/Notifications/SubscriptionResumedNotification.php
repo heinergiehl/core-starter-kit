@@ -25,8 +25,8 @@ class SubscriptionResumedNotification extends Notification implements ShouldQueu
     {
         return (new MailMessage)
             ->subject('Subscription Resumed')
-            ->line('Your subscription to ' . $this->planName . ' has been resumed.')
-            ->lineIf($this->accessUntil, 'You will have access until ' . $this->accessUntil . '.')
+            ->line('Your subscription to '.$this->planName.' has been resumed.')
+            ->lineIf($this->accessUntil, 'You will have access until '.$this->accessUntil.'.')
             ->action('View Subscription', url('/billing'))
             ->line('Thank you for continuing with us!');
     }

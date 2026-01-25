@@ -16,7 +16,7 @@ return [
     'Admin Panel' => 'Admin-Panel',
     'Sign In' => 'Anmelden',
     'Get Started' => 'Jetzt starten',
-    
+
     // Hero Section
     'hero_badge' => 'v1.0 ist jetzt live',
     'hero_title' => 'Das Boilerplate für',
@@ -26,11 +26,11 @@ return [
     'hero_cta' => 'Konsole starten',
     'hero_cta_secondary' => 'Demo ansehen',
     'built_with' => 'Mit modernen Standards gebaut',
-    
+
     // Features
     'features_title' => 'Alles was du brauchst',
     'features_description' => 'Mit modernen Standards gebaut, um schneller zu liefern.',
-    
+
     // Pricing
     'pricing_title' => 'Einfache, transparente Preise',
     'pricing_description' => 'Wähle den Plan, der zu dir passt.',
@@ -42,7 +42,7 @@ return [
     'pricing_enterprise' => 'Enterprise',
     'pricing_cta' => 'Jetzt starten',
     'pricing_contact' => 'Vertrieb kontaktieren',
-    
+
     // Auth
     'email' => 'E-Mail',
     'password' => 'Passwort',
@@ -53,7 +53,7 @@ return [
     'have_account' => 'Bereits ein Konto?',
     'sign_up' => 'Registrieren',
     'sign_in' => 'Anmelden',
-    
+
     // Dashboard
     'welcome_back' => 'Willkommen zurück, :name!',
     'your_team' => 'Dein Team',
@@ -63,7 +63,7 @@ return [
     'team_members' => 'Teammitglieder',
     'invitations' => 'Einladungen',
     'branding' => 'Branding',
-    
+
     // Common
     'save' => 'Speichern',
     'save_changes' => 'Änderungen speichern',
@@ -85,7 +85,7 @@ return [
     'learn_more' => 'Mehr erfahren',
     'view_all' => 'Alle anzeigen',
     'close' => 'Schließen',
-    
+
     // Footer
     'footer_tagline' => 'Baue SaaS schneller mit Premium-Tools.',
     'footer_product' => 'Produkt',
@@ -96,7 +96,7 @@ return [
     'footer_about' => 'Über uns',
     'footer_contact' => 'Kontakt',
     'footer_copyright' => '© :year :name. Alle Rechte vorbehalten.',
-    
+
     // Notifications
     'notification_saved' => 'Deine Änderungen wurden gespeichert.',
     'notification_deleted' => 'Erfolgreich gelöscht.',

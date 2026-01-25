@@ -45,11 +45,13 @@ class StripeInvoiceHandler implements StripeWebhookHandler
 
         if (in_array($eventType, ['invoice.paid', 'invoice.payment_succeeded'])) {
             $this->handleInvoicePaid($object);
+
             return;
         }
 
         if ($eventType === 'invoice.payment_failed') {
             $this->handleInvoicePaymentFailed($object);
+
             return;
         }
 
@@ -63,7 +65,7 @@ class StripeInvoiceHandler implements StripeWebhookHandler
     {
         $subscriptionId = data_get($object, 'subscription');
 
-        if (!$subscriptionId) {
+        if (! $subscriptionId) {
             return;
         }
 
@@ -84,14 +86,13 @@ class StripeInvoiceHandler implements StripeWebhookHandler
     {
         $invoice = $this->syncInvoice($object);
 
-        if (!$invoice || $invoice->payment_failed_email_sent_at) {
+        if (! $invoice || $invoice->payment_failed_email_sent_at) {
             return;
         }
 
-        $team = $invoice->team;
-        $owner = $team?->owner;
+        $owner = $invoice->user;
 
-        if (!$owner) {
+        if (! $owner) {
             return;
         }
 
@@ -120,17 +121,17 @@ class StripeInvoiceHandler implements StripeWebhookHandler
     {
         $providerId = data_get($object, 'id');
 
-        if (!$providerId) {
+        if (! $providerId) {
             return null;
         }
 
         $subscriptionId = data_get($object, 'subscription');
         $customerId = data_get($object, 'customer');
-        $teamId = $this->resolveTeamIdFromMetadata($object)
-            ?? $this->resolveTeamIdFromCustomerId($customerId)
-            ?? $this->resolveTeamIdFromSubscriptionId($subscriptionId);
+        $userId = $this->resolveUserIdFromMetadata($object)
+            ?? $this->resolveUserIdFromCustomerId($customerId)
+            ?? $this->resolveUserIdFromSubscriptionId($subscriptionId);
 
-        if (!$teamId) {
+        if (! $userId) {
             return null;
         }
 
@@ -149,7 +150,7 @@ class StripeInvoiceHandler implements StripeWebhookHandler
                 'provider_id' => (string) $providerId,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'subscription_id' => $subscription?->id,
                 'status' => $status,
                 'number' => data_get($object, 'number'),
@@ -179,7 +180,7 @@ class StripeInvoiceHandler implements StripeWebhookHandler
 
     private function resolvePlanName(?string $planKey): string
     {
-        if (!$planKey) {
+        if (! $planKey) {
             return 'subscription';
         }
 

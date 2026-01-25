@@ -20,7 +20,6 @@ return new class extends Migration
             $table->boolean('amount_is_minor')->default(true);
             $table->string('email')->nullable();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('team_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('discount_id')->nullable()->constrained('discounts')->nullOnDelete();
             $table->string('discount_code')->nullable();
             $table->string('provider_transaction_id')->nullable();

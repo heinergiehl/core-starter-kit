@@ -2,15 +2,30 @@
 
 namespace App\Domain\Billing\Adapters;
 
-use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Models\Discount;
-use App\Domain\Organization\Models\Team;
+use App\Domain\Billing\Models\WebhookEvent;
 use App\Models\User;
 use Illuminate\Http\Request;
 
 interface BillingProviderAdapter
 {
     public function provider(): string;
+
+    /**
+     * Update an existing subscription.
+     */
+    public function updateSubscription(\App\Domain\Billing\Models\Subscription $subscription, string $newPriceId): void;
+
+    /**
+     * Cancel a subscription.
+     * Returns the date when the subscription will end (effective cancellation date).
+     */
+    public function cancelSubscription(\App\Domain\Billing\Models\Subscription $subscription): \Carbon\Carbon;
+
+    /**
+     * Resume a canceled (but still active) subscription.
+     */
+    public function resumeSubscription(\App\Domain\Billing\Models\Subscription $subscription): void;
 
     /**
      * Validate the webhook request and return normalized event data.
@@ -21,10 +36,7 @@ interface BillingProviderAdapter
 
     public function processEvent(WebhookEvent $event): void;
 
-    public function syncSeatQuantity(Team $team, int $quantity): void;
-
     public function createCheckout(
-        Team $team,
         User $user,
         string $planKey,
         string $priceKey,

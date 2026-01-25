@@ -10,7 +10,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,9 +18,9 @@ class BillingCustomerResource extends Resource
 {
     protected static ?string $model = BillingCustomer::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user-group';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Billing';
+    protected static string|\UnitEnum|null $navigationGroup = 'Billing';
 
     protected static ?string $navigationLabel = 'Customers';
 
@@ -38,7 +38,7 @@ class BillingCustomerResource extends Resource
         return $schema->schema([
             Section::make('Customer')
                 ->schema([
-                    TextEntry::make('team.name')->label('Team'),
+                    TextEntry::make('user.name')->label('Customer'),
                     TextEntry::make('provider')->badge(),
                     TextEntry::make('provider_id')->label('Provider ID'),
                     TextEntry::make('email'),
@@ -53,19 +53,19 @@ class BillingCustomerResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('team.name')
-                    ->label('Team')
+                TextColumn::make('user.name')
+                    ->label('Customer')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('provider')
+                TextColumn::make('provider')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('provider_id')
+                TextColumn::make('provider_id')
                     ->label('Provider ID')
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('email')
+                TextColumn::make('email')
                     ->searchable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),

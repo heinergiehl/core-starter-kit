@@ -12,7 +12,7 @@ class BillingPlanServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new BillingPlanService();
+        $this->service = new BillingPlanService;
     }
 
     public function test_providers_returns_array_of_strings(): void

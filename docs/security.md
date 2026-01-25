@@ -15,10 +15,9 @@ This document is a practical checklist for securing the SaaS kit in production.
 ---
 
 ## 2) Authorization (RBAC)
-- Enforce policies/gates on every team-scoped action
+- Enforce policies/gates on every privileged action
 - Ensure Filament resources/pages also enforce authorization
-- Never trust client input for `team_id`; derive from current team context
-- Validate role changes and invitation flows carefully
+- Never trust client input for `user_id`; derive from auth context
 
 ---
 
@@ -32,20 +31,7 @@ This document is a practical checklist for securing the SaaS kit in production.
 
 ---
 
-## 4) Tenant security (if using tenancy)
-- Tenant resolution must be early middleware
-- Prevent tenant leaks with:
-  - tenant-aware route model binding
-  - global scopes
-  - policy checks comparing tenant_id
-- Custom domains:
-  - require verification (DNS TXT or HTTP token)
-  - protect against domain takeover on changes
-  - keep a history/audit log (recommended)
-
----
-
-## 5) Admin panel hardening
+## 4) Admin panel hardening
 - Use a separate admin role or guard
 - Restrict access by email domain or allowlist (optional)
 - Log privileged actions
@@ -53,7 +39,7 @@ This document is a practical checklist for securing the SaaS kit in production.
 
 ---
 
-## 6) Data protection
+## 5) Data protection
 - Encrypt sensitive columns where appropriate
 - Store backups and test restores regularly
 - Apply retention policies for PII
@@ -61,7 +47,7 @@ This document is a practical checklist for securing the SaaS kit in production.
 
 ---
 
-## 7) File uploads
+## 6) File uploads
 - Validate file size and MIME type
 - Store uploads in a private disk when possible
 - Serve via signed URLs for private content (optional)
@@ -69,7 +55,7 @@ This document is a practical checklist for securing the SaaS kit in production.
 
 ---
 
-## 8) Secrets management
+## 7) Secrets management
 - Provider secrets in env vars only
 - Never store secrets in DB
 - Rotate secrets regularly (document rotation steps)
@@ -77,21 +63,21 @@ This document is a practical checklist for securing the SaaS kit in production.
 
 ---
 
-## 9) Logging and monitoring
+## 8) Logging and monitoring
 - Do not log full webhook payloads if they include sensitive data (mask fields)
 - Avoid logging secrets, tokens, credit card data
 - Monitor failed webhooks, queue failures, and login abuse
 
 ---
 
-## 10) Dependencies and updates
+## 9) Dependencies and updates
 - Run `composer audit` and keep dependencies current
 - Track security advisories
 - Use `UPGRADING.md` for safe updates
 
 ---
 
-## 11) Production checklist (minimum)
+## 10) Production checklist (minimum)
 - `APP_DEBUG=false`
 - HTTPS enabled
 - Queue workers running

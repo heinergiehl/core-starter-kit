@@ -14,10 +14,10 @@ return new class extends Migration
         Schema::table('plans', function (Blueprint $table) {
             // Drop the existing foreign key constraint
             $table->dropForeign(['product_id']);
-            
+
             // Make product_id nullable
             $table->foreignId('product_id')->nullable()->change();
-            
+
             // Re-add foreign key with nullOnDelete
             $table->foreign('product_id')
                 ->references('id')
@@ -34,10 +34,10 @@ return new class extends Migration
         Schema::table('plans', function (Blueprint $table) {
             // Drop the nullable foreign key
             $table->dropForeign(['product_id']);
-            
+
             // Make product_id required again
             $table->foreignId('product_id')->nullable(false)->change();
-            
+
             // Re-add foreign key with cascadeOnDelete
             $table->foreign('product_id')
                 ->references('id')

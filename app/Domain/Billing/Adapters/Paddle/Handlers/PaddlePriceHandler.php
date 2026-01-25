@@ -28,7 +28,7 @@ class PaddlePriceHandler implements PaddleWebhookHandler
 
     public function handle(WebhookEvent $event, array $data): void
     {
-        if (!config('saas.billing.sync_catalog_via_webhooks', true)) {
+        if (! config('saas.billing.sync_catalog_via_webhooks', true)) {
             return;
         }
 
@@ -43,18 +43,18 @@ class PaddlePriceHandler implements PaddleWebhookHandler
         $priceId = data_get($data, 'id');
         $productId = data_get($data, 'product_id');
 
-        if (!$priceId) {
+        if (! $priceId) {
             return null;
         }
 
         $product = Product::query()
             ->whereHas('providerMappings', function ($q) use ($productId) {
                 $q->where('provider', 'paddle')
-                  ->where('provider_id', $productId);
+                    ->where('provider_id', $productId);
             })
             ->first();
 
-        if (!$product) {
+        if (! $product) {
             return null;
         }
 
@@ -70,12 +70,12 @@ class PaddlePriceHandler implements PaddleWebhookHandler
             ->where('provider_id', (string) $priceId)
             ->first();
 
-        if ($mapping && !$mapping->price && !config('saas.billing.allow_import_deleted', false)) {
+        if ($mapping && ! $mapping->price && ! config('saas.billing.allow_import_deleted', false)) {
             return null;
         }
 
         $status = data_get($data, 'status', 'active');
-        if (!$mapping && $status !== 'active') {
+        if (! $mapping && $status !== 'active') {
             return null;
         }
 
@@ -93,6 +93,7 @@ class PaddlePriceHandler implements PaddleWebhookHandler
 
         if ($mapping) {
             $mapping->price->update($priceData);
+
             return $mapping->price;
         }
 

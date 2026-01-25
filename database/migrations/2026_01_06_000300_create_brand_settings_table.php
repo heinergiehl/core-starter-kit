@@ -10,7 +10,6 @@ return new class extends Migration
     {
         Schema::create('brand_settings', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('team_id')->nullable()->constrained()->cascadeOnDelete();
             $table->string('app_name')->nullable();
             $table->string('logo_path')->nullable();
             $table->string('color_primary')->nullable();
@@ -19,8 +18,6 @@ return new class extends Migration
             $table->string('color_bg')->nullable();
             $table->string('color_fg')->nullable();
             $table->timestamps();
-
-            $table->unique(['team_id']);
         });
     }
 

@@ -14,7 +14,7 @@ class BillingProviderManager
     {
         $enabled = config('saas.billing.providers', []);
 
-        if (!in_array(strtolower($provider), $enabled, true)) {
+        if (! in_array(strtolower($provider), $enabled, true)) {
             throw new RuntimeException("Billing provider [{$provider}] is not enabled.");
         }
 

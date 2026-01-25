@@ -10,20 +10,25 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class FeatureRequestResource extends Resource
 {
     protected static ?string $model = FeatureRequest::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-light-bulb';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-light-bulb';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Product Management';
+    protected static string|\UnitEnum|null $navigationGroup = 'Product Management';
 
     protected static ?string $navigationLabel = 'Roadmap';
 
@@ -35,25 +40,23 @@ class FeatureRequestResource extends Resource
             ->schema([
                 Section::make('Request')
                     ->schema([
-                        Forms\Components\TextInput::make('title')
+                        TextInput::make('title')
                             ->required()
                             ->maxLength(120),
-                        Forms\Components\TextInput::make('slug')
+                        TextInput::make('slug')
                             ->disabled(),
-                        Forms\Components\Textarea::make('description')
+                        Textarea::make('description')
                             ->rows(4),
-                        Forms\Components\TextInput::make('category')
-                            ->maxLength(80),
-                        Forms\Components\Select::make('status')
-                            ->options([
-                                'planned' => 'Planned',
-                                'in_progress' => 'In progress',
-                                'complete' => 'Complete',
-                            ])
+                        Select::make('category')
+                            ->options(\App\Enums\FeatureCategory::class)
+                            ->searchable()
                             ->required(),
-                        Forms\Components\Toggle::make('is_public')
+                        Select::make('status')
+                            ->options(\App\Enums\FeatureStatus::class)
+                            ->required(),
+                        Toggle::make('is_public')
                             ->label('Public'),
-                        Forms\Components\DateTimePicker::make('released_at')
+                        DateTimePicker::make('released_at')
                             ->label('Released at'),
                     ])
                     ->columns(2),
@@ -64,21 +67,21 @@ class FeatureRequestResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('title')
+                TextColumn::make('title')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('category')
+                TextColumn::make('category')
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('votes_count')
+                TextColumn::make('votes_count')
                     ->label('Votes')
                     ->sortable(),
-                Tables\Columns\IconColumn::make('is_public')
+                IconColumn::make('is_public')
                     ->label('Public')
                     ->boolean(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),

@@ -21,7 +21,7 @@ class RssFeedTest extends TestCase
             'slug' => 'architecture-update',
             'excerpt' => 'Domain-first improvements.',
             'body_markdown' => '## Notes',
-            'is_published' => true,
+            'status' => \App\Enums\PostStatus::Published,
             'published_at' => now(),
         ]);
 

@@ -21,8 +21,6 @@ class Product extends Model
         'description',
         'summary',
         'type',
-        'seat_based',
-        'max_seats',
         'is_featured',
         'features',
         'entitlements',
@@ -31,9 +29,7 @@ class Product extends Model
 
     protected $casts = [
         'is_active' => 'bool',
-        'seat_based' => 'bool',
         'is_featured' => 'bool',
-        'max_seats' => 'int',
         'features' => 'array',
         'entitlements' => 'array',
     ];

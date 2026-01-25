@@ -14,7 +14,7 @@ class PaddleCheckoutController
         $socialProviders = config('saas.auth.social_providers', ['google', 'github', 'linkedin']);
         $inlineItems = [];
 
-        if ($transactionId === '' && !empty($checkout['price_id'])) {
+        if ($transactionId === '' && ! empty($checkout['price_id'])) {
             $inlineItems[] = [
                 'priceId' => $checkout['price_id'],
                 'quantity' => (int) ($checkout['quantity'] ?? 1),

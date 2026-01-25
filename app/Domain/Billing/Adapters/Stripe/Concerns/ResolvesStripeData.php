@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 /**
  * Shared helper methods for Stripe webhook handlers.
  *
- * Provides common functionality for resolving team IDs, plan keys,
+ * Provides common functionality for resolving user IDs, plan keys,
  * and syncing billing customers across all Stripe webhook handlers.
  */
 trait ResolvesStripeData
@@ -24,52 +24,52 @@ trait ResolvesStripeData
     }
 
     /**
-     * Resolve team ID from webhook object metadata.
+     * Resolve user ID from webhook object metadata.
      */
-    protected function resolveTeamIdFromMetadata(array $object): ?int
+    protected function resolveUserIdFromMetadata(array $object): ?int
     {
-        $teamId = data_get($object, 'metadata.team_id');
+        $userId = data_get($object, 'metadata.user_id');
 
-        return $teamId ? (int) $teamId : null;
+        return $userId ? (int) $userId : null;
     }
 
     /**
-     * Resolve team ID from Stripe customer ID.
+     * Resolve user ID from Stripe customer ID.
      */
-    protected function resolveTeamIdFromCustomerId(?string $customerId): ?int
+    protected function resolveUserIdFromCustomerId(?string $customerId): ?int
     {
-        if (!$customerId) {
+        if (! $customerId) {
             return null;
         }
 
         // 1. Try local lookup
-        $teamId = BillingCustomer::query()
+        $userId = BillingCustomer::query()
             ->where('provider', $this->provider())
             ->where('provider_id', $customerId)
-            ->value('team_id');
+            ->value('user_id');
 
-        if ($teamId) {
-            return $teamId;
+        if ($userId) {
+            return $userId;
         }
 
         // 2. Fallback: Fetch from Stripe to fix race conditions
         // (If Invoice webhook arrives before Checkout webhook)
         try {
             $secret = config('services.stripe.secret');
-            if (!$secret) {
+            if (! $secret) {
                 return null;
             }
 
             $stripe = new \Stripe\StripeClient($secret);
             $customer = $stripe->customers->retrieve($customerId);
 
-            if ($customer && isset($customer->metadata['team_id'])) {
-                $teamId = (int) $customer->metadata['team_id'];
-                
-                // Self-heal: Create the mapping immediately
-                $this->syncBillingCustomer($teamId, $customerId, $customer->email);
+            if ($customer && isset($customer->metadata['user_id'])) {
+                $userId = (int) $customer->metadata['user_id'];
 
-                return $teamId;
+                // Self-heal: Create the mapping immediately
+                $this->syncBillingCustomer($userId, $customerId, $customer->email);
+
+                return $userId;
             }
         } catch (\Throwable $e) {
             // Settle for null if API fails
@@ -80,18 +80,18 @@ trait ResolvesStripeData
     }
 
     /**
-     * Resolve team ID from Stripe subscription ID.
+     * Resolve user ID from Stripe subscription ID.
      */
-    protected function resolveTeamIdFromSubscriptionId(?string $subscriptionId): ?int
+    protected function resolveUserIdFromSubscriptionId(?string $subscriptionId): ?int
     {
-        if (!$subscriptionId) {
+        if (! $subscriptionId) {
             return null;
         }
 
         return Subscription::query()
             ->where('provider', $this->provider())
             ->where('provider_id', $subscriptionId)
-            ->value('team_id');
+            ->value('user_id');
     }
 
     /**
@@ -110,7 +110,7 @@ trait ResolvesStripeData
             ?? data_get($object, 'line_items.data.0.price.id')
             ?? data_get($object, 'plan.id');
 
-        if (!$priceId) {
+        if (! $priceId) {
             return null;
         }
 
@@ -131,7 +131,7 @@ trait ResolvesStripeData
      */
     protected function timestampToDateTime(?int $timestamp): ?Carbon
     {
-        if (!$timestamp) {
+        if (! $timestamp) {
             return null;
         }
 
@@ -141,22 +141,23 @@ trait ResolvesStripeData
     /**
      * Sync or create billing customer record.
      */
-    protected function syncBillingCustomer(int $teamId, ?string $providerId, ?string $email): void
+    protected function syncBillingCustomer(int $userId, ?string $providerId, ?string $email): void
     {
         $payload = [
-            'team_id' => $teamId,
+            'user_id' => $userId,
             'provider' => $this->provider(),
             'provider_id' => $providerId,
             'email' => $email,
         ];
 
         $customer = BillingCustomer::query()
-            ->where('team_id', $teamId)
+            ->where('user_id', $userId)
             ->where('provider', $this->provider())
             ->first();
 
         if ($customer) {
             $customer->update(array_filter($payload, fn ($value) => $value !== null));
+
             return;
         }
 

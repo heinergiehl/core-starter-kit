@@ -15,7 +15,7 @@ class SaasStatsWidget extends BaseWidget
         $stats = app(SaasStatsService::class)->getMetrics();
 
         return [
-            Stat::make('Monthly Recurring Revenue', '$' . number_format($stats['mrr'], 2))
+            Stat::make('Monthly Recurring Revenue', '$'.number_format($stats['mrr'], 2))
                 ->description('MRR')
                 ->descriptionIcon('heroicon-m-arrow-trending-up')
                 ->color('success')
@@ -26,12 +26,12 @@ class SaasStatsWidget extends BaseWidget
                 ->descriptionIcon('heroicon-m-users')
                 ->color('primary'),
 
-            Stat::make('Churn Rate', $stats['churn_rate'] . '%')
+            Stat::make('Churn Rate', $stats['churn_rate'].'%')
                 ->description('30-day churn')
                 ->descriptionIcon('heroicon-m-arrow-trending-down')
                 ->color($stats['churn_rate'] > 5 ? 'danger' : 'success'),
 
-            Stat::make('ARPU', '$' . number_format($stats['arpu'], 2))
+            Stat::make('ARPU', '$'.number_format($stats['arpu'], 2))
                 ->description('Avg Revenue Per User')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('warning'),

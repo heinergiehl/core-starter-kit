@@ -8,19 +8,25 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 
 class AnnouncementResource extends Resource
 {
     protected static ?string $model = Announcement::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-megaphone';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-megaphone';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Content';
+    protected static string|\UnitEnum|null $navigationGroup = 'Content';
 
     protected static ?int $navigationSort = 10;
 
@@ -28,17 +34,17 @@ class AnnouncementResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('title')
+                TextInput::make('title')
                     ->required()
                     ->maxLength(255),
-                
-                Forms\Components\Textarea::make('message')
+
+                Textarea::make('message')
                     ->required()
                     ->rows(3)
                     ->maxLength(1000)
                     ->columnSpanFull(),
 
-                Forms\Components\Select::make('type')
+                Select::make('type')
                     ->options([
                         'info' => 'Info (Blue)',
                         'success' => 'Success (Green)',
@@ -48,25 +54,25 @@ class AnnouncementResource extends Resource
                     ->default('info')
                     ->required(),
 
-                Forms\Components\Toggle::make('is_active')
+                Toggle::make('is_active')
                     ->label('Active')
                     ->default(true),
 
-                Forms\Components\Toggle::make('is_dismissible')
+                Toggle::make('is_dismissible')
                     ->label('Dismissible')
                     ->default(true),
 
-                Forms\Components\DateTimePicker::make('starts_at')
+                DateTimePicker::make('starts_at')
                     ->label('Start Date'),
 
-                Forms\Components\DateTimePicker::make('ends_at')
+                DateTimePicker::make('ends_at')
                     ->label('End Date'),
 
-                Forms\Components\TextInput::make('link_text')
+                TextInput::make('link_text')
                     ->label('Button Text')
                     ->maxLength(50),
 
-                Forms\Components\TextInput::make('link_url')
+                TextInput::make('link_url')
                     ->label('Button URL')
                     ->url()
                     ->maxLength(255),
@@ -78,11 +84,11 @@ class AnnouncementResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('title')
+                TextColumn::make('title')
                     ->searchable()
                     ->limit(40),
 
-                Tables\Columns\TextColumn::make('type')
+                TextColumn::make('type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'info' => 'primary',
@@ -92,31 +98,30 @@ class AnnouncementResource extends Resource
                         default => 'gray',
                     }),
 
-                Tables\Columns\IconColumn::make('is_active')
+                IconColumn::make('is_active')
                     ->boolean()
                     ->label('Active'),
 
-                Tables\Columns\TextColumn::make('starts_at')
+                TextColumn::make('starts_at')
                     ->dateTime()
                     ->sortable()
                     ->placeholder('Immediate'),
 
-                Tables\Columns\TextColumn::make('ends_at')
+                TextColumn::make('ends_at')
                     ->dateTime()
                     ->sortable()
                     ->placeholder('Never'),
 
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                Tables\Filters\TernaryFilter::make('is_active')
+                TernaryFilter::make('is_active')
                     ->label('Active'),
             ])
             ->headerActions([
-                CreateAction::make(),
             ])
             ->actions([
                 EditAction::make(),

@@ -3,7 +3,7 @@
 namespace Database\Factories\Domain\Billing;
 
 use App\Domain\Billing\Models\Subscription;
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -16,11 +16,11 @@ class SubscriptionFactory extends Factory
     public function definition(): array
     {
         return [
-            'team_id' => Team::factory(),
-            'provider' => fake()->randomElement(['stripe', 'lemonsqueezy', 'paddle']),
-            'provider_id' => 'sub_' . fake()->uuid(),
+            'user_id' => User::factory(),
+            'provider' => fake()->randomElement(\App\Enums\BillingProvider::class),
+            'provider_id' => 'sub_'.fake()->uuid(),
             'plan_key' => 'pro-monthly',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active,
             'quantity' => 1,
             'trial_ends_at' => null,
             'renews_at' => now()->addMonth(),
@@ -33,7 +33,7 @@ class SubscriptionFactory extends Factory
     public function active(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active,
             'canceled_at' => null,
         ]);
     }
@@ -41,7 +41,7 @@ class SubscriptionFactory extends Factory
     public function canceled(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => 'canceled',
+            'status' => \App\Enums\SubscriptionStatus::Canceled,
             'canceled_at' => now(),
         ]);
     }
@@ -49,7 +49,7 @@ class SubscriptionFactory extends Factory
     public function trialing(): static
     {
         return $this->state(fn (array $attributes) => [
-            'status' => 'trialing',
+            'status' => \App\Enums\SubscriptionStatus::Trialing,
             'trial_ends_at' => now()->addDays(14),
         ]);
     }

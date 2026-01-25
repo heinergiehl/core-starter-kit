@@ -6,7 +6,6 @@ use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
-
 use Stripe\StripeClient;
 
 /**
@@ -18,6 +17,10 @@ use Stripe\StripeClient;
 class StripeSubscriptionHandler implements StripeWebhookHandler
 {
     use ResolvesStripeData;
+
+    public function __construct(
+        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService
+    ) {}
 
     /**
      * {@inheritDoc}
@@ -50,7 +53,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $providerId = data_get($object, 'id');
         $customerId = data_get($object, 'customer');
 
-        if (!$providerId) {
+        if (! $providerId) {
             return;
         }
 
@@ -61,10 +64,10 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
 
         $previousPlanKey = $existingSubscription?->plan_key;
 
-        $teamId = $this->resolveTeamIdFromMetadata($object)
-            ?? $this->resolveTeamIdFromCustomerId($customerId);
+        $userId = $this->resolveUserIdFromMetadata($object)
+            ?? $this->resolveUserIdFromCustomerId($customerId);
 
-        if (!$teamId) {
+        if (! $userId) {
             return;
         }
 
@@ -76,7 +79,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $canceledAt = $this->timestampToDateTime(data_get($object, 'canceled_at'));
 
         $endsAt = $this->timestampToDateTime(data_get($object, 'ended_at'));
-        if (!$endsAt && data_get($object, 'cancel_at_period_end') && $renewsAt) {
+        if (! $endsAt && data_get($object, 'cancel_at_period_end') && $renewsAt) {
             $endsAt = $renewsAt;
         }
 
@@ -85,33 +88,30 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $metadata['stripe_price_id'] = data_get($object, 'items.data.0.price.id');
         $metadata['stripe_status'] = $status;
         $metadata['event_type'] = $eventType;
+        $metadata['items'] = data_get($object, 'items');
+        $metadata['currency'] = data_get($object, 'currency');
 
-        $subscription = Subscription::query()->updateOrCreate(
-            [
-                'provider' => $this->provider(),
-                'provider_id' => $providerId,
-            ],
-            [
-                'team_id' => $teamId,
-                'plan_key' => $planKey,
-                'status' => $status,
-                'quantity' => max($quantity, 1),
+        $this->subscriptionService->syncFromProvider(
+            provider: $this->provider(),
+            providerId: $providerId,
+            userId: $userId,
+            planKey: $planKey,
+            status: $status,
+            quantity: max($quantity, 1),
+            dates: [
                 'trial_ends_at' => $trialEnd,
                 'renews_at' => $renewsAt,
                 'ends_at' => $endsAt,
                 'canceled_at' => $canceledAt,
-                'metadata' => $metadata,
-            ]
+            ],
+            metadata: $metadata
         );
 
-        $this->syncBillingCustomer($teamId, $customerId, data_get($object, 'customer_email'));
+        $this->syncBillingCustomer($userId, $customerId, data_get($object, 'customer_email'));
 
-        // Dispatch Notifications
-        $team = $subscription->team;
-        $owner = $team?->owner;
-
-        if ($owner) {
-             // Notifications are now handled by SubscriptionObserver
+        if ($status === 'active') {
+            app(\App\Domain\Billing\Services\CheckoutService::class)
+                ->verifyUserAfterPayment($userId);
         }
     }
 
@@ -122,7 +122,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
     {
         $secret = config('services.stripe.secret');
 
-        if (!$secret) {
+        if (! $secret) {
             return;
         }
 
@@ -140,7 +140,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
 
     private function resolvePlanName(?string $planKey): string
     {
-        if (!$planKey) {
+        if (! $planKey) {
             return 'subscription';
         }
 

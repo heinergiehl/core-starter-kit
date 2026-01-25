@@ -2,19 +2,19 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Content\Models\BlogCategory;
-use App\Domain\Content\Models\BlogPost;
-use App\Domain\Content\Models\BlogTag;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
-use App\Domain\Organization\Enums\TeamRole;
-use App\Domain\Organization\Models\Team;
-use App\Domain\Tenancy\Services\TenantProvisioner;
+use App\Domain\Content\Models\BlogCategory;
+use App\Domain\Content\Models\BlogPost;
+use App\Domain\Content\Models\BlogTag;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Str;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
@@ -25,81 +25,107 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $admin = User::factory()->create([
+        $adminData = User::factory()->make([
             'name' => 'Admin User',
             'email' => 'admin@example.com',
             'is_admin' => true,
             'email_verified_at' => now(),
-        ]);
+        ])->toArray();
 
-        $adminTeam = Team::create([
-            'name' => 'Platform Admins',
-            'slug' => 'platform-admins',
-            'owner_id' => $admin->id,
-        ]);
-        app(TenantProvisioner::class)->syncDomainsForTeam($adminTeam);
+        $admin = User::firstOrCreate(
+            ['email' => 'admin@example.com'],
+            $adminData
+        );
+        if (! $admin->password) {
+            $admin->update(['password' => 'password']);
+        }
 
-        $adminTeam->members()->attach($admin->id, [
-            'role' => TeamRole::Owner->value,
-            'joined_at' => now(),
-        ]);
-
-        $admin->update(['current_team_id' => $adminTeam->id]);
-
-        $customer = User::factory()->create([
+        $customerData = User::factory()->make([
             'name' => 'Test Customer',
             'email' => 'test@example.com',
             'email_verified_at' => now(),
+        ])->toArray();
+
+        $customer = User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            $customerData
+        );
+        if (! $customer->password) {
+            $customer->update(['password' => 'password']);
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        $permissions = [
+            'users.view',
+            'users.create',
+            'users.update',
+            'users.delete',
+            'users.impersonate',
+            'roles.view',
+            'roles.create',
+            'roles.update',
+            'roles.delete',
+            'permissions.view',
+            'permissions.create',
+            'permissions.update',
+            'permissions.delete',
+        ];
+
+        foreach ($permissions as $permission) {
+            Permission::firstOrCreate([
+                'name' => $permission,
+                'guard_name' => 'web',
+            ]);
+        }
+
+        $adminRole = Role::firstOrCreate([
+            'name' => 'admin',
+            'guard_name' => 'web',
         ]);
 
-        $customerTeam = Team::create([
-            'name' => 'Acme Studio',
-            'slug' => 'acme-studio',
-            'owner_id' => $customer->id,
-        ]);
-        app(TenantProvisioner::class)->syncDomainsForTeam($customerTeam);
+        $adminRole->syncPermissions($permissions);
+        $admin->syncRoles([$adminRole]);
 
-        $customerTeam->members()->attach($customer->id, [
-            'role' => TeamRole::Owner->value,
-            'joined_at' => now(),
-        ]);
-
-        $customer->update(['current_team_id' => $customerTeam->id]);
-
-        $category = BlogCategory::create([
-            'name' => 'Product Updates',
+        $category = BlogCategory::firstOrCreate([
             'slug' => Str::slug('Product Updates'),
+        ], [
+            'name' => 'Product Updates',
         ]);
 
-        $tag = BlogTag::create([
-            'name' => 'Release',
+        $tag = BlogTag::firstOrCreate([
             'slug' => Str::slug('Release'),
+        ], [
+            'name' => 'Release',
         ]);
 
-        $post = BlogPost::create([
-            'title' => 'Welcome to SaaS Kit',
+        $post = BlogPost::firstOrCreate([
             'slug' => 'welcome-to-saas-kit',
+        ], [
+            'title' => 'Welcome to SaaS Kit',
             'excerpt' => 'A quick tour of the architecture, billing model, and the admin experience.',
             'body_markdown' => <<<'MD'
 # Shipping faster
 
-This starter ships with teams, billing, and a clear domain map.
+This starter ships with B2C billing, auth, and a clear domain map.
 
 ## What is inside
 - SSR-first UI with Filament
 - Webhook-driven billing
-- Team-scoped entitlements
+- Customer-scoped entitlements
 
 ## Next steps
 Wire in your billing provider IDs and start building.
 MD,
-            'is_published' => true,
+            'status' => \App\Enums\PostStatus::Published,
             'published_at' => now(),
             'author_id' => $admin->id,
             'category_id' => $category->id,
         ]);
 
-        $post->tags()->attach($tag->id);
+        $post->tags()->syncWithoutDetaching([$tag->id]);
+
+        $this->call(BlogPostSeeder::class);
 
         if (app()->environment(['local', 'testing'])) {
             $this->seedBillingCatalog();
@@ -114,11 +140,9 @@ MD,
                 'summary' => 'Solo founders validating demand.',
                 'description' => 'Launch quickly with the essentials.',
                 'type' => 'subscription',
-                'seat_based' => false,
-                'max_seats' => 3,
                 'is_featured' => false,
                 'features' => [
-                    'Up to 3 team members',
+                    'Single-account access',
                     '2 GB storage',
                     'Email support',
                     'Core analytics',
@@ -128,19 +152,17 @@ MD,
                     'support_sla' => 'community',
                 ],
             ],
-            'team' => [
-                'name' => 'Team',
-                'summary' => 'Seat-based billing for growing teams.',
-                'description' => 'Scale seats with predictable billing.',
+            'growth' => [
+                'name' => 'Growth',
+                'summary' => 'Great for growing products.',
+                'description' => 'Scale features as you grow.',
                 'type' => 'subscription',
-                'seat_based' => true,
-                'max_seats' => null,
                 'is_featured' => true,
                 'features' => [
-                    'Seat-based pricing that scales',
+                    'Flexible monthly billing',
                     '10 GB storage',
-                    'Audit log + team roles',
                     'Priority email support',
+                    'Advanced analytics',
                 ],
                 'entitlements' => [
                     'storage_limit_mb' => 10240,
@@ -149,15 +171,13 @@ MD,
             ],
             'lifetime' => [
                 'name' => 'Lifetime',
-                'summary' => 'One-time purchase for indie teams.',
+                'summary' => 'One-time purchase for solo builders.',
                 'description' => 'Pay once, keep updates.',
                 'type' => 'one_time',
-                'seat_based' => false,
-                'max_seats' => 5,
                 'is_featured' => false,
                 'features' => [
                     'Pay once, keep updates',
-                    'Up to 5 team members',
+                    'Single-account access',
                     '5 GB storage',
                     'Priority bug fixes',
                 ],
@@ -178,8 +198,6 @@ MD,
                     'summary' => $definition['summary'],
                     'description' => $definition['description'],
                     'type' => $definition['type'],
-                    'seat_based' => $definition['seat_based'],
-                    'max_seats' => $definition['max_seats'],
                     'is_featured' => $definition['is_featured'],
                     'features' => $definition['features'],
                     'entitlements' => $definition['entitlements'],
@@ -191,8 +209,8 @@ MD,
         $priceDefinitions = [
             ['plan' => 'starter', 'key' => 'monthly', 'label' => 'Monthly', 'interval' => 'month', 'amount' => 2900],
             ['plan' => 'starter', 'key' => 'yearly', 'label' => 'Yearly', 'interval' => 'year', 'amount' => 29000],
-            ['plan' => 'team', 'key' => 'monthly', 'label' => 'Monthly', 'interval' => 'month', 'amount' => 5900, 'has_trial' => true, 'trial_interval' => 'day', 'trial_interval_count' => 14],
-            ['plan' => 'team', 'key' => 'yearly', 'label' => 'Yearly', 'interval' => 'year', 'amount' => 59000],
+            ['plan' => 'growth', 'key' => 'monthly', 'label' => 'Monthly', 'interval' => 'month', 'amount' => 5900, 'has_trial' => true, 'trial_interval' => 'day', 'trial_interval_count' => 14],
+            ['plan' => 'growth', 'key' => 'yearly', 'label' => 'Yearly', 'interval' => 'year', 'amount' => 59000],
             ['plan' => 'lifetime', 'key' => 'lifetime', 'label' => 'One-time', 'interval' => 'once', 'amount' => 49900],
         ];
 
@@ -201,7 +219,7 @@ MD,
         foreach ($priceDefinitions as $definition) {
             $product = $products[$definition['plan']] ?? null;
 
-            if (!$product) {
+            if (! $product) {
                 continue;
             }
 
@@ -217,7 +235,7 @@ MD,
                     'interval_count' => 1,
                     'currency' => 'USD',
                     'amount' => $definition['amount'],
-                    'type' => 'flat',
+                    'type' => $definition['interval'] === 'once' ? 'one_time' : 'recurring',
                     'has_trial' => (bool) ($definition['has_trial'] ?? false),
                     'trial_interval' => $definition['trial_interval'] ?? null,
                     'trial_interval_count' => $definition['trial_interval_count'] ?? null,
@@ -250,7 +268,7 @@ MD,
                 'type' => 'percent',
                 'amount' => 20,
                 'max_redemptions' => 200,
-                'plan_keys' => ['starter', 'team'],
+                'plan_keys' => ['starter', 'growth'],
                 'starts_at' => now()->subDay(),
                 'ends_at' => now()->addDays(30),
             ],
@@ -276,7 +294,7 @@ MD,
                 'type' => 'percent',
                 'amount' => 15,
                 'max_redemptions' => 150,
-                'plan_keys' => ['team'],
+                'plan_keys' => ['growth'],
                 'starts_at' => now()->subDay(),
                 'ends_at' => now()->addDays(30),
             ],

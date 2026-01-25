@@ -28,7 +28,7 @@ class PaddleProductHandler implements PaddleWebhookHandler
 
     public function handle(WebhookEvent $event, array $data): void
     {
-        if (!config('saas.billing.sync_catalog_via_webhooks', true)) {
+        if (! config('saas.billing.sync_catalog_via_webhooks', true)) {
             return;
         }
 
@@ -43,7 +43,7 @@ class PaddleProductHandler implements PaddleWebhookHandler
         $productId = data_get($data, 'id');
         $name = data_get($data, 'name');
 
-        if (!$productId) {
+        if (! $productId) {
             return null;
         }
 
@@ -54,12 +54,12 @@ class PaddleProductHandler implements PaddleWebhookHandler
             ->where('provider_id', (string) $productId)
             ->first();
 
-        if ($mapping && !$mapping->product && !config('saas.billing.allow_import_deleted', false)) {
+        if ($mapping && ! $mapping->product && ! config('saas.billing.allow_import_deleted', false)) {
             return null;
         }
 
         $status = data_get($data, 'status', 'active');
-        if (!$mapping && $status !== 'active') {
+        if (! $mapping && $status !== 'active') {
             return null;
         }
 
@@ -80,7 +80,7 @@ class PaddleProductHandler implements PaddleWebhookHandler
         // Ensure unique key
         $existingProduct = Product::where('key', $key)->first();
         if ($existingProduct) {
-            $key = $key . '-' . Str::random(4);
+            $key = $key.'-'.Str::random(4);
         }
 
         $productData['key'] = $key;

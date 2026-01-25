@@ -16,7 +16,7 @@ return [
     'hero_badge' => 'v1.0 is now live',
     'hero_title' => 'The boilerplate for',
     'hero_title_highlight' => 'high-ambition SaaS',
-    'hero_description' => 'Stop wasting weeks on billing, auth, and teams. Start with a "Senior Dev" quality foundation.',
+    'hero_description' => 'Stop wasting weeks on billing, auth, and onboarding. Start with a "Senior Dev" quality foundation.',
     'hero_tagline' => 'Domain-driven, event-sourced, upgrade-ready.',
     'hero_cta' => 'Launch Console',
     'hero_cta_secondary' => 'View Demo',

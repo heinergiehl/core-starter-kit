@@ -17,13 +17,12 @@ class WelcomeMail extends Mailable
 
     public function __construct(
         public readonly object $user,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Welcome to ' . config('app.name') . '!',
+            subject: 'Welcome to '.config('app.name').'!',
         );
     }
 

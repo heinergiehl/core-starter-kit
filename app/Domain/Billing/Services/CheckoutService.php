@@ -8,10 +8,7 @@ use App\Domain\Billing\Adapters\PaddleAdapter;
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Subscription;
-use App\Domain\Organization\Models\Team;
-use App\Domain\Organization\Services\TeamProvisioner;
 use App\Models\User;
-use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
@@ -22,132 +19,97 @@ use Throwable;
  * Orchestrates the checkout flow for all billing providers.
  *
  * Responsibilities:
- * - User and team provisioning for guest checkouts
+ * - User provisioning for guest checkouts
  * - Paddle transaction creation with error handling
  * - Session data management for inline checkouts
  */
 class CheckoutService
 {
     public function __construct(
-        private readonly BillingPlanService $plans,
-        private readonly BillingProviderManager $providers,
-        private readonly EntitlementService $entitlements,
-        private readonly DiscountService $discounts,
-        private readonly TeamProvisioner $teamProvisioner,
         private readonly PaddleAdapter $paddleAdapter,
     ) {}
 
     /**
      * Resolve or create a user for checkout.
      *
-     * @return array{user: User, team: Team|null, created: bool}|RedirectResponse
+     * @return array{user: User, created: bool}|RedirectResponse
      */
-    public function resolveOrCreateUser(Request $request, ?string $email, ?string $name): array|RedirectResponse
+    /**
+     * Resolve or create a user for checkout.
+     *
+     * @return array{user: User, created: bool}
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     * @throws \App\Domain\Billing\Exceptions\BillingException
+     */
+    public function resolveOrCreateUser(Request $request, ?string $email, ?string $name): array
     {
         $user = $request->user();
-        $team = $user?->currentTeam;
 
         if ($user) {
-            return ['user' => $user, 'team' => $team, 'created' => false];
+            return ['user' => $user, 'created' => false];
         }
 
-        if (!$email) {
-            // Don't use back() - it goes to pricing page
-            return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
-                ->withErrors(['email' => __('Email is required.')])
-                ->withInput();
+        if (! $email) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'email' => __('Email is required.'),
+            ]);
         }
 
         try {
             return \Illuminate\Support\Facades\DB::transaction(function () use ($email, $name) {
                 $user = User::create([
-                    'name' => !empty($name) ? $name : $this->nameFromEmail($email),
+                    'name' => ! empty($name) ? $name : $this->nameFromEmail($email),
                     'email' => $email,
                     'password' => Str::random(32),
-                    // Mark email as verified for checkout users
-                    // They'll prove ownership by completing payment
-                    'email_verified_at' => now(),
-                    // Mark onboarding as complete for checkout users
-                    // They should go straight to dashboard after payment
-                    'onboarding_completed_at' => now(),
                 ]);
 
-                $team = $this->teamProvisioner->createDefaultTeam($user);
+                event(new \Illuminate\Auth\Events\Registered($user));
 
                 // Log in the user so they're authenticated when checkout completes
                 \Illuminate\Support\Facades\Auth::login($user);
 
-                // Send password reset link so they can set their password
-                // Don't fire Registered event - it triggers verification email
-                Password::sendResetLink(['email' => $user->email]);
-
-                return ['user' => $user, 'team' => $team, 'created' => true];
+                return ['user' => $user, 'created' => true];
             });
         } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-            // User already exists - redirect to login
-            return redirect()->route('login')
-                ->with('info', __('An account with this email already exists. Please log in to continue.'))
-                ->with('intended', $request->fullUrl());
+            throw \App\Domain\Billing\Exceptions\BillingException::userAlreadyExists($email);
         } catch (\Throwable $e) {
-             // Fallback for other potential race conditions effectively caught by Unique key
-             if (Str::contains($e->getMessage(), 'Integrity constraint violation')) {
-                return redirect()->route('login')
-                    ->with('info', __('An account with this email already exists. Please log in to continue.'))
-                    ->with('intended', $request->fullUrl());
-             }
-             throw $e;
+            // Fallback for other potential race conditions effectively caught by Unique key
+            if (Str::contains($e->getMessage(), 'Integrity constraint violation')) {
+                throw \App\Domain\Billing\Exceptions\BillingException::userAlreadyExists($email);
+            }
+            throw $e;
         }
     }
 
     /**
-     * Resolve the team for checkout, auto-selecting if only one.
-     *
-     * @return Team|RedirectResponse
+     * Check if user already has an active subscription.
      */
-    public function resolveTeam(User $user, ?Team $team): Team|RedirectResponse
-    {
-        if ($team) {
-            return $team;
-        }
-
-        $teamIds = $user->teams()->pluck('teams.id');
-
-        if ($teamIds->count() === 1) {
-            $user->update(['current_team_id' => $teamIds->first()]);
-            return $user->fresh()->currentTeam;
-        }
-
-        return redirect()->route('teams.select');
-    }
-
-    /**
-     * Check if team already has an active subscription.
-     */
-    public function hasActiveSubscription(Team $team): bool
+    public function hasActiveSubscription(User $user): bool
     {
         return Subscription::query()
-            ->where('team_id', $team->id)
-            ->whereIn('status', ['active', 'trialing'])
+            ->where('user_id', $user->id)
+            ->whereIn('status', [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing])
             ->exists();
     }
 
     /**
-     * Check if team has any purchase (subscription OR one-time order).
-     * 
-     * This is used to prevent duplicate purchases - once a team has bought
+     * Check if user has any purchase (subscription OR one-time order).
+     *
+     * This is used to prevent duplicate purchases - once a user has bought
      * either a subscription or a one-time product, they cannot purchase again.
      */
-    public function hasAnyPurchase(Team $team): bool
+    public function hasAnyPurchase(User $user): bool
     {
         // Check for active subscription
-        if ($this->hasActiveSubscription($team)) {
+        if ($this->hasActiveSubscription($user)) {
             return true;
         }
 
         // Check for any paid one-time order
         return \App\Domain\Billing\Models\Order::query()
-            ->where('team_id', $team->id)
-            ->whereIn('status', ['paid', 'completed'])
+            ->where('user_id', $user->id)
+            ->whereIn('status', [\App\Enums\OrderStatus::Paid, \App\Enums\OrderStatus::Completed])
             ->exists();
     }
 
@@ -157,7 +119,6 @@ class CheckoutService
      * @return string|RedirectResponse Transaction ID on success, RedirectResponse on failure
      */
     public function createPaddleTransaction(
-        ?Team $team,
         ?User $user,
         string $planKey,
         string $priceKey,
@@ -170,7 +131,6 @@ class CheckoutService
     ): string|RedirectResponse {
         try {
             return $this->paddleAdapter->createTransactionId(
-                $team,
                 $user,
                 $planKey,
                 $priceKey,
@@ -183,6 +143,7 @@ class CheckoutService
             );
         } catch (Throwable $exception) {
             report($exception);
+
             return $this->handleCheckoutError($exception);
         }
     }
@@ -203,7 +164,6 @@ class CheckoutService
         string $providerPriceId,
         string $transactionId,
         ?User $user = null,
-        ?Team $team = null,
         ?Discount $discount = null,
     ): array {
         $data = [
@@ -236,9 +196,8 @@ class CheckoutService
         }
 
         // Add custom data for webhook handling
-        if ($team && $user) {
+        if ($user) {
             $data['custom_data'] = array_filter([
-                'team_id' => $team->id,
                 'user_id' => $user->id,
                 'plan_key' => $planKey,
                 'price_key' => $priceKey,
@@ -250,14 +209,11 @@ class CheckoutService
         return $data;
     }
 
-
-
     /**
      * Create a checkout session for tracking the checkout flow.
      */
     public function createCheckoutSession(
         User $user,
-        Team $team,
         string $provider,
         string $planKey,
         string $priceKey,
@@ -266,7 +222,6 @@ class CheckoutService
     ): CheckoutSession {
         return CheckoutSession::create([
             'user_id' => $user->id,
-            'team_id' => $team->id,
             'provider' => $provider,
             'provider_session_id' => $providerSessionId,
             'plan_key' => $planKey,
@@ -285,9 +240,10 @@ class CheckoutService
         $successUrl = config('saas.billing.success_url');
         $cancelUrl = config('saas.billing.cancel_url');
 
-        if (!$successUrl) {
+        if (! $successUrl) {
             $successUrl = route('billing.processing', [
                 'session' => $session->uuid,
+                'sig' => $this->buildCheckoutSessionSignature($session),
             ], true);
 
             if ($provider === 'stripe') {
@@ -295,24 +251,62 @@ class CheckoutService
             }
         }
 
-        if (!$cancelUrl) {
+        if (! $cancelUrl) {
             $cancelUrl = route('pricing', [], true);
         }
 
         return ['success' => $successUrl, 'cancel' => $cancelUrl];
     }
 
-
-
-    /**
-     * Calculate quantity for checkout, considering seat-based plans.
-     */
-    public function calculateQuantity(array $plan, Team $team): int
+    public function verifyUserAfterPayment(int $userId): void
     {
-        if (!empty($plan['seat_based'])) {
-            return max(1, $this->entitlements->seatsInUse($team));
+        $user = User::find($userId);
+
+        if (! $user || $user->email_verified_at) {
+            return;
         }
 
+        $user->forceFill([
+            'email_verified_at' => now(),
+            'onboarding_completed_at' => $user->onboarding_completed_at ?? now(),
+        ])->save();
+
+        // Send a password reset link so the user can set their password.
+        Password::sendResetLink(['email' => $user->email]);
+    }
+
+    public function isValidCheckoutSessionSignature(CheckoutSession $session, ?string $signature): bool
+    {
+        if (! $signature) {
+            return false;
+        }
+
+        $expected = $this->buildCheckoutSessionSignature($session);
+
+        return hash_equals($expected, $signature);
+    }
+
+    private function buildCheckoutSessionSignature(CheckoutSession $session): string
+    {
+        $key = (string) config('app.key');
+        if (str_starts_with($key, 'base64:')) {
+            $key = base64_decode(substr($key, 7)) ?: '';
+        }
+
+        $payload = implode('|', [
+            $session->uuid,
+            $session->user_id,
+            $session->expires_at?->timestamp ?? 0,
+        ]);
+
+        return hash_hmac('sha256', $payload, $key);
+    }
+
+    /**
+     * Calculate quantity for checkout.
+     */
+    public function calculateQuantity(array $plan): int
+    {
         return 1;
     }
 
@@ -335,12 +329,9 @@ class CheckoutService
     {
         // Paddle-specific error translations
         $errorMappings = [
-            'transaction_checkout_not_enabled' =>
-                'Payment provider (Paddle) is not fully enabled. Please check your Paddle Dashboard > Verify Account.',
-            'forbidden' =>
-                'Paddle Authentication Failed. You might be using a Live API Key in Sandbox mode (or vice versa), or the Key lacks permissions. Please check your .env credentials.',
-            'transaction_default_checkout_url_not_set' =>
-                'Paddle Checkout Error: You must set a "Default Payment Link" in your Paddle Dashboard. Go to Checkout > Checkout Settings > Default Payment Link.',
+            'transaction_checkout_not_enabled' => 'Payment provider (Paddle) is not fully enabled. Please check your Paddle Dashboard > Verify Account.',
+            'forbidden' => 'Paddle Authentication Failed. You might be using a Live API Key in Sandbox mode (or vice versa), or the Key lacks permissions. Please check your .env credentials.',
+            'transaction_default_checkout_url_not_set' => 'Paddle Checkout Error: You must set a "Default Payment Link" in your Paddle Dashboard. Go to Checkout > Checkout Settings > Default Payment Link.',
         ];
 
         foreach ($errorMappings as $pattern => $userMessage) {
@@ -351,7 +342,7 @@ class CheckoutService
         }
 
         // Only show detailed errors in local environment
-        if (!app()->environment('local')) {
+        if (! app()->environment('local')) {
             $message = 'Checkout failed. Please try again or contact support.';
         }
 

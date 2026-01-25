@@ -11,8 +11,10 @@ use Stripe\StripeClient;
 class StripeCatalogPublishAdapter implements CatalogPublishAdapter
 {
     private StripeClient $client;
+
     /** @var array<string, object> */
     private array $productsByKey = [];
+
     /** @var array<string, object> */
     private array $pricesByLookupKey = [];
 
@@ -25,7 +27,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
     {
         $secret = config('services.stripe.secret');
 
-        if (!$secret) {
+        if (! $secret) {
             throw new RuntimeException('Stripe secret is not configured.');
         }
 
@@ -36,7 +38,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         foreach ($this->client->products->all(['limit' => 100])->autoPagingIterator() as $product) {
             $metadata = $this->toMetadataArray($product->metadata);
             // Check for product_key first, then fall back to plan_key for backward compatibility
-            $productKey = $this->metadataValue($metadata, 'product_key') 
+            $productKey = $this->metadataValue($metadata, 'product_key')
                 ?? $this->metadataValue($metadata, 'plan_key');
 
             if ($productKey) {
@@ -45,12 +47,12 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         foreach ($this->client->prices->all(['limit' => 100])->autoPagingIterator() as $price) {
-            if (!empty($price->lookup_key)) {
+            if (! empty($price->lookup_key)) {
                 $this->pricesByLookupKey[(string) $price->lookup_key] = $price;
             }
 
             $metadata = $this->toMetadataArray($price->metadata);
-            $productKey = $this->metadataValue($metadata, 'product_key') 
+            $productKey = $this->metadataValue($metadata, 'product_key')
                 ?? $this->metadataValue($metadata, 'plan_key');
             $priceKey = $this->metadataValue($metadata, 'price_key');
 
@@ -79,7 +81,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'skip', 'id' => (string) $existing->id];
         }
 
-        if (!$apply) {
+        if (! $apply) {
             return ['action' => 'create', 'id' => null];
         }
 
@@ -109,7 +111,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'link', 'id' => (string) $matched->id];
         }
 
-        if (!$apply) {
+        if (! $apply) {
             return ['action' => 'create', 'id' => null];
         }
 
@@ -207,7 +209,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
             $mapping = $price->mappings()->where('provider', $this->provider())->first();
         }
 
-        if (!$mapping || !$mapping->provider_id) {
+        if (! $mapping || ! $mapping->provider_id) {
             return null;
         }
 

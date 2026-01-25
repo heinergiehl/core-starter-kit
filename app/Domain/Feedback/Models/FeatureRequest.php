@@ -2,7 +2,6 @@
 
 namespace App\Domain\Feedback\Models;
 
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -24,8 +23,14 @@ class FeatureRequest extends Model
             $baseSlug = Str::slug($request->title ?? '') ?: Str::random(8);
             $slug = $baseSlug;
             $counter = 1;
+            // Prevent infinite loops in high concurrency
+            $maxAttempts = 10;
 
             while (static::query()->where('slug', $slug)->exists()) {
+                if ($counter > $maxAttempts) {
+                    $slug = "{$baseSlug}-".Str::random(6);
+                    break;
+                }
                 $slug = "{$baseSlug}-{$counter}";
                 $counter++;
             }
@@ -36,7 +41,6 @@ class FeatureRequest extends Model
 
     protected $fillable = [
         'user_id',
-        'team_id',
         'title',
         'slug',
         'description',
@@ -51,16 +55,13 @@ class FeatureRequest extends Model
         'is_public' => 'bool',
         'votes_count' => 'int',
         'released_at' => 'datetime',
+        'status' => \App\Enums\FeatureStatus::class,
+        'category' => \App\Enums\FeatureCategory::class,
     ];
 
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
-    }
-
-    public function team(): BelongsTo
-    {
-        return $this->belongsTo(Team::class);
     }
 
     public function votes(): HasMany

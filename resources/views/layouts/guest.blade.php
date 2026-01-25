@@ -24,7 +24,7 @@
         @php
             $defaultTitle = $appBrandName ?? config('app.name', 'SaaS Kit');
             $pageTitle = trim($__env->yieldContent('title')) ?: $defaultTitle;
-            $pageDescription = trim($__env->yieldContent('meta_description')) ?: 'Launch a polished SaaS with teams, billing, and clean architecture.';
+            $pageDescription = trim($__env->yieldContent('meta_description')) ?: 'Launch a polished SaaS with billing, auth, and clean architecture.';
         @endphp
 
         <title>{{ $pageTitle }}</title>
@@ -70,5 +70,6 @@
             </div>
         </div>
         @livewireScripts
+        <x-livewire-toasts />
     </body>
 </html>

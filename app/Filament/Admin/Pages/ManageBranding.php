@@ -3,22 +3,22 @@
 namespace App\Filament\Admin\Pages;
 
 use App\Domain\Settings\Models\BrandSetting;
-use Filament\Actions\Action;
 use Filament\Forms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 class ManageBranding extends Page implements HasForms
 {
     use Forms\Concerns\InteractsWithForms;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-swatch';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-swatch';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Settings';
+    protected static string|\UnitEnum|null $navigationGroup = 'Settings';
 
     protected static ?string $navigationLabel = 'Branding';
 
@@ -60,24 +60,36 @@ class ManageBranding extends Page implements HasForms
                         Forms\Components\Select::make('template')
                             ->label('Template')
                             ->options([
-                                'default' => '🔮 Default — Modern glassmorphism',
-                                'void' => '⚡ Void — Cyberpunk neon',
-                                'aurora' => '🌌 Aurora — Northern lights',
-                                'prism' => '🔶 Prism — Brutalist geometry',
-                                'velvet' => '👑 Velvet — Luxury editorial',
-                                'frost' => '❄️ Frost — Arctic glass',
-                                'ember' => '🔥 Ember — Warm fire glow',
-                                'ocean' => '🌊 Ocean — Deep sea depths',
+                                'default' => 'Default - Modern glassmorphism',
+                                'void' => 'Void - Cyberpunk neon',
+                                'aurora' => 'Aurora - Northern lights',
+                                'prism' => 'Prism - Brutalist geometry',
+                                'velvet' => 'Velvet - Luxury editorial',
+                                'frost' => 'Frost - Arctic glass',
+                                'ember' => 'Ember - Warm fire glow',
+                                'ocean' => 'Ocean - Deep sea depths',
                             ])
                             ->default('default')
                             ->native(false)
                             ->searchable()
                             ->columnSpanFull(),
                     ]),
-                // Colors section removed as per user request
+                Section::make('Email Branding')
+                    ->description('Brand colors used in transactional email templates.')
+                    ->schema([
+                        Forms\Components\TextInput::make('email_primary_color')
+                            ->label('Primary color')
+                            ->helperText('Hex color, e.g. #4F46E5')
+                            ->maxLength(20),
+                        Forms\Components\TextInput::make('email_secondary_color')
+                            ->label('Secondary color')
+                            ->helperText('Hex color, e.g. #A855F7')
+                            ->maxLength(20),
+                    ])
+                    ->columns(2),
 
                 Section::make('Invoice Defaults')
-                    ->description('Default settings for invoices if not overridden by tenants.')
+                    ->description('Default settings for invoices.')
                     ->schema([
                         Forms\Components\TextInput::make('invoice_name')
                             ->label('Company name')
@@ -108,6 +120,7 @@ class ManageBranding extends Page implements HasForms
         $record = $this->getRecord();
         $record->fill($data);
         $record->save();
+        Cache::forget('branding.global');
 
         Notification::make()
             ->title('Global branding updated.')
@@ -117,11 +130,6 @@ class ManageBranding extends Page implements HasForms
 
     private function getRecord(): BrandSetting
     {
-        // Global setting has team_id = null
-        return BrandSetting::query()->firstOrCreate([
-            'team_id' => null,
-        ]);
+        return BrandSetting::query()->firstOrCreate(['id' => BrandSetting::GLOBAL_ID]);
     }
-
-
 }

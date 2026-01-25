@@ -12,6 +12,8 @@ class OnboardingTest extends TestCase
 
     public function test_new_user_sees_onboarding(): void
     {
+        config()->set('saas.features.onboarding', true);
+
         $user = User::factory()->create([
             'onboarding_completed_at' => null,
         ]);
@@ -24,6 +26,8 @@ class OnboardingTest extends TestCase
 
     public function test_completed_user_redirects_from_onboarding(): void
     {
+        config()->set('saas.features.onboarding', true);
+
         $user = User::factory()->create([
             'onboarding_completed_at' => now(),
         ]);
@@ -35,6 +39,8 @@ class OnboardingTest extends TestCase
 
     public function test_onboarding_step_1_updates_name(): void
     {
+        config()->set('saas.features.onboarding', true);
+
         $user = User::factory()->create([
             'name' => 'Old Name',
             'onboarding_completed_at' => null,
@@ -52,25 +58,29 @@ class OnboardingTest extends TestCase
         ]);
     }
 
-    public function test_onboarding_step_3_completes_onboarding(): void
+    public function test_onboarding_step_2_completes_onboarding(): void
     {
+        config()->set('saas.features.onboarding', true);
+
         $user = User::factory()->create([
             'onboarding_completed_at' => null,
         ]);
 
         $response = $this->actingAs($user)->post('/onboarding', [
-            'step' => 3,
+            'step' => 2,
             'locale' => 'de',
         ]);
 
         $response->assertRedirect('/dashboard');
         $user->refresh();
         $this->assertNotNull($user->onboarding_completed_at);
-        $this->assertEquals('de', $user->locale);
+        $this->assertEquals(\App\Enums\Locale::German, $user->locale);
     }
 
     public function test_onboarding_can_be_skipped(): void
     {
+        config()->set('saas.features.onboarding', true);
+
         $user = User::factory()->create([
             'onboarding_completed_at' => null,
         ]);

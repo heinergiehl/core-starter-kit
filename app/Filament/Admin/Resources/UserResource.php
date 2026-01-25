@@ -2,28 +2,35 @@
 
 namespace App\Filament\Admin\Resources;
 
+use App\Domain\Identity\Services\ImpersonationService;
 use App\Filament\Admin\Resources\UserResource\Pages\CreateUser;
 use App\Filament\Admin\Resources\UserResource\Pages\EditUser;
 use App\Filament\Admin\Resources\UserResource\Pages\ListUsers;
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Gate;
 
 class UserResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'User Management';
+    protected static string|\UnitEnum|null $navigationGroup = 'User Management';
 
     protected static ?string $navigationLabel = 'Users';
 
@@ -35,26 +42,32 @@ class UserResource extends Resource
     {
         return $schema
             ->schema([
-                Forms\Components\TextInput::make('name')
+                TextInput::make('name')
                     ->required()
                     ->maxLength(255),
-                Forms\Components\TextInput::make('email')
+                TextInput::make('email')
                     ->email()
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true),
-                Forms\Components\TextInput::make('password')
+                TextInput::make('password')
                     ->password()
                     ->dehydrated(fn (?string $state): bool => filled($state))
                     ->helperText('Leave blank to keep the current password.'),
-                Forms\Components\Toggle::make('is_admin')
+                Toggle::make('is_admin')
                     ->label('Admin access'),
-                Forms\Components\Select::make('current_team_id')
-                    ->relationship('currentTeam', 'name')
-                    ->label('Current team')
+                Select::make('roles')
+                    ->relationship('roles', 'name')
+                    ->multiple()
+                    ->preload()
+                    ->searchable(),
+                Select::make('permissions')
+                    ->relationship('permissions', 'name')
+                    ->multiple()
+                    ->preload()
                     ->searchable()
-                    ->preload(),
-                Forms\Components\DateTimePicker::make('email_verified_at')
+                    ->helperText('Direct permissions override role defaults.'),
+                DateTimePicker::make('email_verified_at')
                     ->label('Email verified at'),
             ])
             ->columns(2);
@@ -64,24 +77,26 @@ class UserResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('name')
+                TextColumn::make('name')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('email')
+                TextColumn::make('email')
                     ->searchable()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('is_admin')
+                TextColumn::make('is_admin')
                     ->label('Admin')
                     ->badge()
                     ->formatStateUsing(fn (bool $state): string => $state ? 'Yes' : 'No')
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
-                Tables\Columns\TextColumn::make('currentTeam.name')
-                    ->label('Current team')
+                TextColumn::make('roles.name')
+                    ->label('Roles')
+                    ->badge()
+                    ->separator(', ')
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('email_verified_at')
+                TextColumn::make('email_verified_at')
                     ->dateTime()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('created_at')
+                TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
@@ -91,7 +106,7 @@ class UserResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([
-                Tables\Actions\Action::make('impersonate')
+                Action::make('impersonate')
                     ->label('Impersonate')
                     ->icon('heroicon-o-identification')
                     ->color('warning')
@@ -99,8 +114,32 @@ class UserResource extends Resource
                     ->modalHeading('Impersonate User')
                     ->modalDescription(fn (User $record) => "You are about to log in as {$record->name}. You can return to your account anytime.")
                     ->modalSubmitActionLabel('Start Impersonating')
-                    ->url(fn (User $record) => route('impersonate.start', $record))
-                    ->visible(fn (User $record) => !$record->is_admin && auth()->id() !== $record->id),
+                    ->closeModalByClickingAway(false)
+                    ->action(function (User $record) {
+                        Gate::authorize('impersonate', $record);
+
+                        $impersonator = auth()->user();
+
+                        if (! $impersonator) {
+                            abort(403);
+                        }
+
+                        $service = app(ImpersonationService::class);
+                        $success = $service->impersonate($impersonator, $record);
+
+                        if (! $success) {
+                            Notification::make()
+                                ->title('Unable to impersonate this user.')
+                                ->danger()
+                                ->send();
+
+                            return null;
+                        }
+
+                        return redirect()->route('dashboard')
+                            ->with('success', "Now impersonating {$record->name}");
+                    })
+                    ->visible(fn (User $record) => ! $record->is_admin && auth()->id() !== $record->id),
                 EditAction::make(),
                 DeleteAction::make(),
             ])

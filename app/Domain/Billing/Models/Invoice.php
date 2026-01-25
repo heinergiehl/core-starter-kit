@@ -2,19 +2,18 @@
 
 namespace App\Domain\Billing\Models;
 
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class Invoice extends Model
 {
-    use HasFactory, BelongsToTenant;
+    use HasFactory;
 
     protected $fillable = [
-        'team_id',
+        'user_id',
         'subscription_id',
         'order_id',
         'provider',
@@ -61,9 +60,9 @@ class Invoice extends Model
         'metadata' => 'array',
     ];
 
-    public function team(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Team::class);
+        return $this->belongsTo(User::class);
     }
 
     public function subscription(): BelongsTo
@@ -86,8 +85,8 @@ class Invoice extends Model
      */
     public function isPdfCacheValid(): bool
     {
-        return $this->pdf_url 
-            && $this->pdf_url_expires_at 
+        return $this->pdf_url
+            && $this->pdf_url_expires_at
             && $this->pdf_url_expires_at->isFuture();
     }
 }

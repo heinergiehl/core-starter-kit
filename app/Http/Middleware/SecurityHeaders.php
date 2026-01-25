@@ -81,14 +81,14 @@ class SecurityHeaders
         // 'unsafe-inline' and 'unsafe-eval' needed for Livewire/Alpine.js
         // Billing provider domains (Paddle/Stripe) whitelisted for checkout
         // Customize based on your actual third-party integrations
-        
+
         // In development, Vite runs on port 5173 (or 5174 if busy)
         // We need to allow multiple hosts because you might visit localhost:8000
         // but Vite might be serving from saas-kit.test or 127.0.0.1
         $viteDevServer = '';
         $viteWss = '';
         $formAction = "'self'";
-        
+
         if (app()->isLocal()) {
             $hosts = array_unique([
                 $request->getHost(),
@@ -96,7 +96,7 @@ class SecurityHeaders
                 '127.0.0.1',
                 'saas-kit.test',
             ]);
-            
+
             foreach ($hosts as $h) {
                 if (str_contains($h, ':')) {
                     // IPv6 literals are rejected by CSP in browsers like Chrome.
@@ -111,17 +111,17 @@ class SecurityHeaders
             // Allow posting to any local http/https origin while developing.
             $formAction = "'self' http: https:";
         }
-        
+
         $cspDirectives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.paddle.com https://cdn.paddle.com https://js.stripe.com" . ($viteDevServer ? " {$viteDevServer}" : ''),
-            "script-src-elem 'self' 'unsafe-inline' https://*.paddle.com https://cdn.paddle.com https://js.stripe.com" . ($viteDevServer ? " {$viteDevServer}" : ''),
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com" . ($viteDevServer ? " {$viteDevServer}" : ''),
-            "style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com" . ($viteDevServer ? " {$viteDevServer}" : ''),
-            "font-src 'self' https://fonts.gstatic.com data:",
-            "img-src 'self' data: https: blob:",
-            "connect-src 'self' https://*.paddle.com https://api.stripe.com wss:" . ($viteDevServer ? " {$viteDevServer} {$viteWss}" : ''),
-            "frame-src 'self' https://*.paddle.com https://js.stripe.com https://hooks.stripe.com",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' ".implode(' ', config('saas.security.csp_domains.script', [])).($viteDevServer ? " {$viteDevServer}" : ''),
+            "script-src-elem 'self' 'unsafe-inline' ".implode(' ', config('saas.security.csp_domains.script', [])).($viteDevServer ? " {$viteDevServer}" : ''),
+            "style-src 'self' 'unsafe-inline' ".implode(' ', config('saas.security.csp_domains.style', [])).($viteDevServer ? " {$viteDevServer}" : ''),
+            "style-src-elem 'self' 'unsafe-inline' ".implode(' ', config('saas.security.csp_domains.style', [])).($viteDevServer ? " {$viteDevServer}" : ''),
+            "font-src 'self' ".implode(' ', config('saas.security.csp_domains.font', [])),
+            "img-src 'self' ".implode(' ', config('saas.security.csp_domains.img', [])),
+            "connect-src 'self' ".implode(' ', config('saas.security.csp_domains.connect', [])).($viteDevServer ? " {$viteDevServer} {$viteWss}" : ''),
+            "frame-src 'self' ".implode(' ', config('saas.security.csp_domains.frame', [])),
             "object-src 'none'",
             "base-uri 'self'",
             "form-action {$formAction}",

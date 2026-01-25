@@ -26,7 +26,7 @@ return new class extends Migration
 
         // 2. Migrate existing data
         $products = DB::table('products')->whereNotNull('provider')->whereNotNull('provider_id')->get();
-        
+
         foreach ($products as $product) {
             DB::table('product_provider_mappings')->insert([
                 'product_id' => $product->id,
@@ -54,13 +54,13 @@ return new class extends Migration
             $table->string('provider')->nullable()->after('is_active');
             $table->string('provider_id')->nullable()->after('provider');
             $table->timestamp('synced_at')->nullable()->after('provider_id');
-            
+
             $table->unique(['provider', 'provider_id']);
         });
 
         // 2. Restore data (best effort, restore first mapping found)
         $mappings = DB::table('product_provider_mappings')->get();
-        
+
         foreach ($mappings as $mapping) {
             // Only update if not already set (since we can only store one provider back on the main table)
             // This is a lossy reverse migration if multiple providers exist, but acceptable for rollback of this specific change

@@ -13,7 +13,9 @@ use Livewire\Component;
 class Login extends Component
 {
     public string $email = '';
+
     public string $password = '';
+
     public bool $remember = false;
 
     public function login(): void
@@ -31,7 +33,7 @@ class Login extends Component
 
         $this->ensureIsNotRateLimited();
 
-        if (!Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
+        if (! Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
             RateLimiter::hit($this->throttleKey());
 
             Log::channel('auth')->warning('login_failed', [
@@ -41,6 +43,7 @@ class Login extends Component
 
             $this->addError('email', __('auth.failed'));
             $this->dispatch('login-failed');
+
             return;
         }
 
@@ -58,7 +61,7 @@ class Login extends Component
         if ($user->hasTwoFactorEnabled()) {
             session()->put('2fa_user_id', $user->id);
             session()->put('2fa_remember', $this->remember);
-            
+
             Auth::guard('web')->logout();
             session()->regenerateToken();
 
@@ -68,6 +71,7 @@ class Login extends Component
             ]);
 
             $this->redirect(route('two-factor.challenge'));
+
             return;
         }
 
@@ -85,7 +89,7 @@ class Login extends Component
 
     protected function ensureIsNotRateLimited(): void
     {
-        if (!RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
             return;
         }
 
@@ -109,7 +113,7 @@ class Login extends Component
 
     protected function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->email) . '|' . request()->ip());
+        return Str::transliterate(Str::lower($this->email).'|'.request()->ip());
     }
 
     public function render()

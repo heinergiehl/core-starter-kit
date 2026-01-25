@@ -6,6 +6,7 @@ use App\Domain\Identity\Services\ImpersonationService;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class ImpersonationController extends Controller
 {
@@ -20,13 +21,15 @@ class ImpersonationController extends Controller
     {
         $impersonator = $request->user();
 
-        if (!$impersonator) {
+        if (! $impersonator) {
             abort(403);
         }
 
+        Gate::authorize('impersonate', $user);
+
         $success = $this->impersonationService->impersonate($impersonator, $user);
 
-        if (!$success) {
+        if (! $success) {
             return back()->withErrors([
                 'impersonation' => 'Unable to impersonate this user.',
             ]);
@@ -43,7 +46,7 @@ class ImpersonationController extends Controller
     {
         $success = $this->impersonationService->stopImpersonating();
 
-        if (!$success) {
+        if (! $success) {
             return redirect()->route('dashboard')
                 ->withErrors(['impersonation' => 'Not currently impersonating anyone.']);
         }

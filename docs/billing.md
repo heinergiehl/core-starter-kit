@@ -3,7 +3,7 @@
 This kit implements a provider-agnostic billing domain with adapter implementations per provider.
 
 ## 1) Overview
-- Billing is attached to the Team, not the User
+- Billing is attached to the User
 - Provider webhooks are the source of truth
 - Feature access is determined by Entitlements, not plan-name checks
 - Provider-specific logic lives in adapters, not core domain code
@@ -32,18 +32,17 @@ Each provider adapter should:
 - create checkout sessions
 - verify webhook signatures
 - map provider IDs to canonical records
-- update subscription quantity for seat-based plans
 - handle cancellations, refunds, and pauses
 - apply discounts/coupons during checkout (if supported)
 
-Note: Seat sync is implemented for Stripe, Paddle, and Lemon Squeezy. Ensure the API keys are configured for each provider.
+Note: Ensure the API keys are configured for each provider.
 
 ---
 
 ## 4) Configuration
 
 ### 4.1 `config/saas.php`
-Central config should include enabled providers, plan definitions, and seat rules.
+Central config should include enabled providers and plan definitions.
 
 Example shape:
 ```php
@@ -57,9 +56,7 @@ return [
       'starter' => [
         'name' => 'Starter',
         'type' => 'subscription',
-        'seat_based' => false,
         'entitlements' => [
-          'max_seats' => 3,
           'storage_limit_mb' => 2048,
         ],
         'prices' => [
@@ -76,9 +73,6 @@ return [
       ],
     ],
   ],
-  'seats' => [
-    'count_pending_invites' => false,
-  ],
   'support' => [
     'email' => env('SUPPORT_EMAIL'),
     'discord' => env('SUPPORT_DISCORD_URL'),
@@ -88,7 +82,6 @@ return [
 
 Notes:
 - `amount` and `interval` are display-only.
-- `seat_based` plans use subscription quantity as the seat cap.
 
 ### 4.2 Catalog source
 By default the kit reads plan data from `config/saas.php`. You can switch to the database-backed catalog:
@@ -127,7 +120,7 @@ BILLING_STARTER_YEARLY_STRIPE_ID=
 BILLING_STARTER_YEARLY_PADDLE_ID=
 BILLING_STARTER_YEARLY_LEMON_SQUEEZY_ID=
 ```
-Add the `BILLING_TEAM_*` and `BILLING_LIFETIME_*` IDs from `.env.example` for seat-based and one-time plans.
+Add the `BILLING_GROWTH_*` and `BILLING_LIFETIME_*` IDs from `.env.example` for subscription and one-time plans.
 When using the database catalog, provider IDs live in the `prices` table (`provider_id`), not `.env`.
 
 ### 5.1 Stripe
@@ -157,8 +150,8 @@ Exact keys depend on the adapter package you use. Keep them documented here.
 ### 6.1 Subscription checkout
 Requirements:
 - user selects plan/price (monthly/yearly)
-- checkout session is created for the team
-- session metadata includes: `team_id`, `user_id`, `plan_key`, `price_key`, and `quantity`
+- checkout session is created for the user
+- session metadata includes: `user_id`, `plan_key`, `price_key`, and `quantity`
 
 ### 6.2 One-time purchase checkout
 Requirements:
@@ -192,33 +185,12 @@ Redirect does not confirm payment. Show a processing screen that waits for webho
 
 ---
 
-## 8) Seat-based plans
-
-### 8.1 Default rules
-- seat = active team member
-- pending invites do not count (configurable)
-- subscription quantity reflects seat count
-
-### 8.2 Sync algorithm
-On membership changes:
-1) enqueue `SyncSeatQuantityJob(team_id)`
-2) job computes desired quantity
-3) adapter updates provider subscription quantity
-4) webhook reconciles canonical subscription
-
-### 8.3 Over-seat behavior
-- block new invites and seat-consuming actions
-- allow access to billing/settings
-- show banner to upgrade seats
-
----
-
-## 9) Entitlements
+## 8) Entitlements
 Entitlements are computed from canonical billing state and plan definitions. Do not branch on plan names.
 
 ---
 
-## 10) Discounts & coupons
+## 9) Discounts & coupons
 - Manage coupons in the Admin Panel (`discounts` table).
 - Redemptions are recorded on webhook confirmation (`discount_redemptions`).
 - Coupons are supported for Stripe, Paddle, and Lemon Squeezy checkout flows.
@@ -230,18 +202,17 @@ Required fields for a Stripe coupon:
 
 ---
 
-## 11) Testing billing
+## 10) Testing billing
 Minimum tests:
 - webhook idempotency (same event twice)
 - subscription activation via webhook
 - cancellation/resume flows
-- seat sync on member change
 - order paid/refunded flows
 - coupon redemption recorded on checkout
 
 ---
 
-## 12) Catalog import (Stripe)
+## 11) Catalog import (Stripe)
 If you prefer to create products/prices in Stripe first, you can import them into the DB catalog.
 
 Preview only:

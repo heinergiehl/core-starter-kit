@@ -9,10 +9,8 @@ use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Arr;
-use Stripe\StripeClient;
 
 /**
  * Handles Stripe checkout session completed webhook events.
@@ -50,34 +48,35 @@ class StripeCheckoutHandler implements StripeWebhookHandler
      */
     private function handleCheckoutSessionCompleted(array $object): void
     {
-        $teamId = $this->resolveTeamIdFromMetadata($object);
+        $userId = $this->resolveUserIdFromMetadata($object);
         $customerId = data_get($object, 'customer');
         $email = data_get($object, 'customer_details.email') ?? data_get($object, 'customer_email');
 
-        if ($teamId) {
-            $this->syncBillingCustomer($teamId, $customerId, $email);
+        if ($userId) {
+            $this->syncBillingCustomer($userId, $customerId, $email);
         }
 
         $mode = data_get($object, 'mode');
 
         if ($mode === 'subscription') {
-            $this->handleSubscriptionCheckout($object, $teamId);
+            $this->handleSubscriptionCheckout($object, $userId);
+
             return;
         }
 
         if ($mode === 'payment') {
-            $this->handlePaymentCheckout($object, $teamId);
+            $this->handlePaymentCheckout($object, $userId);
         }
     }
 
     /**
      * Handle subscription checkout completion.
      */
-    private function handleSubscriptionCheckout(array $object, ?int $teamId): void
+    private function handleSubscriptionCheckout(array $object, ?int $userId): void
     {
         $subscriptionId = data_get($object, 'subscription');
 
-        if (!$subscriptionId || !$teamId) {
+        if (! $subscriptionId || ! $userId) {
             return;
         }
 
@@ -96,9 +95,9 @@ class StripeCheckoutHandler implements StripeWebhookHandler
 
         $paymentStatus = data_get($object, 'payment_status');
         $status = match ($paymentStatus) {
-            'paid' => 'active',
-            'no_payment_required' => 'trialing',
-            default => 'processing',
+            'paid' => \App\Enums\SubscriptionStatus::Active,
+            'no_payment_required' => \App\Enums\SubscriptionStatus::Trialing,
+            default => \App\Enums\SubscriptionStatus::Incomplete,
         };
 
         Subscription::query()->updateOrCreate(
@@ -107,7 +106,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
                 'provider_id' => $subscriptionId,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'plan_key' => $planKey,
                 'status' => $status,
                 'quantity' => (int) (data_get($object, 'quantity') ?? 1),
@@ -117,7 +116,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
 
         $this->recordDiscountRedemption(
             $object,
-            $teamId,
+            $userId,
             $planKey,
             data_get($object, 'metadata.price_key'),
             (string) $subscriptionId
@@ -129,11 +128,11 @@ class StripeCheckoutHandler implements StripeWebhookHandler
     /**
      * Handle payment (one-time) checkout completion.
      */
-    private function handlePaymentCheckout(array $object, ?int $teamId): void
+    private function handlePaymentCheckout(array $object, ?int $userId): void
     {
         $providerId = data_get($object, 'payment_intent') ?: data_get($object, 'id');
 
-        if (!$providerId || !$teamId) {
+        if (! $providerId || ! $userId) {
             return;
         }
 
@@ -148,9 +147,9 @@ class StripeCheckoutHandler implements StripeWebhookHandler
                 'provider_id' => $providerId,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'plan_key' => $planKey,
-                'status' => $paymentStatus === 'paid' ? 'paid' : 'pending',
+                'status' => $paymentStatus === 'paid' ? \App\Enums\OrderStatus::Paid : \App\Enums\OrderStatus::Pending,
                 'amount' => $amount,
                 'currency' => $currency,
                 'paid_at' => $paymentStatus === 'paid' ? now() : null,
@@ -164,7 +163,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
 
         $this->recordDiscountRedemption(
             $object,
-            $teamId,
+            $userId,
             $planKey,
             data_get($object, 'metadata.price_key'),
             (string) $providerId
@@ -176,7 +175,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
      */
     private function recordDiscountRedemption(
         array $object,
-        int $teamId,
+        int $userId,
         ?string $planKey,
         ?string $priceKey,
         string $providerId
@@ -185,7 +184,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
         $discountId = $metadata['discount_id'] ?? null;
         $discountCode = $metadata['discount_code'] ?? null;
 
-        if (!$discountId && !$discountCode) {
+        if (! $discountId && ! $discountCode) {
             return;
         }
 
@@ -200,22 +199,14 @@ class StripeCheckoutHandler implements StripeWebhookHandler
                 ->first();
         }
 
-        if (!$discount) {
+        if (! $discount) {
             return;
         }
 
-        $team = Team::find($teamId);
-
-        if (!$team) {
-            return;
-        }
-
-        $userId = $metadata['user_id'] ?? null;
-        $user = $userId ? User::find($userId) : null;
+        $user = User::find($userId);
 
         app(DiscountService::class)->recordRedemption(
             $discount,
-            $team,
             $user,
             $this->provider(),
             $providerId,

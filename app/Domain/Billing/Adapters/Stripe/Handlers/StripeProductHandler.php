@@ -44,6 +44,7 @@ class StripeProductHandler implements StripeWebhookHandler
 
         if ($eventType === 'product.deleted') {
             $this->deactivateProduct($object);
+
             return;
         }
 
@@ -58,23 +59,23 @@ class StripeProductHandler implements StripeWebhookHandler
         $productId = data_get($object, 'id');
         $name = data_get($object, 'name');
 
-        if (!$productId || !$name) {
+        if (! $productId || ! $name) {
             return null;
         }
 
         $active = data_get($object, 'active', true);
-        
+
         $mapping = ProductProviderMapping::where('provider', 'stripe')
             ->where('provider_id', $productId)
             ->first();
 
-        if ($mapping && !$mapping->product) {
-            if (!config('saas.billing.allow_import_deleted', false)) {
+        if ($mapping && ! $mapping->product) {
+            if (! config('saas.billing.allow_import_deleted', false)) {
                 return null;
             }
         }
 
-        if (!$mapping && !$active && !config('saas.billing.allow_import_deleted', false)) {
+        if (! $mapping && ! $active && ! config('saas.billing.allow_import_deleted', false)) {
             return null;
         }
 
@@ -90,36 +91,37 @@ class StripeProductHandler implements StripeWebhookHandler
         ];
 
         if ($mapping) {
-             if (!$mapping->product) {
-                 $key = $this->generateProductKey($name, $productId);
-                 $productData['key'] = $key;
-                 $product = Product::create($productData);
-                 $mapping->update(['product_id' => $product->id]);
+            if (! $mapping->product) {
+                $key = $this->generateProductKey($name, $productId);
+                $productData['key'] = $key;
+                $product = Product::create($productData);
+                $mapping->update(['product_id' => $product->id]);
 
-                 return $product;
-             }
+                return $product;
+            }
 
-             $mapping->product->update($productData);
-             return $mapping->product;
+            $mapping->product->update($productData);
+
+            return $mapping->product;
         }
 
         $key = $this->generateProductKey($name, $productId);
         $productData['key'] = $key;
-        
+
         $product = Product::create($productData);
-        
+
         ProductProviderMapping::create([
             'product_id' => $product->id,
             'provider' => 'stripe',
             'provider_id' => $productId,
         ]);
-        
+
         return $product;
     }
 
     /**
      * Determine the product type based on its Stripe prices.
-     * 
+     *
      * If all prices are one-time (no recurring), returns 'one_time'.
      * If any price has recurring billing, returns 'subscription'.
      */
@@ -127,7 +129,7 @@ class StripeProductHandler implements StripeWebhookHandler
     {
         $secret = config('services.stripe.secret');
 
-        if (!$secret) {
+        if (! $secret) {
             return 'subscription'; // Default to subscription if we can't check
         }
 
@@ -144,7 +146,7 @@ class StripeProductHandler implements StripeWebhookHandler
 
             // Check if ANY price has a recurring component
             foreach ($prices->data as $price) {
-                if (!empty($price->recurring)) {
+                if (! empty($price->recurring)) {
                     return 'subscription';
                 }
             }
@@ -166,14 +168,14 @@ class StripeProductHandler implements StripeWebhookHandler
     {
         $productId = data_get($object, 'id');
 
-        if (!$productId) {
+        if (! $productId) {
             return;
         }
 
         Product::query()
             ->whereHas('providerMappings', function ($q) use ($productId) {
                 $q->where('provider', 'stripe')
-                  ->where('provider_id', $productId);
+                    ->where('provider_id', $productId);
             })
             ->update([
                 'is_active' => false,
@@ -194,7 +196,7 @@ class StripeProductHandler implements StripeWebhookHandler
         $existingMapping = ProductProviderMapping::where('provider', 'stripe')
             ->where('provider_id', $productId)
             ->first();
-            
+
         $existing = $existingMapping?->product;
 
         if ($existing && $existing->key) {

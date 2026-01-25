@@ -4,11 +4,11 @@ namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Services\CheckoutService;
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Auth\Events\Registered;
-use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class CheckoutServiceTest extends TestCase
@@ -23,12 +23,12 @@ class CheckoutServiceTest extends TestCase
         $this->service = app(CheckoutService::class);
     }
 
-    /** @test */
-    public function it_creates_user_and_team_for_guest()
+    #[Test]
+    public function it_creates_user_for_guest()
     {
         Event::fake([Registered::class]);
 
-        $request = new Request();
+        $request = new Request;
         $email = 'guest@example.com';
         $name = 'Guest User';
 
@@ -38,31 +38,29 @@ class CheckoutServiceTest extends TestCase
         $this->assertInstanceOf(User::class, $result['user']);
         $this->assertEquals($email, $result['user']->email);
         $this->assertDatabaseHas('users', ['email' => $email]);
-        $this->assertDatabaseHas('teams', ['owner_id' => $result['user']->id]);
-        
         Event::assertDispatched(Registered::class);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_error_if_user_already_exists_for_guest()
     {
         $user = User::factory()->create(['email' => 'existing@example.com']);
-        $request = new Request();
+        $request = new Request;
 
         $result = $this->service->resolveOrCreateUser($request, 'existing@example.com', 'Existing User');
 
-        // Should be a RedirectResponse (back with errors)
+        // Should be a RedirectResponse (login with info)
         $this->assertInstanceOf(\Illuminate\Http\RedirectResponse::class, $result);
-        $this->assertTrue(session()->has('errors'));
+        $this->assertTrue(session()->has('info'));
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_existing_user_if_authenticated()
     {
         $user = User::factory()->create();
         $this->actingAs($user);
-        
-        $request = new Request();
+
+        $request = new Request;
         $request->setUserResolver(fn () => $user);
 
         $result = $this->service->resolveOrCreateUser($request, 'any@email.com', 'Any Name');

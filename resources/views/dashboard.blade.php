@@ -17,79 +17,52 @@
 
                     <div class="flex items-center justify-between relative z-10">
                         <div>
-                            <p class="text-sm font-medium text-ink/50 uppercase tracking-widest">{{ __('Current Workspace') }}</p>
-                            <h3 class="mt-2 text-3xl font-display font-bold text-ink">{{ $team?->name ?? __('No team selected') }}</h3>
-                            @if ($team)
-                                <div class="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
-                                    {{ $team->slug }}
-                                </div>
+                            <p class="text-sm font-medium text-ink/50 uppercase tracking-widest">{{ __('Your Account') }}</p>
+                            <h3 class="mt-2 text-3xl font-display font-bold text-ink">{{ $user?->name ?? __('Welcome') }}</h3>
+                            @if ($user?->email)
+                                <p class="mt-1 text-sm text-ink/50">{{ $user->email }}</p>
                             @endif
                         </div>
-                        <a href="{{ route('teams.select') }}" class="btn-secondary text-sm !py-2 !px-4 hover:bg-surface/10">{{ __('Switch') }}</a>
+                        <a href="{{ route('billing.index') }}" class="btn-secondary text-sm !py-2 !px-4 hover:bg-surface/10">{{ __('Billing') }}</a>
                     </div>
 
-                    @if ($team)
-                        @php
-                            $maxSeats = $entitlements?->get('max_seats');
-                            $subscriptionStatus = $team->subscription?->status;
-                            $statusColor = match($subscriptionStatus) {
-                                'active' => 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-                                'trialing' => 'text-blue-500 bg-blue-500/10 border-blue-500/20',
-                                'past_due' => 'text-amber-500 bg-amber-500/10 border-amber-500/20',
-                                'canceled' => 'text-red-500 bg-red-500/10 border-red-500/20',
-                                default => 'text-ink/50 bg-surface/5 border-ink/10'
-                            };
-                        @endphp
 
-                        <div class="mt-10 grid gap-6 sm:grid-cols-2 relative z-10">
-                            <!-- Helper Card: Seats -->
-                            <div class="rounded-3xl border border-ink/5 bg-surface/30 p-6 backdrop-blur-sm group hover:border-ink/10 transition-colors">
-                                <div class="flex items-start justify-between">
-                                    <div>
-                                        <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Usage') }}</p>
-                                        <p class="mt-3 text-4xl font-display text-ink">
-                                            {{ $entitlements?->get('seats_in_use', 0) }}
-                                            <span class="text-lg text-ink/30 font-sans font-normal">/ {{ is_null($maxSeats) ? '∞' : $maxSeats }}</span>
-                                        </p>
-                                    </div>
-                                    <div class="h-10 w-10 rounded-full bg-surface/50 flex items-center justify-center text-ink/50 group-hover:text-ink group-hover:scale-110 transition-all shadow-sm">
-                                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                                    </div>
+
+                    <div class="mt-10 grid gap-6 sm:grid-cols-2 relative z-10">
+                        <div class="rounded-3xl border border-ink/5 bg-surface/30 p-6 backdrop-blur-sm group hover:border-ink/10 transition-colors">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Plan Status') }}</p>
+                                    <x-subscription-status-badge :status="$subscription?->status" class="mt-3" />
                                 </div>
-                                <div class="mt-4 h-1.5 w-full bg-surface/10 rounded-full overflow-hidden">
-                                    <div class="h-full bg-primary rounded-full" style="width: {{ $maxSeats ? min(($entitlements?->get('seats_in_use', 0) / $maxSeats) * 100, 100) : 0 }}%"></div>
+                                <div class="h-10 w-10 rounded-full bg-surface/50 flex items-center justify-center text-ink/50 group-hover:text-ink group-hover:scale-110 transition-all shadow-sm">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
                                 </div>
                             </div>
-
-                            <!-- Helper Card: Plan -->
-                            <div class="rounded-3xl border border-ink/5 bg-surface/30 p-6 backdrop-blur-sm group hover:border-ink/10 transition-colors">
-                                <div class="flex items-start justify-between">
-                                    <div>
-                                        <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Plan Status') }}</p>
-                                        <div class="mt-3 inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border {{ $statusColor }}">
-                                            {{ ucfirst($subscriptionStatus ?? 'Free') }}
-                                        </div>
-                                    </div>
-                                    <div class="h-10 w-10 rounded-full bg-surface/50 flex items-center justify-center text-ink/50 group-hover:text-ink group-hover:scale-110 transition-all shadow-sm">
-                                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-                                    </div>
-                                </div>
-                                <div class="mt-4 flex items-center gap-2 text-sm text-ink/50">
-                                    @if($team->subscription?->onTrial())
-                                        {{ __('Trial ends in :days days', ['days' => $team->subscription->trial_ends_at->diffInDays(now())]) }}
-                                    @else
-                                        <a href="{{ route('billing.index') }}" class="hover:text-primary transition-colors">{{ __('Manage Billing') }} &rarr;</a>
-                                    @endif
-                                </div>
+                            <div class="mt-4 flex items-center gap-2 text-sm text-ink/50">
+                                @if($subscription?->onTrial())
+                                    {{ __('Trial ends in :days days', ['days' => $subscription->trial_ends_at->diffInDays(now())]) }}
+                                @else
+                                    <a href="{{ route('billing.index') }}" class="hover:text-primary transition-colors">{{ __('Manage Billing') }} &rarr;</a>
+                                @endif
                             </div>
                         </div>
-                    @else
-                        <div class="mt-8 rounded-2xl border border-dashed border-ink/20 bg-surface/5 p-8 text-center">
-                            <h3 class="text-lg font-medium text-ink">{{ __('Welcome to your dashboard') }}</h3>
-                            <p class="mt-2 text-ink/50">{{ __('Get started by creating a team to unlock all features.') }}</p>
-                            <a href="{{ route('teams.create') }}" class="btn-primary mt-6 inline-block">{{ __('Create Team') }}</a>
+
+                        <div class="rounded-3xl border border-ink/5 bg-surface/30 p-6 backdrop-blur-sm group hover:border-ink/10 transition-colors">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Account') }}</p>
+                                    <p class="mt-3 text-2xl font-display text-ink">{{ __('Profile & Preferences') }}</p>
+                                </div>
+                                <div class="h-10 w-10 rounded-full bg-surface/50 flex items-center justify-center text-ink/50 group-hover:text-ink group-hover:scale-110 transition-all shadow-sm">
+                                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-3.33 0-6 2.24-6 5v1h12v-1c0-2.76-2.67-5-6-5z" /></svg>
+                                </div>
+                            </div>
+                            <div class="mt-4 flex items-center gap-2 text-sm text-ink/50">
+                                <a href="{{ route('profile.edit') }}" class="hover:text-primary transition-colors">{{ __('Update profile') }} &rarr;</a>
+                            </div>
                         </div>
-                    @endif
+                    </div>
                 </div>
 
                 <!-- Sidebar -->

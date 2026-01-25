@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('invoices', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('subscription_id')->nullable()->constrained('subscriptions')->nullOnDelete();
             $table->foreignId('order_id')->nullable()->constrained('orders')->nullOnDelete();
             $table->string('provider');
@@ -29,7 +29,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->unique(['provider', 'provider_id']);
-            $table->index(['team_id', 'status']);
+            $table->index(['user_id', 'status']);
         });
     }
 

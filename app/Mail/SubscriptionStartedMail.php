@@ -21,8 +21,7 @@ class SubscriptionStartedMail extends Mailable
         public readonly ?int $amount = null,
         public readonly ?string $currency = null,
         public readonly array $features = [],
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

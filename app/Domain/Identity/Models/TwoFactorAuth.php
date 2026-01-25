@@ -5,7 +5,6 @@ namespace App\Domain\Identity\Models;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Crypt;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -55,7 +54,7 @@ class TwoFactorAuth extends Model
      */
     public static function generateSecret(): string
     {
-        return (new Google2FA())->generateSecretKey(32);
+        return (new Google2FA)->generateSecretKey(32);
     }
 
     /**
@@ -67,6 +66,7 @@ class TwoFactorAuth extends Model
         for ($i = 0; $i < $count; $i++) {
             $codes[] = strtoupper(bin2hex(random_bytes(4)));
         }
+
         return $codes;
     }
 
@@ -75,8 +75,8 @@ class TwoFactorAuth extends Model
      */
     public function verify(string $code): bool
     {
-        $google2fa = new Google2FA();
-        
+        $google2fa = new Google2FA;
+
         return $google2fa->verifyKey($this->getDecryptedSecret(), $code);
     }
 
@@ -87,9 +87,9 @@ class TwoFactorAuth extends Model
     {
         $codes = $this->backup_codes ?? [];
         $code = strtoupper(trim($code));
-        
+
         $index = array_search($code, $codes, true);
-        
+
         if ($index === false) {
             return false;
         }
@@ -114,8 +114,8 @@ class TwoFactorAuth extends Model
      */
     public function getQrCodeUri(string $email, string $appName): string
     {
-        $google2fa = new Google2FA();
-        
+        $google2fa = new Google2FA;
+
         return $google2fa->getQRCodeUrl(
             $appName,
             $email,

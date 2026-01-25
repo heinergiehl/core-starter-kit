@@ -9,7 +9,7 @@ return new class extends Migration
 {
     /**
      * Run the migrations.
-     * 
+     *
      * This migration merges the Plan entity into Product, simplifying the billing model.
      */
     public function up(): void
@@ -86,7 +86,7 @@ return new class extends Migration
         Schema::table('prices', function (Blueprint $table) {
             $table->dropForeign(['plan_id']);
             $table->dropColumn('plan_id');
-            
+
             // Add foreign key constraint for product_id
             $table->foreign('product_id')
                 ->references('id')

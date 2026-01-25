@@ -2,18 +2,22 @@
 
 namespace App\Filament\Admin\Resources;
 
-use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
-use App\Domain\Content\Models\BlogTag;
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Forms;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\RichEditor;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\ToggleButtons;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\ImageColumn;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
 
@@ -21,9 +25,9 @@ class BlogPostResource extends Resource
 {
     protected static ?string $model = BlogPost::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-text';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Content';
+    protected static string|\UnitEnum|null $navigationGroup = 'Content';
 
     protected static ?int $navigationSort = 1;
 
@@ -34,29 +38,28 @@ class BlogPostResource extends Resource
         return $schema
             ->schema([
                 // Main Content Column
-                Forms\Components\TextInput::make('title')
+                TextInput::make('title')
                     ->required()
                     ->maxLength(255)
                     ->live(onBlur: true)
                     ->afterStateUpdated(fn ($state, $set) => $set('slug', Str::slug($state))),
 
-                Forms\Components\TextInput::make('slug')
+                TextInput::make('slug')
                     ->required()
                     ->maxLength(255)
                     ->unique(ignoreRecord: true)
                     ->rules(['alpha_dash']),
 
-                Forms\Components\Textarea::make('excerpt')
+                Textarea::make('excerpt')
                     ->rows(2)
                     ->maxLength(500)
                     ->helperText('Brief summary shown in listing pages')
                     ->columnSpanFull(),
 
                 // WYSIWYG Editor - Filament's built-in RichEditor using TipTap
-                Forms\Components\RichEditor::make('body_html')
+                RichEditor::make('body_html')
                     ->label('Content')
                     ->required()
-                    ->fileAttachmentsDisk('public')
                     ->fileAttachmentsDirectory('blog-attachments')
                     ->fileAttachmentsVisibility('public')
                     ->resizableImages()  // Enable drag-to-resize for images
@@ -78,49 +81,48 @@ class BlogPostResource extends Resource
                     ])
                     ->columnSpanFull(),
 
-                Forms\Components\FileUpload::make('featured_image')
+                FileUpload::make('featured_image')
                     ->label('Featured Image')
                     ->image()
-                    ->disk('public')
                     ->directory('blog-images')
                     ->imageResizeMode('cover')
                     ->imageCropAspectRatio('16:9')
                     ->imageResizeTargetWidth('1200')
                     ->imageResizeTargetHeight('675'),
 
-                Forms\Components\Select::make('category_id')
+                Select::make('category_id')
                     ->label('Category')
                     ->relationship('category', 'name')
                     ->searchable()
                     ->preload()
                     ->createOptionForm([
-                        Forms\Components\TextInput::make('name')
+                        TextInput::make('name')
                             ->required()
                             ->maxLength(100),
-                        Forms\Components\TextInput::make('slug')
+                        TextInput::make('slug')
                             ->required()
                             ->maxLength(100),
                     ]),
 
-                Forms\Components\Select::make('tags')
+                Select::make('tags')
                     ->label('Tags')
                     ->relationship('tags', 'name')
                     ->multiple()
                     ->searchable()
                     ->preload()
                     ->createOptionForm([
-                        Forms\Components\TextInput::make('name')
+                        TextInput::make('name')
                             ->required()
                             ->maxLength(50)
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn ($state, $set) => $set('slug', Str::slug($state))),
-                        Forms\Components\TextInput::make('slug')
+                        TextInput::make('slug')
                             ->required()
                             ->maxLength(50)
                             ->unique('blog_tags', 'slug'),
                     ]),
 
-                Forms\Components\Select::make('author_id')
+                Select::make('author_id')
                     ->label('Author')
                     ->relationship('author', 'name')
                     ->searchable()
@@ -128,21 +130,24 @@ class BlogPostResource extends Resource
                     ->default(auth()->id()),
 
                 // Publishing Options
-                Forms\Components\Toggle::make('is_published')
-                    ->label('Published')
-                    ->default(false),
+                ToggleButtons::make('status')
+                    ->label('Status')
+                    ->inline()
+                    ->options(\App\Enums\PostStatus::class)
+                    ->default(\App\Enums\PostStatus::Draft)
+                    ->required(),
 
-                Forms\Components\DateTimePicker::make('published_at')
+                DateTimePicker::make('published_at')
                     ->label('Publish Date')
                     ->helperText('Leave empty to publish immediately when toggled on'),
 
                 // SEO Section
-                Forms\Components\TextInput::make('meta_title')
+                TextInput::make('meta_title')
                     ->label('SEO Title')
                     ->maxLength(60)
                     ->helperText('Recommended: 50-60 characters'),
 
-                Forms\Components\Textarea::make('meta_description')
+                Textarea::make('meta_description')
                     ->label('SEO Description')
                     ->rows(2)
                     ->maxLength(160)
@@ -156,50 +161,47 @@ class BlogPostResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\ImageColumn::make('featured_image')
+                ImageColumn::make('featured_image')
                     ->label('Image')
                     ->circular()
                     ->size(40),
 
-                Tables\Columns\TextColumn::make('title')
+                TextColumn::make('title')
                     ->searchable()
                     ->sortable()
                     ->limit(40)
                     ->description(fn (BlogPost $record) => Str::limit($record->excerpt, 50)),
 
-                Tables\Columns\TextColumn::make('category.name')
+                TextColumn::make('category.name')
                     ->label('Category')
                     ->badge()
                     ->color('primary')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('author.name')
+                TextColumn::make('author.name')
                     ->label('Author')
                     ->sortable(),
 
-                Tables\Columns\IconColumn::make('is_published')
-                    ->label('Published')
-                    ->boolean(),
+                TextColumn::make('status')
+                    ->badge()
+                    ->sortable(),
 
-                Tables\Columns\TextColumn::make('published_at')
+                TextColumn::make('published_at')
                     ->label('Date')
                     ->dateTime('M d, Y')
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('reading_time')
+                TextColumn::make('reading_time')
                     ->label('Read Time')
                     ->suffix(' min')
                     ->sortable(),
             ])
             ->filters([
-                Tables\Filters\SelectFilter::make('category')
+                SelectFilter::make('category')
                     ->relationship('category', 'name'),
 
-                Tables\Filters\TernaryFilter::make('is_published')
-                    ->label('Status')
-                    ->placeholder('All posts')
-                    ->trueLabel('Published')
-                    ->falseLabel('Draft'),
+                SelectFilter::make('status')
+                    ->options(\App\Enums\PostStatus::class),
             ])
             ->headerActions([
                 CreateAction::make(),

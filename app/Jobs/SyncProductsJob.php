@@ -33,7 +33,8 @@ class SyncProductsJob implements ShouldQueue
      * Create a new job instance.
      */
     public function __construct(
-        public bool $includeDeleted = false
+        public bool $includeDeleted = false,
+        public ?int $initiatorId = null,
     ) {}
 
     /**
@@ -54,8 +55,21 @@ class SyncProductsJob implements ShouldQueue
 
             Log::info('[SyncProductsJob] Sync completed successfully.');
         } catch (Throwable $e) {
-            Log::error('[SyncProductsJob] Sync failed: ' . $e->getMessage());
+            Log::error('[SyncProductsJob] Sync failed: '.$e->getMessage());
             throw $e;
+        } finally {
+            \Illuminate\Support\Facades\Cache::forget('sync_products_job');
+
+            if ($this->initiatorId) {
+                $user = \App\Models\User::find($this->initiatorId);
+                if ($user) {
+                    \Filament\Notifications\Notification::make()
+                        ->title('Product Import Completed')
+                        ->body('The product synchronization process has finished.')
+                        ->success()
+                        ->sendToDatabase($user);
+                }
+            }
         }
     }
 }

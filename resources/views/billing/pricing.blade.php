@@ -6,11 +6,10 @@
 @section('content')
     @php
         $user = auth()->user();
-        $team = $user?->currentTeam;
-        $canCheckout = $user && $team && $user->can('billing', $team);
+        $canCheckout = (bool) $user;
         
         // Check if user already has any purchase (subscription OR one-time)
-        $hasPurchased = $canCheckout && app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($team);
+        $hasPurchased = $canCheckout && app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($user);
         
         // Get customer-friendly provider labels from config
         $providerLabels = config('saas.billing.pricing.provider_labels', [
@@ -203,8 +202,6 @@
                                                 <a href="{{ route('login') }}" class="underline underline-offset-2 hover:text-ink">{{ __('Log In') }}</a>
                                             </div>
                                         </div>
-                                    @elseif (!$team)
-                                        <a href="{{ route('teams.select') }}" class="block w-full px-4 py-2 text-xs font-bold text-center transition rounded-xl bg-secondary/10 text-secondary hover:bg-secondary/20">{{ __('Select Team') }}</a>
                                     @else
                                         <p class="text-xs italic text-center text-ink/50">{{ __('Upgrade required') }}</p>
                                     @endif
@@ -227,13 +224,6 @@
                     </div>
                 @endif
                 
-                <div class="pt-6 mt-auto">
-                    <p class="text-xs font-medium text-center text-ink/30">
-                        {{ !empty($plan['seat_based'])
-                            ? __('Auto-updates based on active members')
-                            : __('Flat-rate billing') }}
-                    </p>
-                </div>
             </div>
         @endforeach
     </section>
@@ -245,7 +235,7 @@
             <div class="relative z-10 flex flex-col items-center justify-between gap-8 md:flex-row">
                 <div>
                     <h2 class="text-3xl font-bold font-display text-ink">{{ __('Need something custom?') }}</h2>
-                    <p class="max-w-xl mt-3 text-lg text-ink/60">{{ __('For large teams and enterprises, we offer custom pricing, SLA guarantees, and dedicated support channels.') }}</p>
+                    <p class="max-w-xl mt-3 text-lg text-ink/60">{{ __('For higher-volume customers, we offer custom pricing, SLA guarantees, and dedicated support channels.') }}</p>
                 </div>
                 <div class="flex flex-wrap gap-4">
                     @if (config('saas.support.email'))

@@ -4,32 +4,23 @@ namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Data\CheckoutRequest;
 use App\Domain\Billing\Models\Discount;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use Tests\TestCase;
 
 class CheckoutRequestTest extends TestCase
 {
-    private function createMockTeam(int $id = 1): Team
-    {
-        $team = new Team();
-        $team->id = $id;
-        $team->name = 'Test Team';
-        return $team;
-    }
-
     private function createMockUser(int $id = 1): User
     {
-        $user = new User();
+        $user = new User;
         $user->id = $id;
         $user->email = 'test@example.com';
+
         return $user;
     }
 
     public function test_metadata_contains_required_fields(): void
     {
         $request = new CheckoutRequest(
-            team: $this->createMockTeam(123),
             user: $this->createMockUser(456),
             planKey: 'starter',
             priceKey: 'monthly',
@@ -40,7 +31,6 @@ class CheckoutRequestTest extends TestCase
 
         $metadata = $request->metadata();
 
-        $this->assertEquals('123', $metadata['team_id']);
         $this->assertEquals('456', $metadata['user_id']);
         $this->assertEquals('starter', $metadata['plan_key']);
         $this->assertEquals('monthly', $metadata['price_key']);
@@ -48,14 +38,13 @@ class CheckoutRequestTest extends TestCase
 
     public function test_metadata_includes_discount_when_provided(): void
     {
-        $discount = new Discount();
+        $discount = new Discount;
         $discount->id = 789;
         $discount->code = 'SAVE20';
 
         $request = new CheckoutRequest(
-            team: $this->createMockTeam(),
             user: $this->createMockUser(),
-            planKey: 'team',
+            planKey: 'growth',
             priceKey: 'yearly',
             quantity: 5,
             successUrl: 'https://example.com/success',
@@ -72,7 +61,6 @@ class CheckoutRequestTest extends TestCase
     public function test_resolve_mode_returns_payment_for_one_time(): void
     {
         $request = new CheckoutRequest(
-            team: $this->createMockTeam(),
             user: $this->createMockUser(),
             planKey: 'lifetime',
             priceKey: 'once',
@@ -90,7 +78,6 @@ class CheckoutRequestTest extends TestCase
     public function test_resolve_mode_returns_subscription_for_subscription(): void
     {
         $request = new CheckoutRequest(
-            team: $this->createMockTeam(),
             user: $this->createMockUser(),
             planKey: 'starter',
             priceKey: 'monthly',
@@ -108,7 +95,6 @@ class CheckoutRequestTest extends TestCase
     public function test_resolve_mode_defaults_to_subscription(): void
     {
         $request = new CheckoutRequest(
-            team: $this->createMockTeam(),
             user: $this->createMockUser(),
             planKey: 'starter',
             priceKey: 'monthly',

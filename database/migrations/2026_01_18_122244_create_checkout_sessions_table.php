@@ -15,7 +15,6 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('team_id')->constrained()->cascadeOnDelete();
             $table->string('provider'); // paddle, stripe, lemonsqueezy
             $table->string('provider_session_id')->nullable(); // Paddle transaction ID, Stripe session ID
             $table->string('plan_key');
@@ -25,7 +24,7 @@ return new class extends Migration
             $table->timestamp('expires_at');
             $table->timestamp('completed_at')->nullable();
             $table->timestamps();
-            
+
             $table->index(['uuid', 'status']);
             $table->index(['user_id', 'status']);
             $table->index('expires_at');

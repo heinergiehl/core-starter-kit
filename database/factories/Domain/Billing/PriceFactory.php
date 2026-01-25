@@ -25,7 +25,7 @@ class PriceFactory extends Factory
             'interval_count' => 1,
             'currency' => 'usd',
             'amount' => fake()->randomElement([990, 1990, 2990, 4900, 9900]),
-            'type' => 'recurring',
+            'type' => \App\Enums\PriceType::Recurring,
             'has_trial' => false,
             'trial_interval' => null,
             'trial_interval_count' => null,

@@ -11,18 +11,22 @@ use Livewire\Component;
 class TwoFactorAuthentication extends Component
 {
     public string $code = '';
+
     public string $password = '';
+
     public string $disablePassword = '';
+
     public string $regeneratePassword = '';
-    
+
     public bool $showBackupCodes = false;
 
     public function enable(): void
     {
         $user = Auth::user();
-        
+
         if ($user->twoFactorAuth?->isEnabled()) {
             $this->dispatch('notify', type: 'error', message: __('Two-factor authentication is already enabled.'));
+
             return;
         }
 
@@ -51,21 +55,23 @@ class TwoFactorAuthentication extends Component
         $user = Auth::user();
         $twoFactor = $user->twoFactorAuth;
 
-        if (!$twoFactor || $twoFactor->isEnabled()) {
+        if (! $twoFactor || $twoFactor->isEnabled()) {
             $this->dispatch('notify', type: 'error', message: __('Invalid request.'));
+
             return;
         }
 
-        if (!$twoFactor->verify($this->code)) {
+        if (! $twoFactor->verify($this->code)) {
             $this->addError('code', __('The provided code is invalid.'));
+
             return;
         }
 
         $twoFactor->update(['confirmed_at' => now()]);
-        
+
         $this->code = '';
         $this->showBackupCodes = true;
-        
+
         $this->dispatch('notify', type: 'success', message: __('Two-factor authentication has been enabled!'));
     }
 
@@ -77,15 +83,16 @@ class TwoFactorAuthentication extends Component
 
         $user = Auth::user();
 
-        if (!Hash::check($this->disablePassword, $user->password)) {
+        if (! Hash::check($this->disablePassword, $user->password)) {
             $this->addError('disablePassword', __('The password is incorrect.'));
+
             return;
         }
 
         $user->twoFactorAuth?->delete();
-        
+
         $this->disablePassword = '';
-        
+
         $this->dispatch('notify', type: 'success', message: __('Two-factor authentication has been disabled.'));
     }
 
@@ -97,15 +104,17 @@ class TwoFactorAuthentication extends Component
 
         $user = Auth::user();
 
-        if (!Hash::check($this->regeneratePassword, $user->password)) {
+        if (! Hash::check($this->regeneratePassword, $user->password)) {
             $this->addError('regeneratePassword', __('The password is incorrect.'));
+
             return;
         }
 
         $twoFactor = $user->twoFactorAuth;
 
-        if (!$twoFactor?->isEnabled()) {
+        if (! $twoFactor?->isEnabled()) {
             $this->dispatch('notify', type: 'error', message: __('Two-factor authentication is not enabled.'));
+
             return;
         }
 
@@ -115,7 +124,7 @@ class TwoFactorAuthentication extends Component
 
         $this->regeneratePassword = '';
         $this->showBackupCodes = true;
-        
+
         $this->dispatch('notify', type: 'success', message: __('Backup codes have been regenerated.'));
     }
 
@@ -123,12 +132,12 @@ class TwoFactorAuthentication extends Component
     {
         $user = Auth::user();
         $twoFactor = $user->twoFactorAuth;
-        
+
         return view('livewire.profile.two-factor-authentication', [
             'user' => $user,
             'twoFactor' => $twoFactor,
             'isEnabled' => $twoFactor?->isEnabled() ?? false,
-            'isPending' => $twoFactor && !$twoFactor->isEnabled(),
+            'isPending' => $twoFactor && ! $twoFactor->isEnabled(),
         ]);
     }
 }

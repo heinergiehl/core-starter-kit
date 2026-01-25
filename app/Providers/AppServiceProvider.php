@@ -3,7 +3,10 @@
 namespace App\Providers;
 
 use App\Domain\Billing\Services\EntitlementService;
+use App\Domain\Settings\Services\AppSettingsService;
 use App\Domain\Settings\Services\BrandingService;
+use App\Domain\Settings\Services\MailSettingsService;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -26,45 +29,30 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('brand_settings')) {
-                $globalSetting = \App\Domain\Settings\Models\BrandSetting::whereNull('team_id')->first();
-                
-                if ($globalSetting) {
-                    config([
-                        'saas.branding.app_name' => $globalSetting->app_name ?? config('saas.branding.app_name'),
-                        'saas.branding.logo_path' => $globalSetting->logo_path ?? config('saas.branding.logo_path'),
-                        'saas.branding.colors.primary' => $globalSetting->color_primary ?? config('saas.branding.colors.primary'),
-                        'saas.branding.colors.secondary' => $globalSetting->color_secondary ?? config('saas.branding.colors.secondary'),
-                        'saas.branding.colors.accent' => $globalSetting->color_accent ?? config('saas.branding.colors.accent'),
-                        'saas.branding.colors.bg' => $globalSetting->color_bg ?? config('saas.branding.colors.bg'),
-                        'saas.branding.colors.fg' => $globalSetting->color_fg ?? config('saas.branding.colors.fg'),
-                        'template.active' => $globalSetting->template ?? config('template.active'),
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            // Suppress errors during early boot (e.g. migrations)
-        }
+        app(AppSettingsService::class)->applyToConfig();
+        app(MailSettingsService::class)->applyConfig();
 
-
-
+        // Global Branding for all views
         View::composer('*', function ($view): void {
-            $user = request()->user();
-            // Only apply Tenant Branding if we are inside the App Panel (/app/*)
-            // Otherwise (Marketing, Auth, Admin), use Global Branding (null).
-            $isAppRoute = request()->is('app') || request()->is('app/*');
-            $team = ($isAppRoute && $user) ? $user->currentTeam : null;
-            
             $branding = app(BrandingService::class);
-            $entitlements = ($user && $user->currentTeam) ? app(EntitlementService::class)->forTeam($user->currentTeam) : null;
+            $view->with('appBrandName', $branding->appName());
+            $view->with('appLogoPath', $branding->logoPath());
+        });
 
-            $view->with('appBrandName', $branding->appNameFor($team));
-            $view->with('appLogoPath', $branding->logoPathFor($team));
-            $view->with('entitlements', $entitlements);
+        // Entitlements only for authenticated app layout
+        View::composer(['layouts.app', 'components.app-layout'], function ($view): void {
+            $user = request()->user();
+            if ($user) {
+                $entitlements = app(EntitlementService::class)->forUser($user);
+                $view->with('entitlements', $entitlements);
+            }
         });
 
         \App\Domain\Billing\Models\Subscription::observe(\App\Domain\Billing\Observers\SubscriptionObserver::class);
         \App\Domain\Billing\Models\Order::observe(\App\Domain\Billing\Observers\OrderObserver::class);
+
+        Event::subscribe(\App\Domain\Billing\Listeners\SendSubscriptionNotifications::class);
+
+        \Filament\Livewire\DatabaseNotifications::pollingInterval('30s');
     }
 }

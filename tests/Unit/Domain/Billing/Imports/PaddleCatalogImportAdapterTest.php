@@ -25,7 +25,7 @@ class PaddleCatalogImportAdapterTest extends TestCase
             'https://sandbox-api.paddle.com/prices*' => Http::response(['data' => []]),
         ]);
 
-        $adapter = new PaddleCatalogImportAdapter();
+        $adapter = new PaddleCatalogImportAdapter;
         $result = $adapter->fetch();
 
         $this->assertCount(2, $result['items']);
@@ -38,7 +38,7 @@ class PaddleCatalogImportAdapterTest extends TestCase
         Http::fake([
             'https://sandbox-api.paddle.com/products*' => Http::response([
                 'data' => [['id' => 'pro_1', 'name' => 'Free Product', 'status' => 'active']],
-                'meta' => ['pagination' => ['next' => null]]
+                'meta' => ['pagination' => ['next' => null]],
             ]),
             'https://sandbox-api.paddle.com/prices*' => Http::response([
                 'data' => [[
@@ -49,11 +49,11 @@ class PaddleCatalogImportAdapterTest extends TestCase
                     'billing_cycle' => ['interval' => 'month', 'frequency' => 1],
                     'status' => 'active',
                 ]],
-                'meta' => ['pagination' => ['next' => null]]
+                'meta' => ['pagination' => ['next' => null]],
             ]),
         ]);
 
-        $adapter = new PaddleCatalogImportAdapter();
+        $adapter = new PaddleCatalogImportAdapter;
         $result = $adapter->fetch();
 
         $this->assertCount(1, $result['items']);
@@ -73,14 +73,14 @@ class PaddleCatalogImportAdapterTest extends TestCase
                     'custom_data' => [
                         'seat_based' => '1',
                         'featured' => 'true',
-                    ]
+                    ],
                 ]],
-                'meta' => ['pagination' => ['next' => null]]
+                'meta' => ['pagination' => ['next' => null]],
             ]),
             'https://sandbox-api.paddle.com/prices*' => Http::response(['data' => []]),
         ]);
 
-        $adapter = new PaddleCatalogImportAdapter();
+        $adapter = new PaddleCatalogImportAdapter;
         $result = $adapter->fetch();
 
         $plan = $result['items'][0]['plan'];

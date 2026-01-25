@@ -25,15 +25,15 @@ class BlogPost extends Model
         'meta_description',
         'reading_time',
         'published_at',
-        'is_published',
+        'status',
         'author_id',
         'category_id',
     ];
 
     protected $casts = [
         'published_at' => 'datetime',
-        'is_published' => 'bool',
         'reading_time' => 'int',
+        'status' => \App\Enums\PostStatus::class,
     ];
 
     /**
@@ -45,12 +45,12 @@ class BlogPost extends Model
 
         static::saving(function (BlogPost $post) {
             // Auto-generate slug from title if not set
-            if (empty($post->slug) && !empty($post->title)) {
+            if (empty($post->slug) && ! empty($post->title)) {
                 $post->slug = Str::slug($post->title);
             }
 
             // Calculate reading time from content
-            if (!empty($post->body_html)) {
+            if (! empty($post->body_html)) {
                 $wordCount = str_word_count(strip_tags($post->body_html));
                 $post->reading_time = max(1, ceil($wordCount / 200));
             }
@@ -63,7 +63,7 @@ class BlogPost extends Model
     public function scopePublished(Builder $query): Builder
     {
         return $query
-            ->where('is_published', true)
+            ->where('status', \App\Enums\PostStatus::Published)
             ->where(function ($q) {
                 $q->whereNull('published_at')
                     ->orWhere('published_at', '<=', now());
@@ -75,7 +75,7 @@ class BlogPost extends Model
      */
     public function scopeDraft(Builder $query): Builder
     {
-        return $query->where('is_published', false);
+        return $query->where('status', \App\Enums\PostStatus::Draft);
     }
 
     /**

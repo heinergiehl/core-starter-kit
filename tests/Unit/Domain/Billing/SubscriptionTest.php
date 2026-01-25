@@ -3,16 +3,17 @@
 namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Models\Subscription;
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class SubscriptionTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function it_identifies_subscription_on_trial()
     {
         $subscription = Subscription::factory()->create([
@@ -30,30 +31,33 @@ class SubscriptionTest extends TestCase
         $this->assertFalse($expiredTrial->onTrial());
     }
 
-    /** @test */
+    #[Test]
     public function it_clears_entitlement_cache_on_save()
     {
-        $team = Team::factory()->create();
-        $cacheKey = "entitlements:team:{$team->id}";
+        $user = User::factory()->create();
+        $cacheKey = "entitlements:user:{$user->id}";
+
+        Cache::shouldReceive('remember')
+            ->andReturn(null);
 
         // Expectation: called on create AND called on update = 2 times
         Cache::shouldReceive('forget')
             ->times(2)
             ->with($cacheKey);
 
-        $subscription = Subscription::factory()->create(['team_id' => $team->id]);
-        
+        $subscription = Subscription::factory()->create(['user_id' => $user->id]);
+
         // Update to trigger save
-        $subscription->update(['status' => 'active']);
+        $subscription->update(['status' => 'canceled']);
     }
 
-    /** @test */
+    #[Test]
     public function it_clears_entitlement_cache_on_delete()
     {
-        $team = Team::factory()->create();
-        $cacheKey = "entitlements:team:{$team->id}";
-        
-        $subscription = Subscription::factory()->create(['team_id' => $team->id]);
+        $user = User::factory()->create();
+        $cacheKey = "entitlements:user:{$user->id}";
+
+        $subscription = Subscription::factory()->create(['user_id' => $user->id]);
 
         Cache::shouldReceive('forget')
             ->once()

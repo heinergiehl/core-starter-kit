@@ -3,7 +3,6 @@
 namespace App\Domain\Billing\Imports;
 
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Str;
 use RuntimeException;
 
 class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
@@ -14,7 +13,9 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
     }
 
     private const PER_PAGE = 100;
+
     private const MAX_RETRIES = 3;
+
     private const RETRY_SLEEP_MS = 200;
 
     public function fetch(): array
@@ -22,7 +23,7 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
         $apiKey = config('services.lemonsqueezy.api_key');
         $storeId = config('services.lemonsqueezy.store_id');
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             throw new RuntimeException('Lemon Squeezy API key is not configured.');
         }
 
@@ -38,8 +39,8 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
         do {
             $response = $this->apiGet($apiKey, $nextUrl, $queryParams);
 
-            if (!$response->successful()) {
-                throw new RuntimeException('Failed to fetch Lemon Squeezy products: ' . $response->body());
+            if (! $response->successful()) {
+                throw new RuntimeException('Failed to fetch Lemon Squeezy products: '.$response->body());
             }
 
             $data = $response->json();
@@ -50,7 +51,6 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
             $queryParams = [];
         } while ($nextUrl);
 
-
         // Fetch all variants
         $allVariants = collect();
         $nextUrl = '/variants';
@@ -59,8 +59,8 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
         do {
             $response = $this->apiGet($apiKey, $nextUrl, $queryParams);
 
-            if (!$response->successful()) {
-                throw new RuntimeException('Failed to fetch Lemon Squeezy variants: ' . $response->body());
+            if (! $response->successful()) {
+                throw new RuntimeException('Failed to fetch Lemon Squeezy variants: '.$response->body());
             }
 
             $data = $response->json();
@@ -72,7 +72,7 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
 
         foreach ($products as $product) {
             $productId = $product['id'] ?? null;
-            if (!$productId) {
+            if (! $productId) {
                 continue;
             }
 
@@ -83,6 +83,7 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
             $productVariants = $allVariants->filter(function ($variant) use ($productId) {
                 $relationships = $variant['relationships'] ?? [];
                 $productRel = $relationships['product']['data']['id'] ?? null;
+
                 return $productRel === $productId;
             });
 
@@ -90,8 +91,9 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
             foreach ($productVariants as $variant) {
                 $pricePayload = $this->normalizeVariant($variant, $product, $customData);
 
-                if (!$pricePayload) {
+                if (! $pricePayload) {
                     $warnings[] = "Skipped Lemon Squeezy variant {$variant['id']} for product {$productId} because price is missing.";
+
                     continue;
                 }
 
@@ -116,12 +118,12 @@ class LemonSqueezyCatalogImportAdapter implements CatalogImportAdapter
             $url = $endpoint;
         } else {
             // Ensure endpoint starts with slash if not present
-            if (!str_starts_with($endpoint, '/')) {
-                $endpoint = '/' . $endpoint;
+            if (! str_starts_with($endpoint, '/')) {
+                $endpoint = '/'.$endpoint;
             }
             $url = "https://api.lemonsqueezy.com/v1{$endpoint}";
         }
-        
+
         return Http::withToken($apiKey)
             ->withHeaders([
                 'Accept' => 'application/vnd.api+json',

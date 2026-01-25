@@ -4,27 +4,25 @@ namespace App\Jobs;
 
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingProviderManager;
-use Illuminate\Support\Facades\DB;
-use Throwable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class ProcessWebhookEvent implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public function __construct(private readonly int $eventId)
-    {
-    }
+    public function __construct(private readonly int $eventId) {}
 
     public function handle(BillingProviderManager $manager): void
     {
         $event = WebhookEvent::find($this->eventId);
 
-        if (!$event || $event->status === 'processed') {
+        if (! $event || $event->status === 'processed') {
             return;
         }
 
@@ -48,4 +46,3 @@ class ProcessWebhookEvent implements ShouldQueue
         }
     }
 }
-

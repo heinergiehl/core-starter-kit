@@ -2,18 +2,14 @@
 
 namespace App\Domain\Billing\Models;
 
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class Subscription extends Model
 {
-    use HasFactory, BelongsToTenant;
-
-
+    use HasFactory;
 
     protected static function newFactory()
     {
@@ -21,7 +17,7 @@ class Subscription extends Model
     }
 
     protected $fillable = [
-        'team_id',
+        'user_id',
         'provider',
         'provider_id',
         'plan_key',
@@ -42,6 +38,8 @@ class Subscription extends Model
         'trial_ends_at' => 'datetime',
         'renews_at' => 'datetime',
         'ends_at' => 'datetime',
+        'status' => \App\Enums\SubscriptionStatus::class,
+        'provider' => \App\Enums\BillingProvider::class,
         'canceled_at' => 'datetime',
         'welcome_email_sent_at' => 'datetime',
         'trial_started_email_sent_at' => 'datetime',
@@ -49,9 +47,9 @@ class Subscription extends Model
         'metadata' => 'array',
     ];
 
-    public function team(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Team::class);
+        return $this->belongsTo(User::class);
     }
 
     /**

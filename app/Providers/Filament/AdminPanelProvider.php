@@ -2,6 +2,9 @@
 
 namespace App\Providers\Filament;
 
+use App\Domain\Settings\Services\BrandingService;
+use App\Filament\Admin\Widgets\BillingMetricsWidget;
+use App\Http\Middleware\EnsureAdminUser;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -12,8 +15,6 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
-use App\Filament\Admin\Widgets\BillingMetricsWidget;
-use App\Http\Middleware\EnsureAdminUser;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -33,12 +34,10 @@ class AdminPanelProvider extends PanelProvider
             ->font(config('saas.branding.fonts.sans', 'Instrument Sans'))
             ->serifFont(config('saas.branding.fonts.display', 'Instrument Serif'))
             ->colors([
-                'primary' => config('saas.branding.colors.primary')
-                    ? Color::hex(config('saas.branding.colors.primary'))
-                    : Color::Slate,
+                'primary' => Color::Slate,
             ])
-            ->brandName(config('saas.branding.app_name', config('app.name')))
-            ->brandLogo(config('saas.branding.logo_path') ? asset(config('saas.branding.logo_path')) : null)
+            ->brandName(fn (): string => app(BrandingService::class)->appName())
+            ->brandLogo(fn (): ?string => ($logo = app(BrandingService::class)->logoPath()) ? asset($logo) : null)
             ->discoverResources(in: app_path('Filament/Admin/Resources'), for: 'App\\Filament\\Admin\\Resources')
             ->discoverPages(in: app_path('Filament/Admin/Pages'), for: 'App\\Filament\\Admin\\Pages')
             ->pages([
@@ -46,7 +45,6 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Admin/Widgets'), for: 'App\\Filament\\Admin\\Widgets')
             ->widgets([
-                \App\Filament\Admin\Widgets\SaasStatsWidget::class,
                 BillingMetricsWidget::class,
                 AccountWidget::class,
                 FilamentInfoWidget::class,
@@ -66,6 +64,7 @@ class AdminPanelProvider extends PanelProvider
                 Authenticate::class,
                 EnsureAdminUser::class,
             ])
-            ->globalSearch(false);
+            ->globalSearch(false)
+            ->databaseNotifications();
     }
 }

@@ -21,7 +21,7 @@ class SitemapTest extends TestCase
             'slug' => 'release-notes',
             'excerpt' => 'What shipped this week.',
             'body_markdown' => '# Update',
-            'is_published' => true,
+            'status' => \App\Enums\PostStatus::Published,
             'published_at' => now(),
         ]);
 

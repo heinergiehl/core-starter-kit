@@ -27,7 +27,7 @@ class CleanExpiredCheckoutSessions extends Command
     public function handle(): int
     {
         $days = (int) $this->option('days');
-        
+
         $this->info("Cleaning checkout sessions older than {$days} days...");
 
         $deleted = CheckoutSession::query()

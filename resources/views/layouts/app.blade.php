@@ -47,19 +47,8 @@
             @include('layouts.navigation')
             
             {{-- Site-wide Announcements --}}
-            <x-announcement-banner />
-
-            @php
-                $maxSeats = $entitlements?->get('max_seats');
-            @endphp
-
-            @if(isset($entitlements) && !is_null($maxSeats) && $maxSeats > 0 && !$entitlements?->get('has_available_seats', true))
-                <div class="border-b border-amber-200 bg-amber-50">
-                    <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 text-sm text-amber-900 sm:px-6 lg:px-8">
-                        <span>{{ __('Seat limit reached. Upgrade your plan to invite more members.') }}</span>
-                        <a href="{{ url('/app') }}" class="font-semibold text-amber-900 underline underline-offset-4 hover:text-amber-700">{{ __('Manage billing') }}</a>
-                    </div>
-                </div>
+            @if (config('saas.features.announcements', true))
+                <x-announcement-banner />
             @endif
 
             @isset($header)
@@ -76,5 +65,6 @@
             </main>
         </div>
         @livewireScripts
+        <x-livewire-toasts />
     </body>
 </html>

@@ -10,16 +10,16 @@ return new class extends Migration
     {
         Schema::table('invoices', function (Blueprint $table) {
             // Customer details (from Paddle checkout)
-            $table->string('customer_name')->nullable()->after('team_id');
+            $table->string('customer_name')->nullable()->after('user_id');
             $table->string('customer_email')->nullable();
             $table->text('billing_address')->nullable(); // JSON: {line1, line2, city, postal_code, country}
             $table->string('customer_vat_number')->nullable();
-            
+
             // Financial breakdown
             $table->integer('subtotal')->nullable()->after('amount_paid')->comment('Amount before tax, in cents');
             $table->integer('tax_amount')->nullable()->comment('Tax amount in cents');
             $table->decimal('tax_rate', 5, 2)->nullable()->comment('Tax rate as percentage, e.g., 19.00');
-            
+
             // PDF caching
             $table->timestamp('pdf_url_expires_at')->nullable()->after('pdf_url');
         });

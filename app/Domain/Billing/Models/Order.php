@@ -2,19 +2,17 @@
 
 namespace App\Domain\Billing\Models;
 
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Stancl\Tenancy\Database\Concerns\BelongsToTenant;
 
 class Order extends Model
 {
-    use HasFactory, BelongsToTenant;
+    use HasFactory;
 
     protected $fillable = [
-        'team_id',
+        'user_id',
         'provider',
         'provider_id',
         'plan_key',
@@ -29,13 +27,15 @@ class Order extends Model
     protected $casts = [
         'amount' => 'int',
         'paid_at' => 'datetime',
+        'status' => \App\Enums\OrderStatus::class,
+        'provider' => \App\Enums\BillingProvider::class,
         'refunded_at' => 'datetime',
         'metadata' => 'array',
     ];
 
-    public function team(): BelongsTo
+    public function user(): BelongsTo
     {
-        return $this->belongsTo(Team::class);
+        return $this->belongsTo(User::class);
     }
 
     /**

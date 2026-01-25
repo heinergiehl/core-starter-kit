@@ -20,7 +20,7 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
     {
         $secret = config('services.stripe.secret');
 
-        if (!$secret) {
+        if (! $secret) {
             throw new RuntimeException('Stripe secret is not configured.');
         }
 
@@ -35,8 +35,9 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
             foreach ($client->prices->all(['limit' => self::PER_PAGE, 'product' => $product->id])->autoPagingIterator() as $price) {
                 $pricePayload = $this->normalizePrice($price, $product, $productMetadata);
 
-                if (!$pricePayload) {
+                if (! $pricePayload) {
                     $warnings[] = "Skipped Stripe price {$price->id} for product {$product->id} because unit_amount is missing.";
+
                     continue;
                 }
 
@@ -74,8 +75,6 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
                 'summary' => $metadata['summary'] ?? null,
                 'description' => (string) ($product->description ?? ''),
                 'type' => $planType,
-                'seat_based' => $this->boolFromMetadata($metadata['seat_based'] ?? $metadata['seatBased'] ?? null),
-                'max_seats' => $this->intFromMetadata($metadata['max_seats'] ?? $metadata['maxSeats'] ?? null),
                 'is_featured' => $this->boolFromMetadata($metadata['featured'] ?? $metadata['is_featured'] ?? null),
                 'features' => $this->parseFeatures($metadata['features'] ?? null),
                 'entitlements' => $this->parseEntitlements($metadata['entitlements'] ?? null),
@@ -97,7 +96,7 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
         $intervalCount = $price->recurring?->interval_count ?? 1;
         $trialDays = (int) ($price->recurring?->trial_period_days ?? 0);
 
-        if (!$interval) {
+        if (! $interval) {
             $interval = 'once';
             $intervalCount = 1;
         }
@@ -179,7 +178,7 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
         }
 
         foreach ($prices as $price) {
-            if (!empty($price['interval']) && $price['interval'] !== 'once') {
+            if (! empty($price['interval']) && $price['interval'] !== 'once') {
                 return 'subscription';
             }
         }
@@ -218,7 +217,7 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
 
     private function resolvePriceLabel(object $price, string $priceKey, string $planName): string
     {
-        if (!empty($price->nickname)) {
+        if (! empty($price->nickname)) {
             return (string) $price->nickname;
         }
 
@@ -255,22 +254,13 @@ class StripeCatalogImportAdapter implements CatalogImportAdapter
         return false;
     }
 
-    private function intFromMetadata(mixed $value): ?int
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        return is_numeric($value) ? (int) $value : null;
-    }
-
     private function parseFeatures(mixed $value): array
     {
         if (is_array($value)) {
             return array_values(array_filter(array_map('trim', $value)));
         }
 
-        if (!is_string($value) || trim($value) === '') {
+        if (! is_string($value) || trim($value) === '') {
             return [];
         }
 

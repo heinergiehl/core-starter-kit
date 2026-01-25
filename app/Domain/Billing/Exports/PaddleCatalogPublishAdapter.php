@@ -11,9 +11,12 @@ use RuntimeException;
 class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
 {
     private ?string $apiKey = null;
+
     private string $baseUrl = 'https://api.paddle.com';
+
     /** @var array<string, array> */
     private array $productsByKey = [];
+
     /** @var array<string, array> */
     private array $pricesByLookupKey = [];
 
@@ -28,7 +31,7 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
         $environment = config('services.paddle.environment', 'production');
         $this->baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
-        if (!$this->apiKey) {
+        if (! $this->apiKey) {
             throw new RuntimeException('Paddle API key is not configured.');
         }
 
@@ -67,8 +70,8 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
                         ->acceptJson()
                         ->patch("{$this->baseUrl}/products/{$existing['id']}", $payload);
 
-                    if (!$response->successful()) {
-                        throw new RuntimeException('Paddle product update failed: ' . $response->body());
+                    if (! $response->successful()) {
+                        throw new RuntimeException('Paddle product update failed: '.$response->body());
                     }
 
                     $this->productsByKey[$productKey] = $response->json('data');
@@ -80,7 +83,7 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
             return ['action' => 'skip', 'id' => (string) $existing['id']];
         }
 
-        if (!$apply) {
+        if (! $apply) {
             return ['action' => 'create', 'id' => null];
         }
 
@@ -88,8 +91,8 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
             ->acceptJson()
             ->post("{$this->baseUrl}/products", $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Paddle product creation failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw new RuntimeException('Paddle product creation failed: '.$response->body());
         }
 
         $created = $response->json('data');
@@ -127,14 +130,15 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
                     // Update logic currently skipped as Paddle prices are mostly immutable.
                     // If we needed to update mutable fields (like description), we'd do it here.
                 }
+
                 return ['action' => 'update', 'id' => (string) $remoteId];
             }
-            
+
             return ['action' => 'link', 'id' => (string) $remoteId];
         }
 
         // 4. If we are here, we need to CREATE a new price
-        if (!$apply) {
+        if (! $apply) {
             return ['action' => 'create', 'id' => null];
         }
 
@@ -144,8 +148,8 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
             ->acceptJson()
             ->post("{$this->baseUrl}/prices", $payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Paddle price creation failed: ' . $response->body());
+        if (! $response->successful()) {
+            throw new RuntimeException('Paddle price creation failed: '.$response->body());
         }
 
         $created = $response->json('data');
@@ -213,7 +217,7 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
             $mapping = $price->mappings()->where('provider', $this->provider())->first();
         }
 
-        if (!$mapping || !$mapping->provider_id) {
+        if (! $mapping || ! $mapping->provider_id) {
             return null;
         }
 
@@ -235,8 +239,8 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
                 ->acceptJson()
                 ->get($url, $query);
 
-            if (!$response->successful()) {
-                throw new RuntimeException("Paddle {$resource} list failed: " . $response->body());
+            if (! $response->successful()) {
+                throw new RuntimeException("Paddle {$resource} list failed: ".$response->body());
             }
 
             $items = array_merge($items, $response->json('data') ?? []);
@@ -245,7 +249,7 @@ class PaddleCatalogPublishAdapter implements CatalogPublishAdapter
                 ?? $response->json('links.next')
                 ?? null;
 
-            if (!$next) {
+            if (! $next) {
                 break;
             }
 

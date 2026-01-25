@@ -1,9 +1,9 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Console\Scheduling\Schedule;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -34,14 +34,12 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
-            'team' => \App\Http\Middleware\EnsureTeamIsSelected::class,
             'subscribed' => \App\Http\Middleware\EnsureSubscription::class,
+            'redirect_if_subscribed' => \App\Http\Middleware\RedirectIfSubscribed::class,
         ]);
 
         $middleware->web(append: [
             \App\Http\Middleware\SecurityHeaders::class,
-            \Stancl\Tenancy\Middleware\InitializeTenancyByDomain::class,
-            \App\Http\Middleware\ResolveTeamByDomain::class,
             \App\Http\Middleware\SetLocale::class,
             \App\Http\Middleware\EnsureOnboardingComplete::class,
         ]);

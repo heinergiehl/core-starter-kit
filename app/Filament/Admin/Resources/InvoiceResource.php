@@ -10,7 +10,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
-use Filament\Tables;
+use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,9 +18,9 @@ class InvoiceResource extends Resource
 {
     protected static ?string $model = Invoice::class;
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-document-text';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'Billing';
+    protected static string|\UnitEnum|null $navigationGroup = 'Billing';
 
     protected static ?string $navigationLabel = 'Invoices';
 
@@ -38,7 +38,7 @@ class InvoiceResource extends Resource
         return $schema->schema([
             Section::make('Invoice')
                 ->schema([
-                    TextEntry::make('team.name')->label('Team'),
+                    TextEntry::make('user.name')->label('Customer'),
                     TextEntry::make('provider')->badge(),
                     TextEntry::make('number')->label('Invoice #'),
                     TextEntry::make('provider_id')->label('Provider ID'),
@@ -46,12 +46,12 @@ class InvoiceResource extends Resource
                     TextEntry::make('amount_due')
                         ->label('Amount due')
                         ->formatStateUsing(fn ($state, Invoice $record): string => $record->currency
-                            ? strtoupper($record->currency) . ' ' . number_format(((int) $state) / 100, 2)
+                            ? strtoupper($record->currency).' '.number_format(((int) $state) / 100, 2)
                             : (string) $state),
                     TextEntry::make('amount_paid')
                         ->label('Amount paid')
                         ->formatStateUsing(fn ($state, Invoice $record): string => $record->currency
-                            ? strtoupper($record->currency) . ' ' . number_format(((int) $state) / 100, 2)
+                            ? strtoupper($record->currency).' '.number_format(((int) $state) / 100, 2)
                             : (string) $state),
                     TextEntry::make('issued_at')->dateTime(),
                     TextEntry::make('due_at')->dateTime(),
@@ -60,12 +60,12 @@ class InvoiceResource extends Resource
                         ->label('Hosted URL')
                         ->url(fn (?string $state): ?string => $state)
                         ->openUrlInNewTab()
-                        ->visible(fn (?string $state): bool => !empty($state)),
+                        ->visible(fn (?string $state): bool => ! empty($state)),
                     TextEntry::make('invoice_pdf')
                         ->label('PDF')
                         ->url(fn (?string $state): ?string => $state)
                         ->openUrlInNewTab()
-                        ->visible(fn (?string $state): bool => !empty($state)),
+                        ->visible(fn (?string $state): bool => ! empty($state)),
                     TextEntry::make('created_at')->dateTime(),
                 ])
                 ->columns(2),
@@ -82,18 +82,18 @@ class InvoiceResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('team.name')
-                    ->label('Team')
+                TextColumn::make('user.name')
+                    ->label('Customer')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('provider')
+                TextColumn::make('provider')
                     ->badge()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('number')
+                TextColumn::make('number')
                     ->label('Invoice #')
                     ->sortable()
                     ->searchable(),
-                Tables\Columns\TextColumn::make('status')
+                TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'paid' => 'success',
@@ -101,7 +101,7 @@ class InvoiceResource extends Resource
                         'void', 'voided', 'uncollectible', 'failed' => 'danger',
                         default => 'gray',
                     }),
-                Tables\Columns\TextColumn::make('amount_due')
+                TextColumn::make('amount_due')
                     ->label('Amount due')
                     ->formatStateUsing(function ($state, Invoice $record): string {
                         $currency = strtoupper((string) $record->currency);
@@ -110,11 +110,11 @@ class InvoiceResource extends Resource
                         return trim("{$currency} {$formatted}");
                     })
                     ->sortable(),
-                Tables\Columns\TextColumn::make('issued_at')
+                TextColumn::make('issued_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
-                Tables\Columns\TextColumn::make('paid_at')
+                TextColumn::make('paid_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),

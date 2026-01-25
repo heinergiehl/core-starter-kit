@@ -9,9 +9,7 @@ use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
-
 use Illuminate\Support\Arr;
 
 /**
@@ -22,6 +20,10 @@ use Illuminate\Support\Arr;
 class PaddleSubscriptionHandler implements PaddleWebhookHandler
 {
     use ResolvesPaddleData;
+
+    public function __construct(
+        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService
+    ) {}
 
     public function eventTypes(): array
     {
@@ -48,18 +50,11 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
     public function syncSubscription(array $data): ?Subscription
     {
         $subscriptionId = data_get($data, 'id') ?? data_get($data, 'subscription_id');
-        $teamId = $this->resolveTeamId($data);
+        $userId = $this->resolveUserId($data);
 
-        if (!$subscriptionId || !$teamId) {
+        if (! $subscriptionId || ! $userId) {
             return null;
         }
-
-        $existingSubscription = Subscription::query()
-            ->where('provider', 'paddle')
-            ->where('provider_id', (string) $subscriptionId)
-            ->first();
-
-        $previousPlanKey = $existingSubscription?->plan_key;
 
         $planKey = $this->resolvePlanKey($data) ?? 'unknown';
         $status = (string) (data_get($data, 'status') ?? data_get($data, 'state') ?? 'active');
@@ -72,50 +67,41 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
             ? $this->timestampToDateTime(data_get($scheduledChange, 'effective_at'))
             : null;
 
-        if (!$canceledAt && $scheduledCancelAt) {
-            $canceledAt = $existingSubscription?->canceled_at ?? now();
-        }
-
         $endsAt = $scheduledCancelAt ?? $canceledAt;
 
-        $subscription = Subscription::query()->updateOrCreate(
-            [
-                'provider' => 'paddle',
-                'provider_id' => (string) $subscriptionId,
-            ],
-            [
-                'team_id' => $teamId,
-                'plan_key' => $planKey,
-                'status' => $status,
-                'quantity' => max($quantity, 1),
+        $subscription = $this->subscriptionService->syncFromProvider(
+            provider: 'paddle',
+            providerId: (string) $subscriptionId,
+            userId: $userId,
+            planKey: $planKey,
+            status: $status,
+            quantity: max($quantity, 1),
+            dates: [
                 'trial_ends_at' => $this->timestampToDateTime(data_get($data, 'trial_ends_at')),
                 'renews_at' => $this->timestampToDateTime(data_get($data, 'next_billed_at')),
                 'ends_at' => $endsAt,
                 'canceled_at' => $canceledAt,
-                'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'customer_id', 'customer']),
-            ]
+            ],
+            metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'customer_id', 'customer'])
         );
 
         $this->syncBillingCustomer(
-            $teamId,
+            $userId,
             data_get($data, 'customer_id') ?? data_get($data, 'customer.id'),
-            data_get($data, 'customer_email')
+            data_get($data, 'customer_email') ?? data_get($data, 'customer.email')
         );
 
         $this->recordDiscountRedemption(
             $data,
-            $teamId,
+            $userId,
             $planKey,
             data_get($data, 'custom_data.price_key'),
             (string) $subscriptionId
         );
 
-        // Dispatch Notifications
-        $team = $subscription->team;
-        $owner = $team?->owner;
-
-        if ($owner) {
-             // Notifications are now handled by SubscriptionObserver
+        if ($status === 'active') {
+            app(\App\Domain\Billing\Services\CheckoutService::class)
+                ->verifyUserAfterPayment($userId);
         }
 
         return $subscription;
@@ -124,25 +110,41 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
     /**
      * Sync billing customer from webhook data.
      */
-    private function syncBillingCustomer(int $teamId, ?string $providerId, ?string $email): void
+    private function syncBillingCustomer(int $userId, ?string $providerId, ?string $email): void
     {
         if ($providerId) {
+            $existing = BillingCustomer::query()
+                ->where('provider', 'paddle')
+                ->where('provider_id', $providerId)
+                ->first();
+
+            if ($existing && $existing->user_id !== $userId) {
+                \Illuminate\Support\Facades\Log::warning('Paddle webhook customer id already mapped', [
+                    'provider_id' => $providerId,
+                    'existing_user_id' => $existing->user_id,
+                    'incoming_user_id' => $userId,
+                ]);
+
+                return;
+            }
+
             BillingCustomer::query()->updateOrCreate(
                 [
                     'provider' => 'paddle',
                     'provider_id' => $providerId,
                 ],
                 [
-                    'team_id' => $teamId,
+                    'user_id' => $userId,
                     'email' => $email,
                 ]
             );
+
             return;
         }
 
         BillingCustomer::query()->updateOrCreate(
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'provider' => 'paddle',
             ],
             [
@@ -156,7 +158,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
      */
     private function recordDiscountRedemption(
         array $data,
-        int $teamId,
+        int $userId,
         ?string $planKey,
         ?string $priceKey,
         string $providerId
@@ -165,7 +167,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         $discountId = $customData['discount_id'] ?? data_get($data, 'metadata.discount_id');
         $discountCode = $customData['discount_code'] ?? data_get($data, 'metadata.discount_code');
 
-        if (!$discountId && !$discountCode) {
+        if (! $discountId && ! $discountCode) {
             return;
         }
 
@@ -180,22 +182,14 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                 ->first();
         }
 
-        if (!$discount) {
+        if (! $discount) {
             return;
         }
 
-        $team = Team::find($teamId);
-
-        if (!$team) {
-            return;
-        }
-
-        $userId = $customData['user_id'] ?? null;
-        $user = $userId ? User::find($userId) : null;
+        $user = User::find($userId);
 
         app(DiscountService::class)->recordRedemption(
             $discount,
-            $team,
             $user,
             'paddle',
             $providerId,
@@ -209,7 +203,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
 
     private function resolvePlanName(?string $planKey): string
     {
-        if (!$planKey) {
+        if (! $planKey) {
             return 'subscription';
         }
 

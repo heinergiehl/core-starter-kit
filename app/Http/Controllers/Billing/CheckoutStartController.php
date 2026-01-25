@@ -11,9 +11,6 @@ class CheckoutStartController
 {
     public function __invoke(Request $request, BillingPlanService $plans): View|RedirectResponse
     {
-        if ($request->user()) {
-            return redirect()->route('pricing', ['provider' => $request->query('provider')]);
-        }
 
         $provider = strtolower((string) $request->query('provider', $plans->defaultProvider()));
         $planKey = (string) $request->query('plan', '');

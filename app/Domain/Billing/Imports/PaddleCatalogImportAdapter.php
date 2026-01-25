@@ -14,7 +14,9 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
     }
 
     private const PER_PAGE = 100;
+
     private const MAX_RETRIES = 3;
+
     private const RETRY_SLEEP_MS = 200;
 
     public function fetch(): array
@@ -23,7 +25,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         $environment = config('services.paddle.environment', 'production');
         $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
-        if (!$apiKey) {
+        if (! $apiKey) {
             throw new RuntimeException('Paddle API key is not configured.');
         }
 
@@ -33,7 +35,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         // Fetch products
         $products = [];
         $nextUrl = "{$baseUrl}/products";
-        $queryParams = ['per_page' => self::PER_PAGE]; 
+        $queryParams = ['per_page' => self::PER_PAGE];
 
         do {
             $response = Http::withToken($apiKey)
@@ -41,17 +43,16 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
                 ->retry(self::MAX_RETRIES, self::RETRY_SLEEP_MS)
                 ->get($nextUrl, $queryParams);
 
-            if (!$response->successful()) {
-                throw new RuntimeException('Failed to fetch Paddle products: ' . $response->body());
+            if (! $response->successful()) {
+                throw new RuntimeException('Failed to fetch Paddle products: '.$response->body());
             }
 
             $data = $response->json();
             $products = array_merge($products, $data['data'] ?? []);
-            
-            $nextUrl = $data['meta']['pagination']['next'] ?? null;
-            $queryParams = []; 
-        } while ($nextUrl);
 
+            $nextUrl = $data['meta']['pagination']['next'] ?? null;
+            $queryParams = [];
+        } while ($nextUrl);
 
         // Fetch all prices
         $allPrices = collect();
@@ -64,8 +65,8 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
                 ->retry(self::MAX_RETRIES, self::RETRY_SLEEP_MS)
                 ->get($nextUrl, $queryParams);
 
-            if (!$response->successful()) {
-                throw new RuntimeException('Failed to fetch Paddle prices: ' . $response->body());
+            if (! $response->successful()) {
+                throw new RuntimeException('Failed to fetch Paddle prices: '.$response->body());
             }
 
             $data = $response->json();
@@ -77,7 +78,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
 
         foreach ($products as $product) {
             $productId = $product['id'] ?? null;
-            if (!$productId) {
+            if (! $productId) {
                 continue;
             }
 
@@ -88,8 +89,9 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
             foreach ($productPrices as $price) {
                 $pricePayload = $this->normalizePrice($price, $product, $customData);
 
-                if (!$pricePayload) {
+                if (! $pricePayload) {
                     $warnings[] = "Skipped Paddle price {$price['id']} for product {$productId} because amount is missing.";
+
                     continue;
                 }
 
@@ -110,7 +112,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         $productKey = $this->resolveProductKey($customData, $product);
         $planKey = $this->resolvePlanKey($product, $customData);
         $planType = $this->resolvePlanType($customData, $prices);
-        
+
         $providerId = (string) ($product['id'] ?? '');
 
         return [
@@ -127,9 +129,8 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
                 'summary' => $customData['summary'] ?? null,
                 'description' => $product['description'] ?? '',
                 'type' => $planType,
-                'seat_based' => $this->boolFromMetadata($customData['seat_based'] ?? null),
-                'max_seats' => $this->intFromMetadata($customData['max_seats'] ?? null),
                 'is_featured' => $this->boolFromMetadata($customData['featured'] ?? null),
+                'seat_based' => $this->boolFromMetadata($customData['seat_based'] ?? null),
                 'features' => $this->parseFeatures($customData['features'] ?? null),
                 'entitlements' => $this->parseEntitlements($customData['entitlements'] ?? null),
                 'is_active' => ($product['status'] ?? 'active') === 'active',
@@ -152,7 +153,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         $billingCycle = $price['billing_cycle'] ?? null;
         $interval = $billingCycle['interval'] ?? 'once';
         $intervalCount = (int) ($billingCycle['frequency'] ?? 1);
-        
+
         $trialPeriod = $price['trial_period'] ?? null;
         $trialDays = (int) ($trialPeriod['frequency'] ?? 0);
         $trialInterval = $trialPeriod['interval'] ?? 'day';
@@ -186,7 +187,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
             return Str::slug((string) $productKey, '-');
         }
 
-        return Str::slug('paddle-' . ($product['id'] ?? 'product'), '-');
+        return Str::slug('paddle-'.($product['id'] ?? 'product'), '-');
     }
 
     private function resolvePlanKey(array $product, array $customData): string
@@ -197,7 +198,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
             return Str::slug((string) $planKey, '-');
         }
 
-        return Str::slug('paddle-' . ($product['id'] ?? 'plan'), '-');
+        return Str::slug('paddle-'.($product['id'] ?? 'plan'), '-');
     }
 
     private function resolvePlanType(array $customData, array $prices): string
@@ -209,7 +210,7 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         }
 
         foreach ($prices as $price) {
-            if (!empty($price['interval']) && $price['interval'] !== 'once') {
+            if (! empty($price['interval']) && $price['interval'] !== 'once') {
                 return 'subscription';
             }
         }
@@ -258,22 +259,13 @@ class PaddleCatalogImportAdapter implements CatalogImportAdapter
         return false;
     }
 
-    private function intFromMetadata(mixed $value): ?int
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        return is_numeric($value) ? (int) $value : null;
-    }
-
     private function parseFeatures(mixed $value): array
     {
         if (is_array($value)) {
             return array_values(array_filter(array_map('trim', $value)));
         }
 
-        if (!is_string($value) || trim($value) === '') {
+        if (! is_string($value) || trim($value) === '') {
             return [];
         }
 

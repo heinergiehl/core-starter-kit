@@ -21,8 +21,7 @@ class PaymentFailedMail extends Mailable
         public readonly ?int $amount = null,
         public readonly ?string $currency = null,
         public readonly ?string $failureReason = null,
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

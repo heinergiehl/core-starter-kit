@@ -12,7 +12,7 @@ class CreateProduct extends CreateRecord
 
     protected function getRedirectUrl(): string
     {
-        return $this->getResourceUrl('edit');
+        return $this->getResource()::getUrl('edit', ['record' => $this->record]);
     }
 
     protected function getCreatedNotification(): ?Notification

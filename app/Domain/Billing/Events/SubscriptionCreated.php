@@ -3,7 +3,7 @@
 namespace App\Domain\Billing\Events;
 
 use App\Domain\Billing\Models\Subscription;
-use App\Domain\Organization\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
@@ -17,7 +17,7 @@ class SubscriptionCreated
 
     public function __construct(
         public readonly Subscription $subscription,
-        public readonly Team $team,
+        public readonly User $user,
         public readonly string $planKey,
         public readonly string $provider,
     ) {}

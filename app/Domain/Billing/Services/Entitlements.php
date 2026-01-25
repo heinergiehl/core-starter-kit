@@ -4,9 +4,7 @@ namespace App\Domain\Billing\Services;
 
 class Entitlements
 {
-    public function __construct(private readonly array $values)
-    {
-    }
+    public function __construct(private readonly array $values) {}
 
     public function get(string $key, mixed $default = null): mixed
     {

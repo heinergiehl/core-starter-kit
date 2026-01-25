@@ -4,13 +4,11 @@ namespace App\Domain\Billing\Adapters\Paddle\Handlers;
 
 use App\Domain\Billing\Adapters\Paddle\Concerns\ResolvesPaddleData;
 use App\Domain\Billing\Contracts\PaddleWebhookHandler;
-use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
-use App\Domain\Organization\Models\Team;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
 use Illuminate\Support\Arr;
@@ -50,9 +48,9 @@ class PaddleOrderHandler implements PaddleWebhookHandler
     public function syncOrder(array $data, ?string $eventType = null): ?Order
     {
         $orderId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
-        $teamId = $this->resolveTeamId($data);
+        $userId = $this->resolveUserId($data);
 
-        if (!$orderId || !$teamId) {
+        if (! $orderId || ! $userId) {
             return null;
         }
 
@@ -73,7 +71,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'provider_id' => (string) $orderId,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'provider_order_id' => (string) $orderId,
                 'plan_key' => $this->resolvePlanKey($data),
                 'status' => $status,
@@ -84,17 +82,22 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             ]
         );
 
-        $invoice = $this->syncInvoiceFromOrder($data, $teamId, $order, $status, $amount, $currency);
+        $invoice = $this->syncInvoiceFromOrder($data, $userId, $order, $status, $amount, $currency);
 
         $this->maybeNotifyPaymentFailed($order, $invoice, $status, $eventType, $data);
 
         $this->recordDiscountRedemption(
             $data,
-            $teamId,
+            $userId,
             $order->plan_key,
             data_get($data, 'custom_data.price_key'),
             (string) $orderId
         );
+
+        if (in_array(strtolower($status), ['paid', 'completed', 'settled'], true)) {
+            app(\App\Domain\Billing\Services\CheckoutService::class)
+                ->verifyUserAfterPayment($userId);
+        }
 
         return $order;
     }
@@ -104,7 +107,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
      */
     private function syncInvoiceFromOrder(
         array $data,
-        int $teamId,
+        int $userId,
         Order $order,
         string $status,
         int $amount,
@@ -144,7 +147,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'provider_id' => (string) $transactionId,
             ],
             [
-                'team_id' => $teamId,
+                'user_id' => $userId,
                 'order_id' => $order->id,
                 'invoice_number' => $invoiceNumber,
                 'provider_invoice_id' => $invoiceId,
@@ -182,7 +185,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'metadata' => Arr::only($data, [
                     'id', 'status', 'items', 'custom_data',
                     'invoice_number', 'invoice_id', 'billing_details',
-                    'customer', 'address', 'details'
+                    'customer', 'address', 'details',
                 ]),
             ]
         );
@@ -208,14 +211,13 @@ class PaddleOrderHandler implements PaddleWebhookHandler
         $failedEvent = $eventType && in_array($eventType, ['transaction.past_due', 'transaction.payment_failed'], true);
         $failedStatus = in_array($normalizedStatus, ['past_due', 'payment_failed', 'failed'], true);
 
-        if (!$failedEvent && !$failedStatus) {
+        if (! $failedEvent && ! $failedStatus) {
             return;
         }
 
-        $team = $order->team;
-        $owner = $team?->owner;
+        $owner = $order->user;
 
-        if (!$owner) {
+        if (! $owner) {
             return;
         }
 
@@ -285,7 +287,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
      */
     private function recordDiscountRedemption(
         array $data,
-        int $teamId,
+        int $userId,
         ?string $planKey,
         ?string $priceKey,
         string $providerId
@@ -294,7 +296,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
         $discountId = $customData['discount_id'] ?? data_get($data, 'metadata.discount_id');
         $discountCode = $customData['discount_code'] ?? data_get($data, 'metadata.discount_code');
 
-        if (!$discountId && !$discountCode) {
+        if (! $discountId && ! $discountCode) {
             return;
         }
 
@@ -309,22 +311,14 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 ->first();
         }
 
-        if (!$discount) {
+        if (! $discount) {
             return;
         }
 
-        $team = Team::find($teamId);
-
-        if (!$team) {
-            return;
-        }
-
-        $userId = $customData['user_id'] ?? null;
-        $user = $userId ? User::find($userId) : null;
+        $user = User::find($userId);
 
         app(DiscountService::class)->recordRedemption(
             $discount,
-            $team,
             $user,
             'paddle',
             $providerId,
@@ -338,7 +332,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
 
     private function resolvePlanName(?string $planKey): string
     {
-        if (!$planKey) {
+        if (! $planKey) {
             return 'subscription';
         }
 

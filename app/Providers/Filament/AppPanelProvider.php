@@ -2,6 +2,8 @@
 
 namespace App\Providers\Filament;
 
+use App\Domain\Settings\Services\BrandingService;
+use App\Http\Middleware\SetLocale;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -12,17 +14,13 @@ use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\Widgets\AccountWidget;
 use Filament\Widgets\FilamentInfoWidget;
-use App\Http\Middleware\EnsureTeamIsSelected;
-use App\Http\Middleware\SetLocale;
-use App\Domain\Settings\Services\BrandingService;
-use Illuminate\Support\HtmlString;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
-use Stancl\Tenancy\Middleware\InitializeTenancyByDomain;
 
 class AppPanelProvider extends PanelProvider
 {
@@ -36,15 +34,14 @@ class AppPanelProvider extends PanelProvider
             ->font(config('saas.branding.fonts.sans', 'Instrument Sans'))
             ->serifFont(config('saas.branding.fonts.display', 'Instrument Serif'))
             ->colors([
-                'primary' => config('saas.branding.colors.primary') ?? Color::Teal,
+                'primary' => Color::Teal,
             ])
-            ->brandName(fn (): string => app(BrandingService::class)->appNameFor(auth()->user()?->currentTeam))
+            ->brandName(fn (): string => app(BrandingService::class)->appName())
             ->brandLogoHeight('2rem')
             ->brandLogo(function (): HtmlString {
                 $branding = app(BrandingService::class);
-                $team = auth()->user()?->currentTeam;
-                $name = $branding->appNameFor($team);
-                $logoPath = $branding->logoPathFor($team);
+                $name = $branding->appName();
+                $logoPath = $branding->logoPath();
                 $logoUrl = $logoPath ? asset($logoPath) : null;
 
                 $nameEscaped = e($name);
@@ -80,8 +77,6 @@ class AppPanelProvider extends PanelProvider
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
-                InitializeTenancyByDomain::class,
-                \App\Http\Middleware\ResolveTeamByDomain::class,
                 SetLocale::class,
                 AuthenticateSession::class,
                 ShareErrorsFromSession::class,
@@ -92,9 +87,7 @@ class AppPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-                EnsureTeamIsSelected::class,
                 \App\Http\Middleware\EnsureSubscription::class,
-                \App\Http\Middleware\ApplyTenantBranding::class,
             ]);
     }
 }

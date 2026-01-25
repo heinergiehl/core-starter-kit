@@ -9,11 +9,7 @@
 
 @section('content')
     @php
-        $statusLabels = [
-            'planned' => __('Planned'),
-            'in_progress' => __('In progress'),
-            'complete' => __('Complete'),
-        ];
+        // Status labels removed in favor of Enums
     @endphp
 
     <section class="py-10">
@@ -29,7 +25,7 @@
             <a href="{{ route('roadmap') }}" class="rounded-full border px-4 py-2 {{ $status ? 'border-ink/10 text-ink/60' : 'border-primary/40 bg-primary/10 text-primary' }}">{{ __('All') }}</a>
             @foreach ($statuses as $filter)
                 <a href="{{ route('roadmap', ['status' => $filter]) }}" class="rounded-full border px-4 py-2 {{ $status === $filter ? 'border-primary/40 bg-primary/10 text-primary' : 'border-ink/10 text-ink/60' }}">
-                    {{ $statusLabels[$filter] ?? Str::headline($filter) }}
+                    {{ \App\Enums\FeatureStatus::tryFrom($filter)?->getLabel() ?? $filter }}
                 </a>
             @endforeach
         </div>
@@ -47,7 +43,7 @@
                         <div class="flex items-start justify-between gap-4">
                             <div>
                                 <p class="text-xs uppercase tracking-[0.2em] text-ink/40">
-                                    {{ $request->category ?: __('General') }}
+                                    {{ $request->category instanceof \App\Enums\FeatureCategory ? $request->category->getLabel() : ($request->category ?: __('General')) }}
                                 </p>
                                 <h3 class="mt-2 text-xl font-semibold text-ink">{{ $request->title }}</h3>
                                 @if ($request->description)
@@ -55,7 +51,7 @@
                                 @endif
                             </div>
                             <span class="rounded-full border border-ink/5 bg-surface-highlight/10 px-3 py-1 text-xs font-semibold text-ink/70">
-                                {{ $statusLabels[$request->status] ?? Str::headline($request->status) }}
+                                {{ $request->status instanceof \App\Enums\FeatureStatus ? $request->status->getLabel() : $request->status }}
                             </span>
                         </div>
                             <div class="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
@@ -102,7 +98,11 @@
                         </div>
                         <div>
                             <x-input-label for="category" :value="__('Category')" />
-                            <x-text-input id="category" class="mt-1 block w-full bg-surface/50" type="text" name="category" value="{{ old('category') }}" />
+                            <select id="category" name="category" class="mt-1 block w-full rounded-xl border border-ink/10 bg-surface/50 px-3 py-2 text-sm text-ink/80 focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20 transition shadow-sm">
+                                @foreach (\App\Enums\FeatureCategory::cases() as $category)
+                                    <option value="{{ $category->value }}" {{ old('category') === $category->value ? 'selected' : '' }}>{{ $category->getLabel() }}</option>
+                                @endforeach
+                            </select>
                         </div>
                         <div>
                             <x-input-label for="description" :value="__('Details')" />
