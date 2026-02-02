@@ -6,7 +6,7 @@ on:
   pull_request:
 
 concurrency:
-  group: shipsolid-ci
+  group: shipsolid-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
