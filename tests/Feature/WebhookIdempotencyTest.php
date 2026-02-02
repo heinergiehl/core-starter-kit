@@ -10,6 +10,17 @@ class WebhookIdempotencyTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        \App\Domain\Billing\Models\PaymentProvider::create([
+            'slug' => 'paddle',
+            'name' => 'Paddle',
+            'is_active' => true,
+            'configuration' => ['webhook_secret' => 'test'],
+        ]);
+    }
+
     public function test_webhook_is_idempotent(): void
     {
         $payload = [

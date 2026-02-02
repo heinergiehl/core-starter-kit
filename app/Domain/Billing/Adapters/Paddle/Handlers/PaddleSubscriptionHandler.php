@@ -9,6 +9,8 @@ use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
+use App\Enums\BillingProvider;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Support\Arr;
 
@@ -57,7 +59,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         }
 
         $planKey = $this->resolvePlanKey($data) ?? 'unknown';
-        $status = (string) (data_get($data, 'status') ?? data_get($data, 'state') ?? 'active');
+        $status = (string) (data_get($data, 'status') ?? data_get($data, 'state') ?? SubscriptionStatus::Active->value);
         $quantity = (int) (data_get($data, 'quantity') ?? data_get($data, 'items.0.quantity') ?? 1);
 
         $canceledAt = $this->timestampToDateTime(data_get($data, 'canceled_at'));
@@ -70,19 +72,21 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         $endsAt = $scheduledCancelAt ?? $canceledAt;
 
         $subscription = $this->subscriptionService->syncFromProvider(
-            provider: 'paddle',
-            providerId: (string) $subscriptionId,
-            userId: $userId,
-            planKey: $planKey,
-            status: $status,
-            quantity: max($quantity, 1),
-            dates: [
-                'trial_ends_at' => $this->timestampToDateTime(data_get($data, 'trial_ends_at')),
-                'renews_at' => $this->timestampToDateTime(data_get($data, 'next_billed_at')),
-                'ends_at' => $endsAt,
-                'canceled_at' => $canceledAt,
-            ],
-            metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'customer_id', 'customer'])
+            \App\Domain\Billing\Data\SubscriptionData::fromProvider(
+                provider: BillingProvider::Paddle->value,
+                providerId: (string) $subscriptionId,
+                userId: $userId,
+                planKey: $planKey,
+                status: $status,
+                quantity: max($quantity, 1),
+                dates: [
+                    'trial_ends_at' => $this->timestampToDateTime(data_get($data, 'trial_ends_at')),
+                    'renews_at' => $this->timestampToDateTime(data_get($data, 'next_billed_at')),
+                    'ends_at' => $endsAt,
+                    'canceled_at' => $canceledAt,
+                ],
+                metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'customer_id', 'customer'])
+            )
         );
 
         $this->syncBillingCustomer(
@@ -99,7 +103,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
             (string) $subscriptionId
         );
 
-        if ($status === 'active') {
+        if ($status === SubscriptionStatus::Active->value) {
             app(\App\Domain\Billing\Services\CheckoutService::class)
                 ->verifyUserAfterPayment($userId);
         }
@@ -114,7 +118,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
     {
         if ($providerId) {
             $existing = BillingCustomer::query()
-                ->where('provider', 'paddle')
+                ->where('provider', BillingProvider::Paddle->value)
                 ->where('provider_id', $providerId)
                 ->first();
 
@@ -130,7 +134,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
 
             BillingCustomer::query()->updateOrCreate(
                 [
-                    'provider' => 'paddle',
+                    'provider' => BillingProvider::Paddle->value,
                     'provider_id' => $providerId,
                 ],
                 [
@@ -145,7 +149,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         BillingCustomer::query()->updateOrCreate(
             [
                 'user_id' => $userId,
-                'provider' => 'paddle',
+                'provider' => BillingProvider::Paddle->value,
             ],
             [
                 'email' => $email,
@@ -177,7 +181,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
             $discount = Discount::query()->find($discountId);
         } elseif ($discountCode) {
             $discount = Discount::query()
-                ->where('provider', 'paddle')
+                ->where('provider', BillingProvider::Paddle->value)
                 ->where('code', strtoupper((string) $discountCode))
                 ->first();
         }
@@ -191,7 +195,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         app(DiscountService::class)->recordRedemption(
             $discount,
             $user,
-            'paddle',
+            BillingProvider::Paddle->value,
             $providerId,
             $planKey,
             $priceKey,

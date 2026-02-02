@@ -36,9 +36,7 @@ class BillingPortalController
             return $this->stripePortal($user->id);
         }
 
-        if ($provider === 'lemonsqueezy') {
-            return $this->lemonSqueezyPortal($subscription);
-        }
+
 
         if ($provider === 'paddle') {
             return $this->paddlePortal($subscription);
@@ -121,49 +119,7 @@ class BillingPortalController
             ->with('info', __('Billing portal is being prepared. Please check back shortly or contact support.'));
     }
 
-    private function lemonSqueezyPortal(Subscription $subscription): RedirectResponse
-    {
-        // First check if portal URL is stored in metadata
-        $portalUrl = data_get($subscription->metadata, 'urls.customer_portal')
-            ?? data_get($subscription->metadata, 'urls.portal')
-            ?? data_get($subscription->metadata, 'urls.customer_portal_url')
-            ?? data_get($subscription->metadata, 'urls.update_payment_method');
 
-        if ($portalUrl && $this->isAllowedPortalUrl($portalUrl, 'lemonsqueezy')) {
-            return redirect()->away($portalUrl);
-        }
-
-        // Try to fetch from LemonSqueezy API
-        $apiKey = config('services.lemonsqueezy.api_key');
-
-        if ($apiKey && $subscription->provider_id) {
-            try {
-                $response = Http::withToken($apiKey)
-                    ->withHeaders(['Accept' => 'application/vnd.api+json'])
-                    ->get("https://api.lemonsqueezy.com/v1/subscriptions/{$subscription->provider_id}");
-
-                if ($response->successful()) {
-                    $urls = $response->json('data.attributes.urls') ?? [];
-                    $portalUrl = $urls['customer_portal'] ?? $urls['update_payment_method'] ?? null;
-
-                    if ($portalUrl && $this->isAllowedPortalUrl($portalUrl, 'lemonsqueezy')) {
-                        // Cache the URL in metadata for future use
-                        $subscription->update([
-                            'metadata' => array_merge($subscription->metadata ?? [], ['urls' => $urls]),
-                        ]);
-
-                        return redirect()->away($portalUrl);
-                    }
-                }
-            } catch (\Throwable) {
-                // Fall through to dashboard redirect
-            }
-        }
-
-        // Fallback: redirect to dashboard with info message
-        return redirect()->route('dashboard')
-            ->with('info', __('Billing portal is being prepared. Please check back shortly or contact support.'));
-    }
 
     private function isAllowedPortalUrl(string $url, string $provider): bool
     {
@@ -175,7 +131,6 @@ class BillingPortalController
 
         $allowlist = match ($provider) {
             'paddle' => ['paddle.com', 'paddlepay.com'],
-            'lemonsqueezy' => ['lemonsqueezy.com'],
             'stripe' => ['stripe.com'],
             default => [],
         };

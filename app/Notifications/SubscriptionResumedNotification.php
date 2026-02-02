@@ -2,18 +2,22 @@
 
 namespace App\Notifications;
 
+use App\Mail\SubscriptionResumedMail;
+use App\Notifications\Concerns\SetsMailRecipient;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
+/**
+ * Notification sent when a subscription is resumed.
+ */
 class SubscriptionResumedNotification extends Notification implements ShouldQueue
 {
-    use Queueable;
+    use Queueable, SetsMailRecipient;
 
     public function __construct(
-        public string $planName,
-        public ?string $accessUntil = null,
+        private readonly ?string $planName = null,
+        private readonly ?string $accessUntil = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -21,20 +25,12 @@ class SubscriptionResumedNotification extends Notification implements ShouldQueu
         return ['mail'];
     }
 
-    public function toMail(object $notifiable): MailMessage
+    public function toMail(object $notifiable): SubscriptionResumedMail
     {
-        return (new MailMessage)
-            ->subject('Subscription Resumed')
-            ->line('Your subscription to '.$this->planName.' has been resumed.')
-            ->lineIf($this->accessUntil, 'You will have access until '.$this->accessUntil.'.')
-            ->action('View Subscription', url('/billing'))
-            ->line('Thank you for continuing with us!');
-    }
-
-    public function toArray(object $notifiable): array
-    {
-        return [
-            //
-        ];
+        return $this->setMailRecipient($notifiable, new SubscriptionResumedMail(
+            user: $notifiable,
+            planName: $this->planName,
+        ));
     }
 }
+

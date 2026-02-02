@@ -19,7 +19,6 @@ class CreateDiscount extends CreateRecord
                 $adapter = match ($provider) {
                     'paddle' => app(\App\Domain\Billing\Adapters\PaddleAdapter::class),
                     'stripe' => app(\App\Domain\Billing\Adapters\StripeAdapter::class),
-                    'lemonsqueezy' => app(\App\Domain\Billing\Adapters\LemonSqueezyAdapter::class),
                     default => null,
                 };
 

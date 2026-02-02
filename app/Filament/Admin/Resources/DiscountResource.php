@@ -180,7 +180,7 @@ class DiscountResource extends Resource
     private static function providerOptions(): array
     {
         $options = [];
-        $providers = config('saas.billing.providers', ['stripe', 'paddle', 'lemonsqueezy']);
+        $providers = config('saas.billing.providers', ['stripe', 'paddle']);
 
         foreach ($providers as $provider) {
             $options[$provider] = ucfirst((string) $provider);

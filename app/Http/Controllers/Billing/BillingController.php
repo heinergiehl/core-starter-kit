@@ -80,10 +80,7 @@ class BillingController
         // Find subscription pending cancellation (has canceled_at but still active)
         $subscription = Subscription::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', ['active', 'trialing', 'past_due', 'canceled'])
-            ->whereNotNull('canceled_at')
-            ->whereNotNull('ends_at')
-            ->where('ends_at', '>', now())
+            ->pendingCancellation()
             ->latest('id')
             ->first();
 
@@ -134,42 +131,13 @@ class BillingController
                 ->with('error', __('No active subscription found. Please subscribe first.'));
         }
 
-        // Can't change plan if pending cancellation
-        if ($subscription->canceled_at) {
-            return back()->with('error', __('Please resume your subscription before changing plans.'));
-        }
-
-        // Get new price ID
-        $newPriceId = $this->planService->providerPriceId(
-            $subscription->provider->value,
-            $data['plan'],
-            $data['price']
-        );
-
-        if (! $newPriceId) {
-            return back()->with('error', __('This plan is not available for your current provider.'));
-        }
-
-        $previousPlanKey = $subscription->plan_key;
-
         try {
-            $this->providerManager->adapter($subscription->provider->value)
-                ->updateSubscription($subscription, $newPriceId);
+            $this->subscriptionService->changePlan($user, $data['plan'], $data['price']);
 
-            $subscription->update([
-                'plan_key' => $data['plan'],
-            ]);
-
-            $previousPlanName = $this->resolvePlanName($previousPlanKey);
+            // Get plan name for success message (optional, could be moved to service return, but acceptable here)
+            // For simplicity, we just use the plan key or let the user see the update on index
+            // But let's keep the nice message
             $newPlanName = $this->resolvePlanName($data['plan']);
-
-            if ($previousPlanKey !== $data['plan']) {
-                $user->notify(new SubscriptionPlanChangedNotification(
-                    previousPlanName: $previousPlanName,
-                    newPlanName: $newPlanName,
-                    effectiveDate: now()->format('F j, Y'),
-                ));
-            }
 
             return redirect()->route('billing.index')
                 ->with('success', __('Your subscription has been updated to :plan.', [

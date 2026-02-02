@@ -17,12 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             ->daily()
             ->at('02:00');
 
-        // Daily sync for LemonSqueezy (no webhooks for products)
-        $schedule->command('billing:sync-products --provider=lemonsqueezy')
-            ->daily()
-            ->at('03:00')
-            ->withoutOverlapping()
-            ->runInBackground();
+
 
         // Weekly full sync (both providers) on Sundays as a safety net
         $schedule->command('billing:sync-products')

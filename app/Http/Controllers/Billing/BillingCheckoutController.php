@@ -30,18 +30,25 @@ class BillingCheckoutController
 
         $provider = strtolower($data['provider'] ?? $plans->defaultProvider());
 
-        $plan = $plans->plan($data['plan']);
-        $price = $plans->price($data['plan'], $data['price']);
-        $priceCurrency = $price['currency'] ?? ($price['currencies'][$provider] ?? null);
+        // Get generic plan/price first for validation
+        $genericPlan = $plans->plan($data['plan']);
+        $price = $genericPlan->getPrice($data['price']); // Generic price
 
-        $providerPlan = collect($plans->plansForProvider($provider))
-            ->firstWhere('key', $data['plan']) ?? [];
-        $providerPrice = $providerPlan['prices'][$data['price']] ?? null;
-
-        if (is_array($providerPrice)) {
-            $price = array_merge($price, $providerPrice);
-            $priceCurrency = $providerPrice['currency'] ?? $priceCurrency;
+        if (! $price) {
+             return back()->withErrors(['billing' => 'Invalid price selected.']);
         }
+
+        // Try to get provider-specific resolved price
+        $providerPlan = $plans->plansForProvider($provider)
+            ->firstWhere('key', $data['plan']);
+        
+        $providerPrice = $providerPlan?->getPrice($data['price']);
+
+        if ($providerPrice) {
+            $price = $providerPrice; // Use resolved DTO
+        }
+
+        $priceCurrency = $price->currency;
 
         $discount = null;
         if (! empty($data['coupon'])) {
@@ -75,24 +82,25 @@ class BillingCheckoutController
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\App\Domain\Billing\Exceptions\BillingException $e) {
-            error_log($e->getMessage()); // Or check error code if implemented
-            // Assuming this is the user exists error
+            error_log($e->getMessage()); 
             session(['url.intended' => route('checkout.start', $request->only(['provider', 'plan', 'price']))]);
 
             return redirect()->route('login')
                 ->with('info', __('An account with this email already exists. Please log in to continue.'));
         }
 
-        $user = $resolved['user'];
+        $user = $resolved->user;
 
-        $planType = (string) ($plan['type'] ?? 'subscription');
+        $planType = $genericPlan->type;
 
         if ($planType === 'one_time' && $checkoutService->hasAnyPurchase($user)) {
             return redirect()->route('billing.index')
                 ->with('info', __('You already have an active plan or purchase. Manage it in billing.'));
         }
 
-        $quantity = $checkoutService->calculateQuantity($plan);
+        // We assume calculateQuantity can handle the Plan object or we need to update it
+        // For now, let's pass the generic plan object.
+        $quantity = $checkoutService->calculateQuantity($genericPlan); 
 
         $checkoutSession = $checkoutService->createCheckoutSession(
             $user,
@@ -107,7 +115,7 @@ class BillingCheckoutController
         $cancelUrl = $urls['cancel'];
 
         if ($provider === 'paddle') {
-            $transactionId = $checkoutService->createPaddleTransaction(
+            $transactionDto = $checkoutService->createPaddleTransaction(
                 $user,
                 $data['plan'],
                 $data['price'],
@@ -119,11 +127,13 @@ class BillingCheckoutController
                 $user->email
             );
 
-            if ($transactionId instanceof RedirectResponse) {
+            if ($transactionDto instanceof RedirectResponse) {
                 $checkoutSession->markCanceled();
 
-                return $transactionId;
+                return $transactionDto;
             }
+
+            $transactionId = $transactionDto->id;
 
             $checkoutSession->update([
                 'provider_session_id' => $transactionId,
@@ -133,7 +143,7 @@ class BillingCheckoutController
                 $provider,
                 $data['plan'],
                 $data['price'],
-                $plan,
+                $genericPlan, 
                 $price,
                 $priceCurrency,
                 $quantity,
@@ -151,7 +161,7 @@ class BillingCheckoutController
         }
 
         try {
-            $checkoutUrl = $providers->adapter($provider)->createCheckout(
+            $checkoutDto = $providers->adapter($provider)->createCheckout(
                 $user,
                 $data['plan'],
                 $data['price'],
@@ -160,6 +170,7 @@ class BillingCheckoutController
                 $cancelUrl,
                 $discount
             );
+            $checkoutUrl = $checkoutDto->url;
         } catch (Throwable $exception) {
             report($exception);
             $checkoutSession->markCanceled();

@@ -40,6 +40,7 @@ class Discount extends Model
         'plan_keys' => 'array',
         'price_keys' => 'array',
         'metadata' => 'array',
+        'type' => \App\Enums\DiscountType::class,
     ];
 
     public function redemptions(): HasMany

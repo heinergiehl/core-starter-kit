@@ -6,6 +6,8 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Enums\SubscriptionStatus;
+use App\Enums\BillingProvider;
 
 class Subscription extends Model
 {
@@ -14,6 +16,26 @@ class Subscription extends Model
     protected static function newFactory()
     {
         return \Database\Factories\Domain\Billing\SubscriptionFactory::new();
+    }
+
+    protected static function booted(): void
+    {
+        static::created(function (Subscription $subscription) {
+            if (app()->environment('local')) {
+                \Illuminate\Support\Facades\Log::info('Subscription created event fired');
+            }
+            $subscription->clearUserCache();
+        });
+
+        static::updated(fn (Subscription $subscription) => $subscription->clearUserCache());
+        static::deleted(fn (Subscription $subscription) => $subscription->clearUserCache());
+    }
+
+    protected function clearUserCache(): void
+    {
+        if ($this->user_id) {
+            \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$this->user_id}");
+        }
     }
 
     protected $fillable = [
@@ -38,8 +60,8 @@ class Subscription extends Model
         'trial_ends_at' => 'datetime',
         'renews_at' => 'datetime',
         'ends_at' => 'datetime',
-        'status' => \App\Enums\SubscriptionStatus::class,
-        'provider' => \App\Enums\BillingProvider::class,
+        'status' => SubscriptionStatus::class,
+        'provider' => BillingProvider::class,
         'canceled_at' => 'datetime',
         'welcome_email_sent_at' => 'datetime',
         'trial_started_email_sent_at' => 'datetime',
@@ -58,5 +80,27 @@ class Subscription extends Model
     public function onTrial(): bool
     {
         return $this->trial_ends_at && $this->trial_ends_at->isFuture();
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->whereIn('status', [
+            SubscriptionStatus::Active,
+            SubscriptionStatus::Trialing,
+            SubscriptionStatus::PastDue,
+            SubscriptionStatus::Canceled,
+        ])->where(function ($q) {
+            $q->where('status', '!=', SubscriptionStatus::Canceled)
+              ->orWhere(function ($q2) {
+                  $q2->where('status', SubscriptionStatus::Canceled)
+                     ->where('ends_at', '>', now());
+              });
+        });
+    }
+
+    public function scopePendingCancellation($query)
+    {
+        return $query->whereNotNull('canceled_at')
+            ->where('ends_at', '>', now());
     }
 }

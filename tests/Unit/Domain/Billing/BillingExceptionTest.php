@@ -54,10 +54,10 @@ class BillingExceptionTest extends TestCase
 
     public function test_checkout_failed_creates_correct_exception(): void
     {
-        $exception = BillingException::checkoutFailed('LemonSqueezy', 'Session expired');
+        $exception = BillingException::checkoutFailed('Paddle', 'Session expired');
 
         $this->assertEquals('BILLING_CHECKOUT_FAILED', $exception->getErrorCode());
-        $this->assertStringContainsString('LemonSqueezy', $exception->getMessage());
+        $this->assertStringContainsString('Paddle', $exception->getMessage());
     }
 
     public function test_seat_sync_failed_creates_correct_exception(): void

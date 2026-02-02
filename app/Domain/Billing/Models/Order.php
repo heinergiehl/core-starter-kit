@@ -22,6 +22,7 @@ class Order extends Model
         'paid_at',
         'refunded_at',
         'metadata',
+        'payment_success_email_sent_at',
     ];
 
     protected $casts = [
@@ -31,6 +32,7 @@ class Order extends Model
         'provider' => \App\Enums\BillingProvider::class,
         'refunded_at' => 'datetime',
         'metadata' => 'array',
+        'payment_success_email_sent_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

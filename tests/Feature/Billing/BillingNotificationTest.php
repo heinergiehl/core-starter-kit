@@ -3,8 +3,8 @@
 namespace Tests\Feature\Billing;
 
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleSubscriptionHandler;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripeInvoiceHandler;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeSubscriptionHandler;
+use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
@@ -33,7 +33,7 @@ class BillingNotificationTest extends TestCase
         $payload = [
             'id' => 'sub_123',
             'customer' => 'cus_123',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active->value,
             'items' => [
                 'data' => [
                     [
@@ -86,7 +86,7 @@ class BillingNotificationTest extends TestCase
         $handler = app(PaddleSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_paddle_123',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active->value,
             'custom_data' => [
                 'user_id' => $user->id,
                 'plan_key' => 'pro',
@@ -122,7 +122,7 @@ class BillingNotificationTest extends TestCase
         $handler = app(PaddleSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_paddle_trial_123',
-            'status' => 'trialing',
+            'status' => \App\Enums\SubscriptionStatus::Trialing->value,
             'trial_ends_at' => now()->addDays(7)->timestamp,
             'custom_data' => [
                 'user_id' => $user->id,
@@ -153,7 +153,7 @@ class BillingNotificationTest extends TestCase
             'user_id' => $user->id,
             'provider' => 'stripe',
             'provider_id' => 'sub_cancel_test',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active->value,
             // Simulate welcome email already sent
             'welcome_email_sent_at' => now(),
         ]);
@@ -162,7 +162,7 @@ class BillingNotificationTest extends TestCase
         $payload = [
             'id' => 'sub_cancel_test',
             'customer' => 'cus_123',
-            'status' => 'canceled',
+            'status' => \App\Enums\SubscriptionStatus::Canceled->value,
             'canceled_at' => now()->timestamp,
             'metadata' => [
                 'user_id' => $user->id,
@@ -177,7 +177,7 @@ class BillingNotificationTest extends TestCase
 
         $subscription->refresh();
         $this->assertNotNull($subscription->cancellation_email_sent_at);
-        $this->assertEquals('canceled', $subscription->status);
+        $this->assertEquals(\App\Enums\SubscriptionStatus::Canceled, $subscription->status);
 
         // 2. Duplicate Sync
         Notification::fake();
@@ -193,17 +193,17 @@ class BillingNotificationTest extends TestCase
 
         Subscription::factory()->create([
             'user_id' => $user->id,
-            'provider' => 'stripe',
+            'provider' => \App\Enums\BillingProvider::Stripe->value,
             'provider_id' => 'sub_plan_change',
             'plan_key' => 'starter',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active->value,
         ]);
 
         $handler = app(StripeSubscriptionHandler::class);
         $payload = [
             'id' => 'sub_plan_change',
             'customer' => 'cus_456',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active->value,
             'items' => [
                 'data' => [
                     [
@@ -238,13 +238,13 @@ class BillingNotificationTest extends TestCase
 
         Subscription::factory()->create([
             'user_id' => $user->id,
-            'provider' => 'stripe',
+            'provider' => \App\Enums\BillingProvider::Stripe->value,
             'provider_id' => 'sub_fail_123',
             'plan_key' => 'pro',
-            'status' => 'active',
+            'status' => \App\Enums\SubscriptionStatus::Active->value,
         ]);
 
-        $handler = new StripeInvoiceHandler;
+        $handler = app(StripeSubscriptionHandler::class);
         $event = new WebhookEvent([
             'type' => 'invoice.payment_failed',
         ]);
@@ -265,7 +265,7 @@ class BillingNotificationTest extends TestCase
         Notification::assertSentTo($user, PaymentFailedNotification::class);
 
         $invoice = Invoice::query()
-            ->where('provider', 'stripe')
+            ->where('provider', \App\Enums\BillingProvider::Stripe->value)
             ->where('provider_id', 'in_fail_123')
             ->first();
 

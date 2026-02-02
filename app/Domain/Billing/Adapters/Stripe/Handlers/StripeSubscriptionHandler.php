@@ -4,15 +4,19 @@ namespace App\Domain\Billing\Adapters\Stripe\Handlers;
 
 use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
+use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Notifications\PaymentFailedNotification;
+use Illuminate\Support\Arr;
 use Stripe\StripeClient;
 
 /**
  * Handles Stripe subscription lifecycle webhook events.
  *
- * Processes: customer.subscription.created, customer.subscription.updated,
- * customer.subscription.deleted
+ * Handles Stripe subscription and invoice lifecycle webhook events.
+ *
+ * Processes: customer.subscription.*, invoice.*
  */
 class StripeSubscriptionHandler implements StripeWebhookHandler
 {
@@ -31,6 +35,12 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
             'customer.subscription.created',
             'customer.subscription.updated',
             'customer.subscription.deleted',
+            'invoice.paid',
+            'invoice.payment_succeeded',
+            'invoice.payment_failed',
+            'invoice.finalized',
+            'invoice.voided',
+            'invoice.marked_uncollectible',
         ];
     }
 
@@ -41,6 +51,21 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
     {
         $payload = $event->payload ?? [];
         $eventType = $payload['type'] ?? $event->type;
+
+        if (in_array($eventType, ['invoice.paid', 'invoice.payment_succeeded'])) {
+            $this->handleInvoicePaid($object);
+            return;
+        }
+
+        if ($eventType === 'invoice.payment_failed') {
+            $this->handleInvoicePaymentFailed($object);
+            return;
+        }
+
+        if (str_starts_with($eventType, 'invoice.')) {
+            $this->syncInvoice($object);
+            return;
+        }
 
         $this->syncSubscription($object, $eventType);
     }
@@ -92,19 +117,21 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $metadata['currency'] = data_get($object, 'currency');
 
         $this->subscriptionService->syncFromProvider(
-            provider: $this->provider(),
-            providerId: $providerId,
-            userId: $userId,
-            planKey: $planKey,
-            status: $status,
-            quantity: max($quantity, 1),
-            dates: [
-                'trial_ends_at' => $trialEnd,
-                'renews_at' => $renewsAt,
-                'ends_at' => $endsAt,
-                'canceled_at' => $canceledAt,
-            ],
-            metadata: $metadata
+            \App\Domain\Billing\Data\SubscriptionData::fromProvider(
+                provider: $this->provider(),
+                providerId: $providerId,
+                userId: $userId,
+                planKey: $planKey,
+                status: $status,
+                quantity: max($quantity, 1),
+                dates: [
+                    'trial_ends_at' => $trialEnd,
+                    'renews_at' => $renewsAt,
+                    'ends_at' => $endsAt,
+                    'canceled_at' => $canceledAt,
+                ],
+                metadata: $metadata
+            )
         );
 
         $this->syncBillingCustomer($userId, $customerId, data_get($object, 'customer_email'));
@@ -151,5 +178,124 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         } catch (\Throwable) {
             return ucfirst($planKey);
         }
+    }
+    /**
+     * Handle paid invoice - syncs invoice and updates subscription.
+     */
+    private function handleInvoicePaid(array $object): void
+    {
+        $subscriptionId = data_get($object, 'subscription');
+
+        if (! $subscriptionId) {
+            return;
+        }
+
+        $this->syncInvoice($object, 'paid');
+
+        Subscription::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $subscriptionId)
+            ->update([
+                'status' => \App\Enums\SubscriptionStatus::Active,
+            ]);
+    }
+
+    /**
+     * Handle failed invoice payment - syncs invoice and notifies the owner.
+     */
+    private function handleInvoicePaymentFailed(array $object): void
+    {
+        $invoice = $this->syncInvoice($object);
+
+        if (! $invoice || $invoice->payment_failed_email_sent_at) {
+            return;
+        }
+
+        $owner = $invoice->user;
+
+        if (! $owner) {
+            return;
+        }
+
+        $subscription = $invoice->subscription;
+        $planKey = $subscription?->plan_key;
+
+        $failureReason = data_get($object, 'last_finalization_error.message')
+            ?? data_get($object, 'payment_intent.last_payment_error.message')
+            ?? data_get($object, 'status_transitions')
+            ?? null;
+
+        $owner->notify(new PaymentFailedNotification(
+            planName: $this->resolvePlanName($planKey),
+            amount: $invoice->amount_due,
+            currency: $invoice->currency,
+            failureReason: is_string($failureReason) ? $failureReason : null,
+        ));
+
+        $invoice->forceFill(['payment_failed_email_sent_at' => now()])->save();
+    }
+
+    /**
+     * Sync invoice data from Stripe webhook.
+     */
+    public function syncInvoice(array $object, ?string $overrideStatus = null): ?Invoice
+    {
+        $providerId = data_get($object, 'id');
+
+        if (! $providerId) {
+            return null;
+        }
+
+        $subscriptionId = data_get($object, 'subscription');
+        $customerId = data_get($object, 'customer');
+        $userId = $this->resolveUserIdFromMetadata($object)
+            ?? $this->resolveUserIdFromCustomerId($customerId)
+            ?? $this->resolveUserIdFromSubscriptionId($subscriptionId);
+
+        if (! $userId) {
+            return null;
+        }
+
+        $subscription = $subscriptionId
+            ? Subscription::query()
+                ->where('provider', $this->provider())
+                ->where('provider_id', $subscriptionId)
+                ->first()
+            : null;
+
+        $status = $overrideStatus ?: (string) data_get($object, 'status', 'open');
+
+        $invoice = Invoice::query()->updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => (string) $providerId,
+            ],
+            [
+                'user_id' => $userId,
+                'subscription_id' => $subscription?->id,
+                'status' => $status,
+                'number' => data_get($object, 'number'),
+                'amount_due' => (int) (data_get($object, 'amount_due') ?? 0),
+                'amount_paid' => (int) (data_get($object, 'amount_paid') ?? 0),
+                'currency' => strtoupper((string) data_get($object, 'currency', 'USD')),
+                'issued_at' => $this->timestampToDateTime(data_get($object, 'created')),
+                'due_at' => $this->timestampToDateTime(data_get($object, 'due_date')),
+                'paid_at' => $this->timestampToDateTime(data_get($object, 'status_transitions.paid_at')),
+                'hosted_invoice_url' => data_get($object, 'hosted_invoice_url'),
+                'invoice_pdf' => data_get($object, 'invoice_pdf'),
+                'metadata' => Arr::only($object, [
+                    'id',
+                    'status',
+                    'subscription',
+                    'customer',
+                    'total',
+                    'lines',
+                    'metadata',
+                    'status_transitions',
+                ]),
+            ]
+        );
+
+        return $invoice;
     }
 }

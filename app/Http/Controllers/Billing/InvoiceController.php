@@ -122,7 +122,6 @@ class InvoiceController
         $allowlist = match ($provider) {
             'paddle' => ['paddle.com', 'paddlecdn.com'],
             'stripe' => ['stripe.com'],
-            'lemonsqueezy' => ['lemonsqueezy.com'],
             default => [],
         };
 

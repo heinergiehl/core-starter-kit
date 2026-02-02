@@ -17,8 +17,12 @@ class ProductFactory extends Factory
         return [
             'name' => fake()->words(2, true).' Product',
             'key' => fake()->unique()->slug(2),
-            'description' => fake()->paragraph(),
+            'description' => fake()->sentence(),
+            'summary' => fake()->sentence(),
+            'type' => \App\Enums\PriceType::Recurring,
+            'is_featured' => false,
             'is_active' => true,
+            'features' => [],
         ];
     }
 }

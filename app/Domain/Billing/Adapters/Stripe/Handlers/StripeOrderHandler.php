@@ -9,15 +9,16 @@ use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\DiscountService;
+use App\Domain\Billing\Jobs\SyncSubscriptionFromStripeJob;
 use App\Models\User;
 use Illuminate\Support\Arr;
 
 /**
- * Handles Stripe checkout session completed webhook events.
+ * Handles Stripe order-related webhook events.
  *
- * Processes: checkout.session.completed
+ * Processes: checkout.session.completed, charge.refunded
  */
-class StripeCheckoutHandler implements StripeWebhookHandler
+class StripeOrderHandler implements StripeWebhookHandler
 {
     use ResolvesStripeData;
 
@@ -32,6 +33,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
     {
         return [
             'checkout.session.completed',
+            'charge.refunded',
         ];
     }
 
@@ -40,6 +42,14 @@ class StripeCheckoutHandler implements StripeWebhookHandler
      */
     public function handle(WebhookEvent $event, array $object): void
     {
+        $payload = $event->payload ?? [];
+        $eventType = $payload['type'] ?? $event->type;
+
+        if ($eventType === 'charge.refunded') {
+            $this->handleChargeRefunded($object);
+            return;
+        }
+
         $this->handleCheckoutSessionCompleted($object);
     }
 
@@ -122,7 +132,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
             (string) $subscriptionId
         );
 
-        $this->subscriptionHandler->syncSubscriptionFromStripe($subscriptionId);
+        SyncSubscriptionFromStripeJob::dispatch((string) $subscriptionId);
     }
 
     /**
@@ -141,7 +151,7 @@ class StripeCheckoutHandler implements StripeWebhookHandler
         $currency = strtoupper((string) data_get($object, 'currency', 'USD'));
         $paymentStatus = data_get($object, 'payment_status');
 
-        Order::query()->updateOrCreate(
+        $order = Order::query()->updateOrCreate(
             [
                 'provider' => $this->provider(),
                 'provider_id' => $providerId,
@@ -168,6 +178,26 @@ class StripeCheckoutHandler implements StripeWebhookHandler
             data_get($object, 'metadata.price_key'),
             (string) $providerId
         );
+
+        // Send payment success notification for one-time purchases (consistent with Paddle)
+        if ($paymentStatus === 'paid' && ! $order->payment_success_email_sent_at) {
+            $user = \App\Models\User::find($userId);
+            if ($user) {
+                $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
+                    planName: $this->resolvePlanName($planKey),
+                    amount: $amount,
+                    currency: $currency,
+                    receiptUrl: null, // Invoice URL arrives via invoice.paid webhook
+                ));
+                $order->forceFill(['payment_success_email_sent_at' => now()])->save();
+            }
+        }
+
+        // Verify user email after successful payment
+        if ($paymentStatus === 'paid') {
+            app(\App\Domain\Billing\Services\CheckoutService::class)
+                ->verifyUserAfterPayment($userId);
+        }
     }
 
     /**
@@ -217,5 +247,43 @@ class StripeCheckoutHandler implements StripeWebhookHandler
                 'session_id' => data_get($object, 'id'),
             ]
         );
+    }
+
+    /**
+     * Resolve human-readable plan name from plan key.
+     */
+    private function resolvePlanName(?string $planKey): string
+    {
+        if (! $planKey) {
+            return 'product';
+        }
+
+        try {
+            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+
+            return $plan['name'] ?? ucfirst($planKey);
+        } catch (\Throwable) {
+            return ucfirst($planKey);
+        }
+    }
+    /**
+     * Handle refunded charge.
+     */
+    private function handleChargeRefunded(array $object): void
+    {
+        $paymentIntent = data_get($object, 'payment_intent');
+        $providerId = $paymentIntent ?: data_get($object, 'id');
+
+        if (! $providerId) {
+            return;
+        }
+
+        Order::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $providerId)
+            ->update([
+                'status' => 'refunded',
+                'refunded_at' => now(),
+            ]);
     }
 }

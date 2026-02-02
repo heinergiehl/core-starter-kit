@@ -1,22 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Billing\Adapters;
 
 use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripeCheckoutHandler;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripeCustomerHandler;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripeInvoiceHandler;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripePaymentHandler;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripePriceHandler;
-use App\Domain\Billing\Adapters\Stripe\Handlers\StripeProductHandler;
+
+use App\Domain\Billing\Adapters\Stripe\Handlers\StripeOrderHandler;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeSubscriptionHandler;
+use App\Domain\Billing\Contracts\BillingRuntimeProvider;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
 use App\Domain\Billing\Data\CheckoutRequest;
+use App\Domain\Billing\Data\TransactionDTO;
+use App\Domain\Billing\Data\WebhookPayload;
 use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
+use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Enums\BillingProvider;
+use App\Enums\DiscountType;
+use App\Enums\PaymentMode;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Stripe\StripeClient;
@@ -38,9 +44,12 @@ use Stripe\Webhook;
  * @see StripePaymentHandler
  * @see StripeCustomerHandler
  */
-class StripeAdapter implements BillingProviderAdapter
+class StripeAdapter implements BillingRuntimeProvider
 {
     use ResolvesStripeData;
+
+    private const SIGNATURE_HEADER = 'Stripe-Signature';
+
 
     /**
      * Registered webhook handlers.
@@ -49,8 +58,10 @@ class StripeAdapter implements BillingProviderAdapter
      */
     private array $handlers = [];
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly array $config,
+        private readonly BillingPlanService $planService,
+    ) {
         $this->registerHandlers();
     }
 
@@ -59,7 +70,7 @@ class StripeAdapter implements BillingProviderAdapter
      */
     public function provider(): string
     {
-        return 'stripe';
+        return BillingProvider::Stripe->value;
     }
 
     /**
@@ -67,31 +78,32 @@ class StripeAdapter implements BillingProviderAdapter
      *
      * @throws BillingException When webhook secret is missing or signature is invalid
      */
-    public function parseWebhook(Request $request): array
+    public function parseWebhook(Request $request): WebhookPayload
     {
         $payload = $request->getContent();
-        $signature = $request->header('Stripe-Signature');
-        $secret = config('services.stripe.webhook_secret');
+        $signature = $request->header(self::SIGNATURE_HEADER);
+        $secret = $this->config['webhook_secret'] ?? null;
 
         if (! $secret) {
-            throw BillingException::missingConfiguration('Stripe', 'webhook secret');
+            throw BillingException::missingConfiguration(BillingProvider::Stripe, 'webhook secret');
         }
 
         if (! $signature) {
-            throw BillingException::webhookValidationFailed('Stripe', 'signature header is missing');
+            throw BillingException::webhookValidationFailed(BillingProvider::Stripe, 'signature header is missing');
         }
 
         try {
             $event = Webhook::constructEvent($payload, $signature, $secret);
         } catch (\Exception $e) {
-            throw BillingException::webhookValidationFailed('Stripe', $e->getMessage());
+            throw BillingException::webhookValidationFailed(BillingProvider::Stripe, $e->getMessage());
         }
 
-        return [
-            'id' => $event->id,
-            'type' => $event->type,
-            'payload' => $event->toArray(),
-        ];
+        return new WebhookPayload(
+            id: $event->id,
+            type: $event->type,
+            payload: $event->toArray(),
+            provider: $this->provider()
+        );
     }
 
     /**
@@ -132,7 +144,7 @@ class StripeAdapter implements BillingProviderAdapter
         string $successUrl,
         string $cancelUrl,
         ?Discount $discount = null
-    ): string {
+    ): TransactionDTO {
         $request = new CheckoutRequest(
             user: $user,
             planKey: $planKey,
@@ -151,14 +163,13 @@ class StripeAdapter implements BillingProviderAdapter
      *
      * @throws BillingException When checkout creation fails
      */
-    public function createCheckoutSession(CheckoutRequest $request): string
+    public function createCheckoutSession(CheckoutRequest $request): TransactionDTO
     {
-        $planService = app(BillingPlanService::class);
-        $plan = $planService->plan($request->planKey);
-        $priceId = $planService->providerPriceId($this->provider(), $request->planKey, $request->priceKey);
+        $plan = $this->planService->plan($request->planKey);
+        $priceId = $this->planService->providerPriceId($this->provider(), $request->planKey, $request->priceKey);
 
         if (! $priceId) {
-            throw BillingException::missingPriceId('Stripe', $request->planKey, $request->priceKey);
+            throw BillingException::missingPriceId(BillingProvider::Stripe, $request->planKey, $request->priceKey);
         }
 
         $mode = $request->resolveMode($plan);
@@ -171,14 +182,18 @@ class StripeAdapter implements BillingProviderAdapter
             $session = $client->checkout->sessions->create($params);
 
             if (! $session->url) {
-                throw BillingException::checkoutFailed('Stripe', 'session URL was not returned');
+                throw BillingException::checkoutFailed(BillingProvider::Stripe, 'session URL was not returned');
             }
 
-            return $session->url;
+            return new TransactionDTO(
+                id: $session->id,
+                url: $session->url,
+                status: $session->payment_status // or status
+            );
         } catch (BillingException $e) {
             throw $e;
         } catch (\Exception $e) {
-            throw BillingException::checkoutFailed('Stripe', $e->getMessage());
+            throw BillingException::checkoutFailed(BillingProvider::Stripe, $e->getMessage());
         }
     }
 
@@ -193,11 +208,11 @@ class StripeAdapter implements BillingProviderAdapter
         ];
 
         // Map Amount
-        if ($discount->type === 'percent') {
+        if ($discount->type === DiscountType::Percent->value) {
             $payload['percent_off'] = $discount->amount;
         } else {
             $payload['amount_off'] = $discount->amount;
-            $payload['currency'] = $discount->currency ?? 'USD';
+            $payload['currency'] = $discount->currency ?? config('saas.billing.pricing.currency', 'USD');
         }
 
         // Map Limits & Dates
@@ -221,7 +236,7 @@ class StripeAdapter implements BillingProviderAdapter
             // Note: If ID already exists, Stripe throws error.
             // In that case we might want to just return the ID or let it bubble.
             // Letting it bubble so user knows why it failed (duplicate).
-            throw BillingException::failedAction('Stripe', 'create discount', $e->getMessage());
+            throw BillingException::failedAction(BillingProvider::Stripe, 'create discount', $e->getMessage());
         }
     }
 
@@ -232,22 +247,22 @@ class StripeAdapter implements BillingProviderAdapter
      * @param  string  $priceId  Stripe price ID
      * @param  string  $mode  Payment mode (subscription or payment)
      * @param  array<string, string>  $metadata  Session metadata
-     * @param  array<string, mixed>  $plan  The plan configuration
+     * @param  \App\Domain\Billing\Data\Plan  $plan  The plan configuration
      * @return array<string, mixed>
      */
     private function buildCheckoutParams(
         CheckoutRequest $request,
         string $priceId,
-        string $mode,
+        PaymentMode $mode,
         array $metadata,
-        array $plan = []
+        \App\Domain\Billing\Data\Plan $plan
     ): array {
         // Build descriptive payment type info
-        $paymentTypeLabel = $mode === 'subscription' ? 'Subscription' : 'One-time purchase';
-        $planName = $plan['name'] ?? $request->planKey;
+        $paymentTypeLabel = $mode === PaymentMode::Subscription ? 'Subscription' : 'One-time purchase';
+        $planName = $plan->name ?? $request->planKey;
 
         $params = [
-            'mode' => $mode,
+            'mode' => $mode->value,
             'line_items' => [
                 [
                     'price' => $priceId,
@@ -260,11 +275,11 @@ class StripeAdapter implements BillingProviderAdapter
             'metadata' => $metadata,
             'allow_promotion_codes' => true,
             // Customize the submit button based on payment type
-            'submit_type' => $mode === 'subscription' ? 'auto' : 'pay',
+            'submit_type' => $mode === PaymentMode::Subscription ? 'auto' : 'pay',
             // Add custom text for better user experience
             'custom_text' => [
                 'submit' => [
-                    'message' => $mode === 'subscription'
+                    'message' => $mode === PaymentMode::Subscription
                         ? "You'll be charged automatically each billing period."
                         : 'This is a one-time payment. No recurring charges.',
                 ],
@@ -293,7 +308,7 @@ class StripeAdapter implements BillingProviderAdapter
         }
 
         // Set mode-specific data
-        if ($mode === 'subscription') {
+        if ($mode === PaymentMode::Subscription) {
             $params['subscription_data'] = ['metadata' => $metadata];
         } else {
             $params['payment_intent_data'] = ['metadata' => $metadata];
@@ -304,19 +319,17 @@ class StripeAdapter implements BillingProviderAdapter
 
     /**
      * Register webhook handlers.
+     * 
+     * NOTE: Product/Price handlers are intentionally NOT registered.
+     * App-first mode = products/prices are managed in app, not synced from Stripe webhooks.
      */
     private function registerHandlers(): void
     {
-        $subscriptionHandler = app(StripeSubscriptionHandler::class);
-
+        // Use the container to resolve handlers so dependencies (like other handlers) are injected automatically
         $handlers = [
-            new StripeCustomerHandler,
-            $subscriptionHandler,
-            new StripeCheckoutHandler($subscriptionHandler),
-            new StripeInvoiceHandler,
-            new StripePaymentHandler,
-            new StripeProductHandler,
-            new StripePriceHandler,
+            app(StripeSubscriptionHandler::class),
+            app(StripeOrderHandler::class),
+            // StripeProductHandler and StripePriceHandler REMOVED for app-first mode
         ];
 
         foreach ($handlers as $handler) {
@@ -334,7 +347,7 @@ class StripeAdapter implements BillingProviderAdapter
         return $this->handlers[$eventType] ?? null;
     }
 
-    public function updateSubscription(\App\Domain\Billing\Models\Subscription $subscription, string $newPriceId): void
+    public function updateSubscription(Subscription $subscription, string $newPriceId): void
     {
         $client = $this->stripeClient();
 
@@ -343,7 +356,7 @@ class StripeAdapter implements BillingProviderAdapter
         $itemId = $stripeSubscription->items->data[0]->id ?? null;
 
         if (! $itemId) {
-            throw BillingException::failedAction('Stripe', 'update subscription', 'Could not find subscription item.');
+            throw BillingException::failedAction(BillingProvider::Stripe, 'update subscription', 'Could not find subscription item.');
         }
 
         // Update the subscription with the new price (proration by default)
@@ -358,11 +371,11 @@ class StripeAdapter implements BillingProviderAdapter
                 'proration_behavior' => 'create_prorations',
             ]);
         } catch (\Exception $e) {
-            throw BillingException::failedAction('Stripe', 'update subscription', $e->getMessage());
+            throw BillingException::failedAction(BillingProvider::Stripe, 'update subscription', $e->getMessage());
         }
     }
 
-    public function cancelSubscription(\App\Domain\Billing\Models\Subscription $subscription): \Carbon\Carbon
+    public function cancelSubscription(Subscription $subscription): \Carbon\Carbon
     {
         $client = $this->stripeClient();
 
@@ -374,11 +387,11 @@ class StripeAdapter implements BillingProviderAdapter
 
             return \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
         } catch (\Exception $e) {
-            throw BillingException::failedAction('Stripe', 'cancel subscription', $e->getMessage());
+            throw BillingException::failedAction(BillingProvider::Stripe, 'cancel subscription', $e->getMessage());
         }
     }
 
-    public function resumeSubscription(\App\Domain\Billing\Models\Subscription $subscription): void
+    public function resumeSubscription(Subscription $subscription): void
     {
         $client = $this->stripeClient();
 
@@ -387,16 +400,16 @@ class StripeAdapter implements BillingProviderAdapter
                 'cancel_at_period_end' => false,
             ]);
         } catch (\Exception $e) {
-            throw BillingException::failedAction('Stripe', 'resume subscription', $e->getMessage());
+            throw BillingException::failedAction(BillingProvider::Stripe, 'resume subscription', $e->getMessage());
         }
     }
 
     private function stripeClient(): StripeClient
     {
-        $secret = config('services.stripe.secret');
+        $secret = $this->config['secret_key'] ?? null;
 
         if (! $secret) {
-            throw BillingException::missingConfiguration('Stripe', 'secret');
+            throw BillingException::missingConfiguration(BillingProvider::Stripe, 'secret');
         }
 
         // Note: Stripe SDK configures timeouts via Stripe\Stripe::setMaxNetworkRetries()
@@ -405,7 +418,7 @@ class StripeAdapter implements BillingProviderAdapter
 
         // Configure retries at the SDK level
         \Stripe\Stripe::setMaxNetworkRetries(
-            (int) config('saas.billing.provider_api.retries.stripe', 2)
+            (int) ($this->config['retries'] ?? 2)
         );
 
         return $client;

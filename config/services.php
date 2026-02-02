@@ -66,10 +66,4 @@ return [
         'environment' => env('PADDLE_ENV', 'production'),
     ],
 
-    'lemonsqueezy' => [
-        'api_key' => env('LEMON_SQUEEZY_API_KEY'),
-        'webhook_secret' => env('LEMON_SQUEEZY_WEBHOOK_SECRET'),
-        'store_id' => env('LEMON_SQUEEZY_STORE_ID'),
-    ],
-
 ];

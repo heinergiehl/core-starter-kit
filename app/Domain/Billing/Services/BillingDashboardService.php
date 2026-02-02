@@ -53,9 +53,23 @@ class BillingDashboardService
                 ->where('user_id', $user->id)
                 ->whereIn('status', ['paid', 'completed'])
                 ->where('created_at', '>=', now()->subMinutes(10))
-                // Exclude one-time product orders
+                // Exclude one-time product orders or orders without subscription_id in metadata
                 ->whereDoesntHave('product', fn ($q) => $q->where('type', 'one_time'))
                 ->latest('id')
+                ->get()
+                // Ensure it's actually a subscription order by checking metadata or product type relationship
+                ->filter(function ($order) {
+                     $meta = $order->metadata ?? [];
+                     // If we have explicit subscription_id, it is a sub.
+                     if (!empty($meta['subscription_id'])) {
+                         return true;
+                     }
+                     
+                     // If the order is paid/completed but has no subscription_id, 
+                     // it's a one-time purchase (or a one-time price on a sub product).
+                     // We should NOT treat it as a pending subscription.
+                     return false;
+                })
                 ->first();
         }
 
@@ -64,18 +78,35 @@ class BillingDashboardService
             ->where('user_id', $user->id)
             ->whereIn('status', ['paid', 'completed'])
             ->where('created_at', '>=', now()->subMinutes(10))
-            ->whereHas('product', fn ($q) => $q->where('type', 'one_time'))
             ->latest('id')
+            ->get()
+            ->filter(function ($order) {
+                // explicit one-time product
+                if ($order->product && $order->product->type === 'one_time') {
+                    return true;
+                }
+                // OR no subscription_id in metadata
+                $meta = $order->metadata ?? [];
+                return empty($meta['subscription_id']);
+            })
             ->first();
 
         // Get all one-time orders for purchase history
         $oneTimeOrders = Order::query()
             ->where('user_id', $user->id)
             ->whereIn('status', ['paid', 'completed'])
-            ->whereHas('product', fn ($q) => $q->where('type', 'one_time'))
             ->with('product')
             ->latest('id')
-            ->get();
+            ->get()
+            ->filter(function ($order) {
+                // explicit one-time product
+                if ($order->product && $order->product->type === 'one_time') {
+                    return true;
+                }
+                // OR no subscription_id in metadata
+                $meta = $order->metadata ?? [];
+                return empty($meta['subscription_id']);
+            });
 
         $canCancel = $subscription && in_array($subscription->status, ['active', 'trialing']);
 

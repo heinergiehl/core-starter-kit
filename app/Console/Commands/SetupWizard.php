@@ -249,7 +249,6 @@ class SetupWizard extends Command
         return match ($provider) {
             'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
             'paddle' => ! empty($this->envValues['PADDLE_API_KEY']),
-            'lemonsqueezy' => ! empty($this->envValues['LEMONSQUEEZY_API_KEY']),
             default => false,
         };
     }
@@ -364,7 +363,6 @@ class SetupWizard extends Command
             [
                 'stripe' => 'Stripe (Credit cards, global)',
                 'paddle' => 'Paddle (PayPal, handles VAT)',
-                'lemonsqueezy' => 'Lemon Squeezy (Digital products)',
             ],
             $this->envValues['BILLING_DEFAULT_PROVIDER'] ?? 'stripe'
         );
@@ -375,7 +373,6 @@ class SetupWizard extends Command
         match ($provider) {
             'stripe' => $this->setupStripe(),
             'paddle' => $this->setupPaddle(),
-            'lemonsqueezy' => $this->setupLemonSqueezy(),
         };
 
         // Provider choice on pricing page
@@ -445,30 +442,7 @@ class SetupWizard extends Command
         }
     }
 
-    private function setupLemonSqueezy(): void
-    {
-        $this->components->info('  → Lemon Squeezy Configuration');
 
-        $currentKey = $this->envValues['LEMONSQUEEZY_API_KEY'] ?? '';
-        $masked = $currentKey ? Str::mask($currentKey, '*', 7, -4) : '(not set)';
-
-        if ($this->confirm("Configure Lemon Squeezy API keys? Current: {$masked}", empty($currentKey))) {
-            $apiKey = $this->secret('Lemon Squeezy API Key');
-            if ($apiKey) {
-                $this->envValues['LEMONSQUEEZY_API_KEY'] = $apiKey;
-            }
-
-            $storeId = $this->ask('Lemon Squeezy Store ID');
-            if ($storeId) {
-                $this->envValues['LEMONSQUEEZY_STORE_ID'] = $storeId;
-            }
-
-            $webhookSecret = $this->secret('Lemon Squeezy Signing Secret [optional]');
-            if ($webhookSecret) {
-                $this->envValues['LEMONSQUEEZY_SIGNING_SECRET'] = $webhookSecret;
-            }
-        }
-    }
 
     private function setupDatabase(): void
     {
@@ -590,7 +564,6 @@ class SetupWizard extends Command
         $hasKey = match ($provider) {
             'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
             'paddle' => ! empty($this->envValues['PADDLE_API_KEY']),
-            'lemonsqueezy' => ! empty($this->envValues['LEMONSQUEEZY_API_KEY']),
             default => false,
         };
 

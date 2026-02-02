@@ -10,6 +10,11 @@ use App\Jobs\SyncProductsJob;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Repeater;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -30,7 +35,7 @@ class ProductResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Product Management';
 
-    protected static ?string $navigationLabel = 'Products';
+    protected static ?string $navigationLabel = 'Plans';
 
     protected static ?int $navigationSort = 1;
 
@@ -40,80 +45,157 @@ class ProductResource extends Resource
     {
         return $schema
             ->schema([
-                TextInput::make('key')
-                    ->label('Key')
-                    ->required()
-                    ->maxLength(64)
-                    ->readOnly()
-                    ->unique(ignoreRecord: true),
-                TextInput::make('name')
-                    ->required()
-                    ->maxLength(255)
-                    ->readOnly()
-                    ->helperText('Managed by Provider (Sync to update)'),
-                TextInput::make('summary')
-                    ->maxLength(255)
-                    ->helperText('Local marketing summary (not synced)'),
-                Textarea::make('description')
-                    ->rows(4)
-                    ->columnSpanFull()
-                    ->readOnly()
-                    ->helperText('Managed by Provider (Sync to update)'),
-                Select::make('type')
-                    ->options([
-                        'subscription' => 'Subscription',
-                        'one_time' => 'One-time',
+                Section::make('Product Details')
+                    ->schema([
+                        TextInput::make('key')
+                            ->label('Key')
+                            ->required()
+                            ->maxLength(64)
+                            ->unique(ignoreRecord: true),
+                        TextInput::make('name')
+                            ->required()
+                            ->maxLength(255)
+                            ->helperText('This name will be synced to payment providers'),
+                        TextInput::make('summary')
+                            ->maxLength(255)
+                            ->helperText('Local marketing summary (not synced)'),
+                        Textarea::make('description')
+                            ->rows(4)
+                            ->columnSpanFull()
+                            ->helperText('This description will be synced to payment providers'),
+                        Select::make('type')
+                            ->options([
+                                'subscription' => 'Subscription',
+                                'one_time' => 'One-time',
+                            ])
+                            ->required()
+                            ->default('subscription'),
+                        Toggle::make('is_featured')
+                            ->label('Featured'),
+                        Toggle::make('is_active')
+                            ->label('Active')
+                            ->default(false),
+                    ])->columns(2),
+
+                Section::make('Pricing')
+                    ->description('Manage prices for this product. They will be synced automatically.')
+                    ->schema([
+                        Repeater::make('prices')
+                            ->hiddenOn('edit')
+                            ->relationship()
+                            ->schema([
+                                Group::make([
+                                    Select::make('interval')
+                                        ->label('Billing Frequency')
+                                        ->options([
+                                            'month' => 'Monthly',
+                                            'year' => 'Yearly',
+                                            'once' => 'Lifetime / One-time',
+                                        ])
+                                        ->required()
+                                        ->default('month')
+                                        ->reactive()
+                                        ->afterStateUpdated(fn ($state, callable $set) => match($state) {
+                                            'month' => $set('label', 'Monthly'),
+                                            'year' => $set('label', 'Yearly'),
+                                            'once' => $set('label', 'Lifetime'),
+                                            default => null,
+                                        }),
+                                    
+                                    TextInput::make('amount')
+                                        ->label('Price (Cents)')
+                                        ->numeric()
+                                        ->required()
+                                        ->prefix('$')
+                                        ->helperText('e.g. 2900 = $29.00'),
+
+                                    TextInput::make('label')
+                                        ->required()
+                                        ->placeholder('e.g. Monthly'),
+                                ])->columns(3),
+
+                                Section::make('Advanced Config')
+                                    ->collapsed()
+                                    ->compact()
+                                    ->schema([
+                                        Grid::make(3)->schema([
+                                            TextInput::make('currency')
+                                                ->default('USD')
+                                                ->maxLength(3)
+                                                ->required(),
+                                            TextInput::make('key')
+                                                ->unique(ignoreRecord: true)
+                                                ->placeholder('Leave empty to auto-generate')
+                                                ->helperText('Unique ID for API usage'),
+                                            TextInput::make('interval_count')
+                                                ->numeric()
+                                                ->default(1)
+                                                ->label('Interval Count')
+                                                ->helperText('e.g. "3" for Quarterly'),
+                                        ]),
+                                        
+                                        Grid::make(2)->schema([
+                                            Toggle::make('has_trial')
+                                                ->label('Offer Free Trial')
+                                                ->reactive(),
+                                            TextInput::make('trial_interval_count')
+                                                ->label('Trial Days')
+                                                ->numeric()
+                                                ->default(7)
+                                                ->visible(fn ($get) => $get('has_trial')),
+                                        ]),
+                                        
+                                        Hidden::make('is_active')->default(true),
+                                    ]),
+                            ])
+                            ->itemLabel(fn (array $state): ?string => ($state['label'] ?? 'Price') . ' - ' . ($state['amount'] ? '$' . ($state['amount'] / 100) : ''))
+                            ->collapsed(false)
+                            ->cloneable()
+                            ->grid(1) // 1 price per row for better visibility
+                            ->defaultItems(1),
+                    ]),
+
+                Section::make('Entitlements & Features')
+                    ->schema([
+                        Textarea::make('features')
+                            ->label('Features (one per line)')
+                            ->rows(5)
+                            ->columnSpanFull()
+                            ->formatStateUsing(function ($state): string {
+                                if (is_array($state)) {
+                                    return implode("\n", $state);
+                                }
+                                return (string) $state;
+                            })
+                            ->dehydrateStateUsing(function ($state): array {
+                                if (! $state) {
+                                    return [];
+                                }
+                                $lines = preg_split('/\r?\n/', (string) $state);
+                                return array_values(array_filter(array_map('trim', $lines)));
+                            }),
+                        Textarea::make('entitlements')
+                            ->label('Entitlements (JSON)')
+                            ->rows(6)
+                            ->columnSpanFull()
+                            ->helperText('Example: {"storage_limit_mb": 2048, "support_sla": "priority"}')
+                            ->formatStateUsing(function ($state): ?string {
+                                if (! $state) {
+                                    return null;
+                                }
+                                return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+                            })
+                            ->dehydrateStateUsing(function ($state): ?array {
+                                if (! $state) {
+                                    return null;
+                                }
+                                $decoded = json_decode((string) $state, true);
+                                return is_array($decoded) ? $decoded : null;
+                            })
+                            ->rules(['nullable', 'json']),
                     ])
-                    ->required()
-                    ->default('subscription')
-                    ->disabled(),
-                Toggle::make('is_featured')
-                    ->label('Featured'),
-                Toggle::make('is_active')
-                    ->label('Active')
-                    ->default(false),
-                Textarea::make('features')
-                    ->label('Features (one per line)')
-                    ->rows(5)
-                    ->columnSpanFull()
-                    ->formatStateUsing(function ($state): string {
-                        if (is_array($state)) {
-                            return implode("\n", $state);
-                        }
-
-                        return (string) $state;
-                    })
-                    ->dehydrateStateUsing(function ($state): array {
-                        if (! $state) {
-                            return [];
-                        }
-                        $lines = preg_split('/\r?\n/', (string) $state);
-
-                        return array_values(array_filter(array_map('trim', $lines)));
-                    }),
-                Textarea::make('entitlements')
-                    ->label('Entitlements (JSON)')
-                    ->rows(6)
-                    ->columnSpanFull()
-                    ->helperText('Example: {"storage_limit_mb": 2048, "support_sla": "priority"}')
-                    ->formatStateUsing(function ($state): ?string {
-                        if (! $state) {
-                            return null;
-                        }
-
-                        return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-                    })
-                    ->dehydrateStateUsing(function ($state): ?array {
-                        if (! $state) {
-                            return null;
-                        }
-                        $decoded = json_decode((string) $state, true);
-
-                        return is_array($decoded) ? $decoded : null;
-                    })
-                    ->rules(['nullable', 'json']),
-            ])
-            ->columns(2);
+                    ->collapsed(),
+            ]);
     }
 
     public static function table(Table $table): Table
@@ -132,9 +214,25 @@ class ProductResource extends Resource
                 TextColumn::make('providerMappings.provider')
                     ->label('Providers')
                     ->badge()
+                    ->getStateUsing(function (Product $record) {
+                        static $activeProviders = null;
+                        
+                        if ($activeProviders === null) {
+                            $activeProviders = \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
+                                ->pluck('slug')
+                                ->map(fn ($s) => strtolower($s))
+                                ->toArray();
+                        }
+
+                        return $record->providerMappings
+                            ->pluck('provider')
+                            ->filter(fn ($provider) => in_array(strtolower((string) $provider), $activeProviders))
+                            ->unique()
+                            ->values()
+                            ->all();
+                    })
                     ->color(fn (string $state): string => match ($state) {
                         'stripe' => 'primary',
-                        'lemonsqueezy' => 'warning',
                         'paddle' => 'success',
                         'default' => 'gray', // Added default case to match style
                         default => 'gray',
@@ -156,7 +254,7 @@ class ProductResource extends Resource
                     ->placeholder('All Products'),
             ])
             ->headerActions([
-                // CreateAction::make(), // Disabled for Provider-First
+                CreateAction::make(),
                 Action::make('sync')
                     ->label('Import from Providers')
                     ->icon('heroicon-o-arrow-path')
@@ -199,7 +297,7 @@ class ProductResource extends Resource
             ->defaultSort('name')
             ->actions([
                 EditAction::make(),
-                // Delete removed: Products are managed on provider side (Paddle/Stripe/LemonSqueezy)
+                // Delete removed: Products are managed on provider side (Paddle/Stripe)
             ])
             ->bulkActions([
                 // Bulk delete removed: Products are managed on provider side
@@ -218,7 +316,7 @@ class ProductResource extends Resource
     private static function providerOptions(): array
     {
         $options = [];
-        $providers = config('saas.billing.providers', ['stripe', 'paddle', 'lemonsqueezy']);
+        $providers = config('saas.billing.providers', ['stripe', 'paddle']);
 
         foreach ($providers as $provider) {
             $options[$provider] = ucfirst((string) $provider);

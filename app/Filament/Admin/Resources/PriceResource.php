@@ -118,7 +118,6 @@ class PriceResource extends Resource
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'stripe' => 'primary',
-                        'lemonsqueezy' => 'warning',
                         'paddle' => 'success',
                         default => 'gray',
                     })
@@ -146,7 +145,7 @@ class PriceResource extends Resource
             ->defaultSort('product_id')
             ->actions([
                 EditAction::make(),
-                // Delete removed: Prices are managed on provider side (Paddle/Stripe/LemonSqueezy)
+                // Delete removed: Prices are managed on provider side (Paddle/Stripe)
             ])
             ->bulkActions([
                 // Bulk delete removed: Prices are managed on provider side
@@ -165,7 +164,7 @@ class PriceResource extends Resource
     private static function providerOptions(): array
     {
         $options = [];
-        $providers = config('saas.billing.providers', ['stripe', 'paddle', 'lemonsqueezy']);
+        $providers = config('saas.billing.providers', ['stripe', 'paddle']);
 
         foreach ($providers as $provider) {
             $options[$provider] = ucfirst((string) $provider);

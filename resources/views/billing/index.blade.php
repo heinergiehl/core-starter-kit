@@ -37,7 +37,7 @@
                     $statusColor = $statusColors[$subscription->status->value] ?? 'text-ink/60 bg-surface/10 border-ink/10';
                     // Pending cancellation = has canceled_at but still active status and ends_at in future
                     $isPendingCancellation = $subscription->canceled_at && $subscription->ends_at && $subscription->ends_at->isFuture();
-                    $supportsLocalCancel = in_array($subscription->provider->value, ['stripe', 'lemonsqueezy', 'paddle'], true);
+                    $supportsLocalCancel = in_array($subscription->provider->value, ['stripe', 'paddle'], true);
                     $canResume = $supportsLocalCancel && $isPendingCancellation;
                     $canCancel = $supportsLocalCancel && !$isPendingCancellation && in_array($subscription->status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing], true);
                 @endphp
@@ -178,8 +178,8 @@
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                     </div>
-                    <h2 class="text-xl font-display font-bold text-ink">{{ __('Setting up your subscription') }}</h2>
-                    <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('We received your payment and are activating your plan. This usually takes just a few seconds.') }}</p>
+                    <h2 class="text-xl font-display font-bold text-ink">{{ __('Processing Order') }}</h2>
+                    <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('We received your payment. We are finalizing your order details.') }}</p>
                     <div class="mt-6">
                         <span class="text-xs font-mono text-ink/40">{{ __('Order ID: :id', ['id' => $pendingOrder->id]) }}</span>
                     </div>

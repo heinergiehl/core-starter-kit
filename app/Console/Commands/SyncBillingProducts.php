@@ -8,6 +8,7 @@ use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\ProductProviderMapping;
+use App\Domain\Billing\Models\PaymentProvider;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -16,23 +17,21 @@ use Stripe\StripeClient;
 /**
  * Sync products and prices from billing providers.
  *
- * This command pulls product/price data from Stripe, Paddle, and LemonSqueezy
- * and syncs it to the local database. This is especially useful for
- * LemonSqueezy which doesn't have product/price webhooks.
+ * This command pulls product/price data from Stripe and Paddle
+ * and syncs it to the local database.
  *
  * @example php artisan billing:sync-products
  * @example php artisan billing:sync-products --provider=stripe
  * @example php artisan billing:sync-products --provider=paddle
- * @example php artisan billing:sync-products --provider=lemonsqueezy --dry-run
  */
 class SyncBillingProducts extends Command
 {
     protected $signature = 'billing:sync-products
-        {--provider=all : Provider to sync from (stripe|paddle|lemonsqueezy|all)}
+        {--provider=all : Provider to sync from (stripe|paddle|all)}
         {--dry-run : Preview changes without saving to database}
         {--force : Re-import products/prices even if deleted locally}';
 
-    protected $description = 'Sync products and prices from billing providers (Stripe, Paddle, LemonSqueezy)';
+    protected $description = 'Sync products and prices from billing providers (Stripe, Paddle)';
 
     private bool $dryRun = false;
 
@@ -56,17 +55,26 @@ class SyncBillingProducts extends Command
 
         $success = true;
 
-        if ($provider === 'all' || $provider === 'stripe') {
+        $activeProviders = PaymentProvider::where('is_active', true)
+            ->pluck('slug')
+            ->map(fn ($s) => strtolower($s))
+            ->toArray();
+
+        // 1. Stripe
+        if (($provider === 'all' || $provider === 'stripe') && in_array('stripe', $activeProviders)) {
             $success = $this->syncStripe() && $success;
+        } elseif ($provider === 'stripe') {
+            $this->warn('Stripe is disabled in settings. Skipping.');
         }
 
-        if ($provider === 'all' || $provider === 'paddle') {
+        // 2. Paddle
+        if (($provider === 'all' || $provider === 'paddle') && in_array('paddle', $activeProviders)) {
             $success = $this->syncPaddle() && $success;
+        } elseif ($provider === 'paddle') {
+            $this->warn('Paddle is disabled in settings. Skipping.');
         }
 
-        if ($provider === 'all' || $provider === 'lemonsqueezy') {
-            $success = $this->syncLemonSqueezy() && $success;
-        }
+
 
         $this->newLine();
         $this->info($this->dryRun ? '✅ Dry run complete' : '✅ Sync complete');
@@ -81,7 +89,9 @@ class SyncBillingProducts extends Command
     {
         $this->info('📦 Syncing from Stripe...');
 
-        $secret = config('services.stripe.secret');
+        $provider = PaymentProvider::where('slug', 'stripe')->first();
+        $config = $provider?->configuration ?? [];
+        $secret = $config['secret_key'] ?? config('services.stripe.secret');
 
         if (! $secret) {
             $this->error('  ❌ Stripe secret not configured');
@@ -167,8 +177,11 @@ class SyncBillingProducts extends Command
     {
         $this->info('🏓 Syncing from Paddle...');
 
-        $apiKey = config('services.paddle.api_key');
-        $environment = config('services.paddle.environment', 'production');
+        $provider = PaymentProvider::where('slug', 'paddle')->first();
+        $config = $provider?->configuration ?? [];
+        
+        $apiKey = $config['api_key'] ?? config('services.paddle.api_key');
+        $environment = $config['environment'] ?? config('services.paddle.environment', 'production');
         $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
 
         if (! $apiKey) {
@@ -402,11 +415,15 @@ class SyncBillingProducts extends Command
             $productModel = Product::create($productData);
 
             // Create mapping
-            ProductProviderMapping::create([
-                'product_id' => $productModel->id,
-                'provider' => 'paddle',
-                'provider_id' => (string) $id,
-            ]);
+            ProductProviderMapping::updateOrCreate(
+                [
+                    'product_id' => $productModel->id,
+                    'provider' => 'paddle',
+                ],
+                [
+                    'provider_id' => (string) $id,
+                ]
+            );
         }
     }
 
@@ -540,11 +557,15 @@ class SyncBillingProducts extends Command
 
                 $priceModel = Price::create($priceData);
 
-                PriceProviderMapping::create([
-                    'price_id' => $priceModel->id,
-                    'provider' => 'paddle',
-                    'provider_id' => (string) $id,
-                ]);
+                PriceProviderMapping::updateOrCreate(
+                    [
+                        'provider' => 'paddle',
+                        'provider_id' => (string) $id,
+                    ],
+                    [
+                        'price_id' => $priceModel->id,
+                    ]
+                );
 
                 if ($debug) {
                     $this->warn("DEBUG: Created new price {$priceModel->id} and mapping for {$id}");
@@ -729,304 +750,8 @@ class SyncBillingProducts extends Command
         return "every-{$intervalCount}-{$interval}";
     }
 
-    /**
-     * Sync products and variants from LemonSqueezy.
-     */
-    private function syncLemonSqueezy(): bool
-    {
-        $this->info('🍋 Syncing from LemonSqueezy...');
 
-        $apiKey = config('services.lemonsqueezy.api_key');
-        $storeId = config('services.lemonsqueezy.store_id');
 
-        if (! $apiKey || ! $storeId) {
-            $this->error('  ❌ LemonSqueezy API key or store ID not configured');
-
-            return false;
-        }
-
-        try {
-            // Sync products
-            $this->info('  → Fetching products...');
-            $nextUrl = "https://api.lemonsqueezy.com/v1/products?filter[store_id]={$storeId}&page[size]=100";
-            $productCount = 0;
-
-            do {
-                $productsResponse = Http::retry(3, 500)
-                    ->timeout(30)
-                    ->withToken($apiKey)
-                    ->withHeaders(['Accept' => 'application/vnd.api+json'])
-                    ->get($nextUrl);
-
-                if (! $productsResponse->successful()) {
-                    throw new \RuntimeException('Failed to fetch products: '.$productsResponse->body());
-                }
-
-                $data = $productsResponse->json();
-                $products = $data['data'] ?? [];
-
-                // CRITICAL: If we get 0 products, stop pagination (API bug workaround)
-                if (count($products) === 0) {
-                    break;
-                }
-
-                foreach ($products as $product) {
-                    $this->syncLemonSqueezyProduct($product);
-                    $productCount++;
-                }
-
-                $nextUrl = $data['links']['next'] ?? null;
-
-                // Small delay between pagination requests
-                if ($nextUrl) {
-                    usleep(500000); // 0.5 seconds
-                }
-            } while ($nextUrl);
-
-            $this->info("  ✓ {$productCount} products synced");
-
-            // Sync variants (these are like prices in LS)
-            $this->info('  → Fetching variants...');
-            $nextUrl = 'https://api.lemonsqueezy.com/v1/variants?page[size]=100';
-            $variantCount = 0;
-
-            do {
-                $variantsResponse = Http::retry(3, 500)
-                    ->timeout(30)
-                    ->withToken($apiKey)
-                    ->withHeaders(['Accept' => 'application/vnd.api+json'])
-                    ->get($nextUrl);
-
-                if (! $variantsResponse->successful()) {
-                    throw new \RuntimeException('Failed to fetch variants: '.$variantsResponse->body());
-                }
-
-                $data = $variantsResponse->json();
-                $variants = $data['data'] ?? [];
-
-                // CRITICAL: If we get 0 variants, stop pagination (API bug workaround)
-                if (count($variants) === 0) {
-                    break;
-                }
-
-                foreach ($variants as $variant) {
-                    $this->syncLemonSqueezyVariant($variant);
-                    $variantCount++;
-                }
-
-                $nextUrl = $data['links']['next'] ?? null;
-
-                // Small delay between pagination requests
-                if ($nextUrl) {
-                    usleep(500000); // 0.5 seconds
-                }
-            } while ($nextUrl);
-
-            $this->info("  ✓ {$variantCount} variants synced");
-
-            return true;
-        } catch (\Throwable $e) {
-            $this->error("  ❌ LemonSqueezy sync failed: {$e->getMessage()}");
-
-            return false;
-        }
-    }
-
-    /**
-     * Fetch a resource from LemonSqueezy API.
-     */
-    private function fetchLemonSqueezyResource(string $resource, string $apiKey, array $query = []): array
-    {
-        $response = Http::withToken($apiKey)
-            ->withHeaders(['Accept' => 'application/vnd.api+json'])
-            ->get("https://api.lemonsqueezy.com/v1/{$resource}", $query);
-
-        if (! $response->successful()) {
-            throw new \RuntimeException("Failed to fetch {$resource}: ".$response->body());
-        }
-
-        return $response->json('data') ?? [];
-    }
-
-    /**
-     * Sync a LemonSqueezy product.
-     */
-    private function syncLemonSqueezyProduct(array $product): void
-    {
-        $id = $product['id'] ?? null;
-        $attributes = $product['attributes'] ?? [];
-        $name = $attributes['name'] ?? 'Unknown';
-
-        if (! $id) {
-            return;
-        }
-
-        if ($this->dryRun) {
-            $this->line("    Would sync product: {$name}");
-
-            return;
-        }
-
-        $key = $attributes['custom_data']['product_key'] ?? $this->generateKey($name, $id);
-
-        // Check for existing mapping
-        $mapping = ProductProviderMapping::where('provider', 'lemonsqueezy')
-            ->where('provider_id', (string) $id)
-            ->first();
-
-        $productData = [
-            'name' => $name,
-            'description' => $attributes['description'] ?? null,
-            'is_active' => ($attributes['status'] ?? 'published') === 'published',
-            // 'synced_at' => now(), // syncing date is global on mapping or ignored on product? Using now() is fine for product update tracking
-        ];
-
-        if ($mapping) {
-            if (! $mapping->product) {
-                if (! $this->allowImportDeleted) {
-                    return;
-                }
-
-                $key = $attributes['custom_data']['product_key'] ?? $this->generateKey($name, $id);
-                $finalKey = $this->ensureUniqueKey(Product::class, $key, 'lemonsqueezy', (string) $id);
-                $productData['key'] = $finalKey;
-                $productModel = Product::create($productData);
-                $mapping->update(['product_id' => $productModel->id]);
-
-                return;
-            }
-
-            $productModel = $mapping->product;
-            $productModel->update($productData);
-        } else {
-            $key = $attributes['custom_data']['product_key'] ?? $this->generateKey($name, $id);
-            $finalKey = $this->ensureUniqueKey(Product::class, $key, 'lemonsqueezy', (string) $id);
-            $productData['key'] = $finalKey;
-
-            $productModel = Product::create($productData);
-
-            ProductProviderMapping::create([
-                'product_id' => $productModel->id,
-                'provider' => 'lemonsqueezy',
-                'provider_id' => (string) $id,
-            ]);
-        }
-    }
-
-    /**
-     * Sync a LemonSqueezy variant as a price.
-     */
-    private function syncLemonSqueezyVariant(array $variant): void
-    {
-        $id = $variant['id'] ?? null;
-        $attributes = $variant['attributes'] ?? [];
-        $name = $attributes['name'] ?? 'Default';
-
-        if (! $id) {
-            return;
-        }
-
-        if ($this->dryRun) {
-            $this->line("    Would sync variant: {$name}");
-
-            return;
-        }
-
-        // Get product ID from attributes (primary) or relationships (fallback)
-        // LemonSqueezy API includes product_id directly in attributes
-        $productId = $attributes['product_id'] ?? $variant['relationships']['product']['data']['id'] ?? null;
-
-        // Find product for this variant
-        $product = $this->findLemonSqueezyProduct($productId);
-
-        if (! $product) {
-            $this->warn("      ⚠ Variant {$id}: Product {$productId} not found locally");
-
-            return;
-        }
-
-        $interval = $this->resolveLemonSqueezyInterval($attributes);
-        $key = $attributes['custom_data']['price_key'] ?? $this->generateKey($interval, $id);
-
-        $mapping = PriceProviderMapping::where('provider', 'lemonsqueezy')
-            ->where('provider_id', (string) $id)
-            ->first();
-
-        $priceData = [
-            'product_id' => $product->id,
-            'label' => $name,
-            'interval' => $interval,
-            'interval_count' => $attributes['interval_count'] ?? 1,
-            'currency' => strtoupper($attributes['currency'] ?? 'USD'),
-            'amount' => $attributes['price'] ?? 0,
-            'type' => ($attributes['is_subscription'] ?? false) ? 'recurring' : 'one_time',
-            'has_trial' => ($attributes['trial_interval_count'] ?? 0) > 0,
-            'trial_interval' => $attributes['trial_interval'] ?? null,
-            'trial_interval_count' => $attributes['trial_interval_count'] ?? null,
-            'is_active' => ($attributes['status'] ?? 'published') === 'published',
-        ];
-
-        if ($mapping) {
-            if (! $mapping->price) {
-                if (! $this->allowImportDeleted) {
-                    return;
-                }
-
-                $key = $attributes['custom_data']['price_key'] ?? $this->generateKey($interval, $id);
-                $finalKey = $this->ensureUniqueKey(Price::class, $key, 'lemonsqueezy', (string) $id);
-                $priceData['key'] = $finalKey;
-                $priceModel = Price::create($priceData);
-                $mapping->update(['price_id' => $priceModel->id]);
-
-                return;
-            }
-
-            // Update
-            $priceModel = $mapping->price;
-            $priceModel->update($priceData);
-        } else {
-            $key = $attributes['custom_data']['price_key'] ?? $this->generateKey($interval, $id);
-            $finalKey = $this->ensureUniqueKey(Price::class, $key, 'lemonsqueezy', (string) $id);
-            $priceData['key'] = $finalKey;
-
-            $priceModel = Price::create($priceData);
-
-            PriceProviderMapping::create([
-                'price_id' => $priceModel->id,
-                'provider' => 'lemonsqueezy',
-                'provider_id' => (string) $id,
-            ]);
-        }
-    }
-
-    /**
-     * Find a product for a LemonSqueezy product ID.
-     */
-    private function findLemonSqueezyProduct(?string $productId): ?Product
-    {
-        if (! $productId) {
-            return null;
-        }
-
-        return Product::query()
-            ->whereHas('providerMappings', function ($query) use ($productId) {
-                $query->where('provider', 'lemonsqueezy')
-                    ->where('provider_id', $productId);
-            })
-            ->first();
-    }
-
-    /**
-     * Resolve interval from LemonSqueezy variant attributes.
-     */
-    private function resolveLemonSqueezyInterval(array $attributes): string
-    {
-        if (! ($attributes['is_subscription'] ?? false)) {
-            return 'one_time';
-        }
-
-        return $attributes['interval'] ?? 'month';
-    }
 
     /**
      * Generate a URL-friendly key.

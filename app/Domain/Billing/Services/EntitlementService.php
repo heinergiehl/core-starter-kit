@@ -2,15 +2,20 @@
 
 namespace App\Domain\Billing\Services;
 
+
+use App\Domain\Billing\Data\Entitlements;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Models\User;
+use App\Enums\SubscriptionStatus;
+use App\Enums\OrderStatus;
+use Illuminate\Support\Facades\Cache;
 
 class EntitlementService
 {
     public function forUser(User $user): Entitlements
     {
-        return \Illuminate\Support\Facades\Cache::remember(
+        return Cache::remember(
             "entitlements:user:{$user->id}",
             now()->addMinutes(30),
             fn () => $this->calculateEntitlements($user)
@@ -19,7 +24,7 @@ class EntitlementService
 
     public function clearCache(User $user): void
     {
-        \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$user->id}");
+        Cache::forget("entitlements:user:{$user->id}");
     }
 
     protected function calculateEntitlements(User $user): Entitlements
@@ -27,9 +32,9 @@ class EntitlementService
         $subscription = Subscription::query()
             ->where('user_id', $user->id)
             ->whereIn('status', [
-                \App\Enums\SubscriptionStatus::Active,
-                \App\Enums\SubscriptionStatus::Trialing,
-                \App\Enums\SubscriptionStatus::PastDue,
+                SubscriptionStatus::Active,
+                SubscriptionStatus::Trialing,
+                SubscriptionStatus::PastDue,
             ])
             ->latest('id')
             ->first();
@@ -40,8 +45,8 @@ class EntitlementService
             $order = Order::query()
                 ->where('user_id', $user->id)
                 ->whereIn('status', [
-                    \App\Enums\OrderStatus::Paid,
-                    \App\Enums\OrderStatus::Completed,
+                    OrderStatus::Paid,
+                    OrderStatus::Completed,
                 ])
                 ->latest('id')
                 ->first();
@@ -58,7 +63,7 @@ class EntitlementService
         }
 
         // Handle grace period for past_due subscriptions
-        if ($subscription->status === \App\Enums\SubscriptionStatus::PastDue && ! $this->withinGracePeriod($subscription)) {
+        if ($subscription->status === SubscriptionStatus::PastDue && ! $this->withinGracePeriod($subscription)) {
             // Treat as no subscription / free plan if outside grace period
             // For now, let's fallback to default plan logic via recursion or just copy logic.
             // Simplest is to check default plan.
@@ -74,7 +79,7 @@ class EntitlementService
 
     protected function withinGracePeriod(Subscription $subscription): bool
     {
-        if ($subscription->status !== \App\Enums\SubscriptionStatus::PastDue) {
+        if ($subscription->status !== SubscriptionStatus::PastDue) {
             return true;
         }
 

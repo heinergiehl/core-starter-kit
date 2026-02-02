@@ -20,7 +20,7 @@ trait ResolvesStripeData
      */
     protected function provider(): string
     {
-        return 'stripe';
+        return \App\Enums\BillingProvider::Stripe->value;
     }
 
     /**

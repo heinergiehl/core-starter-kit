@@ -7,17 +7,22 @@ use Tests\TestCase;
 
 class BillingPlanServiceTest extends TestCase
 {
+    use \Illuminate\Foundation\Testing\RefreshDatabase;
+
     private BillingPlanService $service;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->service = new BillingPlanService;
+
+        \App\Domain\Billing\Models\PaymentProvider::create(['name' => 'Stripe', 'slug' => 'stripe', 'is_active' => true]);
+        \App\Domain\Billing\Models\PaymentProvider::create(['name' => 'Paddle', 'slug' => 'paddle', 'is_active' => true]);
     }
 
     public function test_providers_returns_array_of_strings(): void
     {
-        config(['saas.billing.providers' => ['stripe', 'paddle', 'lemonsqueezy']]);
+        config(['saas.billing.providers' => ['stripe', 'paddle']]);
 
         $providers = $this->service->providers();
 
@@ -45,26 +50,32 @@ class BillingPlanServiceTest extends TestCase
 
     public function test_plans_returns_normalized_array(): void
     {
-        config(['saas.billing.plans' => [
-            'starter' => [
-                'name' => 'Starter',
-                'type' => 'subscription',
-            ],
-        ]]);
-        config(['saas.billing.catalog' => 'config']);
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
+            'key' => 'starter',
+            'name' => 'Starter',
+            'is_active' => true,
+        ]);
+        
+        $price = \App\Domain\Billing\Models\Price::factory()->create([
+            'product_id' => $product->id,
+            'key' => 'monthly',
+            'amount' => 1000,
+            'currency' => 'USD',
+            'interval' => 'month',
+            'is_active' => true,
+        ]);
+
+        config(['saas.billing.pricing.shown_plans' => ['starter']]);
 
         $plans = $this->service->plans();
 
-        $this->assertIsArray($plans);
+        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $plans);
         $this->assertNotEmpty($plans);
-        $this->assertEquals('starter', $plans[0]['key'] ?? null);
+        $this->assertEquals('starter', $plans->first()->key);
     }
 
     public function test_plan_throws_exception_for_unknown_plan(): void
     {
-        config(['saas.billing.plans' => []]);
-        config(['saas.billing.catalog' => 'config']);
-
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Unknown plan [nonexistent]');
 
@@ -73,13 +84,11 @@ class BillingPlanServiceTest extends TestCase
 
     public function test_price_throws_exception_for_unknown_price(): void
     {
-        config(['saas.billing.plans' => [
-            'starter' => [
-                'name' => 'Starter',
-                'prices' => [],
-            ],
-        ]]);
-        config(['saas.billing.catalog' => 'config']);
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
+            'key' => 'starter',
+            'name' => 'Starter',
+            'is_active' => true,
+        ]);
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Unknown price [monthly] for plan [starter]');

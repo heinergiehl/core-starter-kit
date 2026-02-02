@@ -3,6 +3,7 @@
 namespace App\Domain\Billing\Data;
 
 use App\Domain\Billing\Models\Discount;
+use App\Enums\PaymentMode;
 use App\Models\User;
 
 /**
@@ -59,8 +60,34 @@ readonly class CheckoutRequest
      * @param  array<string, mixed>  $plan  The plan configuration
      * @return string 'payment' for one-time purchases, 'subscription' otherwise
      */
-    public function resolveMode(array $plan): string
+    /**
+     * Determine payment mode based on plan type.
+     *
+     * @param  \App\Domain\Billing\Data\Plan  $plan  The plan configuration
+     * @return \App\Enums\PaymentMode
+     */
+    public function resolveMode(\App\Domain\Billing\Data\Plan $plan): PaymentMode
     {
-        return ($plan['type'] ?? 'subscription') === 'one_time' ? 'payment' : 'subscription';
+        $prices = $plan->prices;
+        if (isset($prices[$this->priceKey])) {
+            $price = $prices[$this->priceKey];
+            $type = $price->type;
+            
+            // Handle Enum object or string
+            if ($type instanceof \BackedEnum) {
+                $type = $type->value;
+            }
+
+            if ($type === 'one_time' || ($price->interval ?? '') === 'once' || empty($price->interval)) {
+                return PaymentMode::OneTime;
+            }
+        }
+
+        $planType = $plan->type;
+        if ($planType instanceof \BackedEnum) {
+            $planType = $planType->value;
+        }
+
+        return $planType === 'one_time' ? PaymentMode::OneTime : PaymentMode::Subscription;
     }
 }

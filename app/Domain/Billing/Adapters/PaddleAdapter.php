@@ -1,18 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Billing\Adapters;
 
 use App\Domain\Billing\Adapters\Paddle\Concerns\ResolvesPaddleData;
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleOrderHandler;
-use App\Domain\Billing\Adapters\Paddle\Handlers\PaddlePriceHandler;
-use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleProductHandler;
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleSubscriptionHandler;
+use App\Domain\Billing\Contracts\BillingRuntimeProvider;
 use App\Domain\Billing\Contracts\PaddleWebhookHandler;
+use App\Domain\Billing\Data\CheckoutRequest;
+use App\Domain\Billing\Data\TransactionDTO;
+use App\Domain\Billing\Data\WebhookPayload;
 use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
+use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Enums\BillingProvider;
+use App\Enums\DiscountType;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
@@ -28,14 +36,18 @@ use Illuminate\Support\Facades\Http;
  * Webhook event processing is delegated to specialized handlers for
  * maintainability and single responsibility.
  *
- * @see PaddleProductHandler
- * @see PaddlePriceHandler
  * @see PaddleSubscriptionHandler
  * @see PaddleOrderHandler
  */
-class PaddleAdapter implements BillingProviderAdapter
+class PaddleAdapter implements BillingRuntimeProvider
 {
     use ResolvesPaddleData;
+
+    private const SIGNATURE_HEADER = 'Paddle-Signature';
+    private const SANDBOX_API_URL = 'https://sandbox-api.paddle.com';
+    private const PRODUCTION_API_URL = 'https://api.paddle.com';
+    private const WEBHOOK_TOLERANCE_SECONDS = 300;
+
 
     /**
      * Registered webhook handlers.
@@ -44,54 +56,57 @@ class PaddleAdapter implements BillingProviderAdapter
      */
     private array $handlers = [];
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly array $config,
+        private readonly BillingPlanService $planService,
+    ) {
         $this->registerHandlers();
     }
 
     public function provider(): string
     {
-        return 'paddle';
+        return BillingProvider::Paddle->value;
     }
 
-    public function parseWebhook(Request $request): array
+    public function parseWebhook(Request $request): WebhookPayload
     {
         $payload = $request->getContent();
-        $signature = $request->header('Paddle-Signature');
-        $secret = config('services.paddle.webhook_secret');
+        $signature = $request->header(self::SIGNATURE_HEADER);
+        $secret = $this->config['webhook_secret'] ?? null;
 
         // Verify signature in production
         if (! app()->environment(['local', 'testing'])) {
             if (! $secret) {
-                throw BillingException::missingConfiguration('Paddle', 'webhook secret');
+                throw BillingException::missingConfiguration(BillingProvider::Paddle, 'webhook secret');
             }
 
             if (! $signature) {
-                throw BillingException::webhookValidationFailed('Paddle', 'signature header is missing');
+                throw BillingException::webhookValidationFailed(BillingProvider::Paddle, 'signature header is missing');
             }
 
             if (! $this->verifyPaddleSignature($payload, $signature, $secret)) {
-                throw BillingException::webhookValidationFailed('Paddle', 'invalid signature');
+                throw BillingException::webhookValidationFailed(BillingProvider::Paddle, 'invalid signature');
             }
         }
 
         $data = json_decode($payload, true);
         if (! is_array($data)) {
-            throw BillingException::webhookValidationFailed('Paddle', 'invalid payload structure');
+            throw BillingException::webhookValidationFailed(BillingProvider::Paddle, 'invalid payload structure');
         }
 
         $eventId = $data['event_id'] ?? $data['id'] ?? null;
         $eventType = $data['event_type'] ?? $data['type'] ?? null;
 
         if (! $eventId || ! $eventType) {
-            throw BillingException::webhookValidationFailed('Paddle', 'missing event id or type');
+            throw BillingException::webhookValidationFailed(BillingProvider::Paddle, 'missing event id or type');
         }
 
-        return [
-            'id' => (string) $eventId,
-            'type' => $eventType,
-            'payload' => $data,
-        ];
+        return new WebhookPayload(
+            id: (string) $eventId,
+            type: $eventType,
+            payload: $data,
+            provider: $this->provider()
+        );
     }
 
     /**
@@ -116,7 +131,7 @@ class PaddleAdapter implements BillingProviderAdapter
         }
 
         $timestamp = (int) $timestamp;
-        $toleranceSeconds = (int) config('services.paddle.webhook_tolerance_seconds', 300);
+        $toleranceSeconds = (int) ($this->config['webhook_tolerance_seconds'] ?? self::WEBHOOK_TOLERANCE_SECONDS);
         if ($toleranceSeconds > 0 && abs(time() - $timestamp) > $toleranceSeconds) {
             return false;
         }
@@ -147,12 +162,14 @@ class PaddleAdapter implements BillingProviderAdapter
 
     /**
      * Register webhook handlers.
+     * 
+     * NOTE: Product/Price handlers are intentionally NOT registered.
+     * App-first mode = products/prices are managed in app, not synced from Paddle webhooks.
      */
     private function registerHandlers(): void
     {
         $handlers = [
-            new PaddleProductHandler,
-            new PaddlePriceHandler,
+            // PaddleProductHandler and PaddlePriceHandler REMOVED for app-first mode
             app(PaddleSubscriptionHandler::class),
             new PaddleOrderHandler,
         ];
@@ -180,7 +197,7 @@ class PaddleAdapter implements BillingProviderAdapter
         string $successUrl,
         string $cancelUrl,
         ?Discount $discount = null
-    ): string {
+    ): TransactionDTO {
         $payload = $this->buildTransactionPayload(
             $user,
             $planKey,
@@ -192,17 +209,7 @@ class PaddleAdapter implements BillingProviderAdapter
             []
         );
 
-        $data = $this->createTransaction($payload);
-
-        $url = data_get($data, 'checkout.url')
-            ?? data_get($data, 'url')
-            ?? data_get($data, 'checkout_url');
-
-        if (! $url) {
-            throw BillingException::checkoutFailed('Paddle', 'checkout URL was not returned');
-        }
-
-        return $url;
+        return $this->createTransaction($payload);
     }
 
     public function createTransactionId(
@@ -215,7 +222,7 @@ class PaddleAdapter implements BillingProviderAdapter
         ?Discount $discount = null,
         array $extraCustomData = [],
         ?string $customerEmail = null
-    ): string {
+    ): TransactionDTO {
         $payload = $this->buildTransactionPayload(
             $user,
             $planKey,
@@ -228,15 +235,7 @@ class PaddleAdapter implements BillingProviderAdapter
             $customerEmail
         );
 
-        $data = $this->createTransaction($payload);
-
-        $transactionId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
-
-        if (! $transactionId) {
-            throw BillingException::checkoutFailed('Paddle', 'transaction id was not returned');
-        }
-
-        return (string) $transactionId;
+        return $this->createTransaction($payload);
     }
 
     /**
@@ -253,11 +252,10 @@ class PaddleAdapter implements BillingProviderAdapter
         array $extraCustomData = [],
         ?string $customerEmail = null
     ): array {
-        $planService = app(BillingPlanService::class);
-        $priceId = $planService->providerPriceId($this->provider(), $planKey, $priceKey);
+        $priceId = $this->planService->providerPriceId($this->provider(), $planKey, $priceKey);
 
         if (! $priceId) {
-            throw BillingException::missingPriceId('Paddle', $planKey, $priceKey);
+            throw BillingException::missingPriceId(BillingProvider::Paddle, $planKey, $priceKey);
         }
 
         $customData = [
@@ -324,34 +322,53 @@ class PaddleAdapter implements BillingProviderAdapter
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
-    private function createTransaction(array $payload): array
+    private function createTransaction(array $payload): TransactionDTO
     {
-        $apiKey = config('services.paddle.api_key');
+        $apiKey = $this->config['api_key'] ?? null;
 
         if (! $apiKey) {
-            throw BillingException::missingConfiguration('Paddle', 'api_key');
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
         }
 
         $response = $this->paddleRequest($apiKey)
             ->post('/transactions', $payload);
 
         if (! $response->successful()) {
-            throw BillingException::failedAction('Paddle', 'create transaction', $response->body());
+            throw BillingException::failedAction(BillingProvider::Paddle, 'create transaction', $response->body());
         }
 
-        return $response->json('data') ?? [];
+        $data = $response->json('data') ?? [];
+        $id = data_get($data, 'id') ?? data_get($data, 'transaction_id');
+        $url = data_get($data, 'checkout.url') 
+            ?? data_get($data, 'url') 
+            ?? data_get($data, 'checkout_url');
+        
+        // Status is sometimes 'status', sometimes 'state' depending on endpoint version/type
+        $status = data_get($data, 'status') ?? data_get($data, 'state');
+
+        if (! $id) {
+             throw BillingException::checkoutFailed(BillingProvider::Paddle, 'transaction id was not returned');
+        }
+
+        /* If URL is missing, we might need to handle it, but for now we trust Paddle or fallbacks */
+        
+        return new TransactionDTO(
+            id: (string) $id,
+            url: (string) $url,
+            status: (string) $status
+        );
     }
 
     public function createDiscount(Discount $discount): string
     {
-        $apiKey = config('services.paddle.api_key');
+        $apiKey = $this->config['api_key'] ?? null;
         if (! $apiKey) {
-            throw BillingException::missingConfiguration('Paddle', 'api_key');
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
         }
 
         $payload = [
             'description' => $discount->name ?? $discount->code,
-            'type' => $discount->type === 'percent' ? 'percentage' : 'flat',
+            'type' => $discount->type === DiscountType::Percent->value ? 'percentage' : 'flat',
             'amount' => (string) $discount->amount,
             'currency_code' => $discount->currency ?? 'USD',
             'code' => $discount->code,
@@ -369,7 +386,7 @@ class PaddleAdapter implements BillingProviderAdapter
             ->post('/discounts', $payload);
 
         if (! $response->successful()) {
-            throw BillingException::failedAction('Paddle', 'create discount', $response->body());
+            throw BillingException::failedAction(BillingProvider::Paddle, 'create discount', $response->body());
         }
 
         return $response->json('data.id');
@@ -377,10 +394,11 @@ class PaddleAdapter implements BillingProviderAdapter
 
     private function paddleRequest(string $apiKey): PendingRequest
     {
-        $timeout = (int) config('saas.billing.provider_api.timeouts.paddle', 15);
-        $connectTimeout = (int) config('saas.billing.provider_api.connect_timeouts.paddle', 5);
-        $retries = (int) config('saas.billing.provider_api.retries.paddle', 2);
-        $retryDelay = (int) config('saas.billing.provider_api.retry_delay_ms', 500);
+        $timeout = (int) ($this->config['timeout'] ?? 15);
+        $connectTimeout = (int) ($this->config['connect_timeout'] ?? 5);
+        $retries = (int) ($this->config['retries'] ?? 2);
+        // Retry delay is usually standard, but can be config'd if needed.
+        $retryDelay = 500;
 
         return Http::withToken($apiKey)
             ->acceptJson()
@@ -397,11 +415,11 @@ class PaddleAdapter implements BillingProviderAdapter
 
     private function paddleBaseUrl(): string
     {
-        $environment = config('services.paddle.environment', 'production');
+        $environment = $this->config['environment'] ?? 'production';
 
         return $environment === 'sandbox'
-            ? 'https://sandbox-api.paddle.com'
-            : 'https://api.paddle.com';
+            ? self::SANDBOX_API_URL
+            : self::PRODUCTION_API_URL;
     }
 
     private function shouldRetryProviderRequest(\Throwable $exception): bool
@@ -420,9 +438,9 @@ class PaddleAdapter implements BillingProviderAdapter
         return true;
     }
 
-    public function updateSubscription(\App\Domain\Billing\Models\Subscription $subscription, string $newPriceId): void
+    public function updateSubscription(Subscription $subscription, string $newPriceId): void
     {
-        $apiKey = config('services.paddle.api_key');
+        $apiKey = $this->config['api_key'] ?? null;
 
         // Get current subscription to find quantity
         $quantity = $subscription->quantity ?? 1;
@@ -440,13 +458,13 @@ class PaddleAdapter implements BillingProviderAdapter
             ]);
 
         if (! $response->successful()) {
-            throw BillingException::failedAction('Paddle', 'update subscription', $response->body());
+            throw BillingException::failedAction(BillingProvider::Paddle, 'update subscription', $response->body());
         }
     }
 
-    public function cancelSubscription(\App\Domain\Billing\Models\Subscription $subscription): \Carbon\Carbon
+    public function cancelSubscription(Subscription $subscription): \Carbon\Carbon
     {
-        $apiKey = config('services.paddle.api_key');
+        $apiKey = $this->config['api_key'] ?? null;
 
         // Cancel at next billing date (graceful cancellation)
         $response = $this->paddleRequest($apiKey)
@@ -467,7 +485,7 @@ class PaddleAdapter implements BillingProviderAdapter
         }
 
         if (! $response->successful()) {
-            throw BillingException::failedAction('Paddle', 'cancel subscription', $response->body());
+            throw BillingException::failedAction(BillingProvider::Paddle, 'cancel subscription', $response->body());
         }
 
         // Get the scheduled cancel date
@@ -479,9 +497,9 @@ class PaddleAdapter implements BillingProviderAdapter
             : ($subscription->renews_at ?? now()->addMonth());
     }
 
-    public function resumeSubscription(\App\Domain\Billing\Models\Subscription $subscription): void
+    public function resumeSubscription(Subscription $subscription): void
     {
-        $apiKey = config('services.paddle.api_key');
+        $apiKey = $this->config['api_key'] ?? null;
 
         // Remove scheduled cancellation by setting scheduled_change to null
         $response = $this->paddleRequest($apiKey)
@@ -490,7 +508,7 @@ class PaddleAdapter implements BillingProviderAdapter
             ]);
 
         if (! $response->successful()) {
-            throw BillingException::failedAction('Paddle', 'resume subscription', $response->body());
+            throw BillingException::failedAction(BillingProvider::Paddle, 'resume subscription', $response->body());
         }
     }
 }

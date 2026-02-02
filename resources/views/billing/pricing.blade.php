@@ -11,21 +11,18 @@
         // Check if user already has any purchase (subscription OR one-time)
         $hasPurchased = $canCheckout && app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($user);
         
-        // Get customer-friendly provider labels from config
-        $providerLabels = config('saas.billing.pricing.provider_labels', [
-            'stripe' => 'Stripe',
-            'paddle' => 'Paddle',
-            'lemonsqueezy' => 'Lemon Squeezy',
-        ]);
-        
-        // Check if provider choice is enabled for customers
-        $providerChoiceEnabled = config('saas.billing.pricing.provider_choice_enabled', true);
-        
         $catalog = strtolower((string) config('saas.billing.catalog', 'config'));
-        $couponEnabledProviders = array_map('strtolower', config('saas.billing.discounts.providers', ['stripe']));
-        $couponEnabled = in_array($provider ?? 'stripe', $couponEnabledProviders, true);
+
+        // Determine available intervals for toggle
+        // $plans is a Collection<Plan>
+        $allIntervals = collect($plans)->pluck('prices')->collapse()->pluck('interval')->unique()->values();
+        $hasMonthly = $allIntervals->contains('month');
+        $hasYearly = $allIntervals->contains('year');
+        $hasOneTime = $allIntervals->contains('once');
+        $defaultInterval = $hasMonthly ? 'month' : ($hasYearly ? 'year' : 'once');
     @endphp
 
+    <div x-data="{ interval: '{{ $defaultInterval }}' }">
     <section class="py-12">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div class="max-w-2xl">
@@ -33,43 +30,43 @@
                     {{ __('Pricing Plans') }}
                 </div>
                 <h1 class="text-4xl font-bold font-display text-ink sm:text-5xl">{{ __('Plans that scale with your product') }}</h1>
-                <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data. Switch providers instantly.') }}</p>
+                <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data.') }}</p>
             </div>
             
-            @if ($providerChoiceEnabled && count($providers) > 1)
-                <!-- Provider Toggles (only shown when multiple providers and choice enabled) -->
-                <div class="flex flex-wrap items-center gap-2 p-1.5 rounded-full bg-surface-highlight/10 border border-ink/5 backdrop-blur-md">
-                    @foreach ($providers as $providerOption)
-                        <a
-                            href="{{ route('pricing', ['provider' => $providerOption]) }}"
-                            class="{{ $providerOption === $provider 
-                                ? 'bg-primary text-white shadow-lg shadow-primary/20' 
-                                : 'text-ink/60 hover:text-ink hover:bg-surface/50' }} 
-                                rounded-full px-5 py-2 text-sm font-semibold transition-all duration-300"
-                        >
-                            {{ $providerLabels[$providerOption] ?? ucfirst($providerOption) }}
-                        </a>
-                    @endforeach
+            @if (($hasMonthly || $hasYearly) && $hasOneTime || ($hasMonthly && $hasYearly))
+                <!-- Interval Toggle -->
+                <div class="flex items-center gap-1 p-1 rounded-full bg-surface-highlight/10 border border-ink/5 backdrop-blur-md">
+                    @if ($hasMonthly)
+                    <button 
+                        @click="interval = 'month'"
+                        class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
+                        :class="interval === 'month' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
+                    >
+                        {{ __('Monthly') }}
+                    </button>
+                    @endif
+                    @if ($hasYearly)
+                    <button 
+                        @click="interval = 'year'"
+                        class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
+                        :class="interval === 'year' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
+                    >
+                        {{ __('Yearly') }}
+                        <span class="ml-1 text-[10px] font-bold uppercase tracking-wider bg-white/20 px-1.5 py-0.5 rounded text-white">{{ __('Save') }}</span>
+                    </button>
+                    @endif
+                    @if ($hasOneTime)
+                    <button 
+                        @click="interval = 'once'"
+                        class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
+                        :class="interval === 'once' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
+                    >
+                        {{ __('Lifetime') }}
+                    </button>
+                    @endif
                 </div>
             @endif
         </div>
-
-        @if ($providerChoiceEnabled && count($providers) > 1)
-            <!-- Provider Info Banner (only shown in multi-provider mode) -->
-            <div class="flex items-center gap-2 px-6 py-3 mt-8 text-sm border rounded-2xl border-ink/5 bg-surface-highlight/5 text-ink/60 backdrop-blur">
-                <svg class="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                <span>
-                    <span class="font-semibold text-ink">{{ __('Active Provider:') }}</span>
-                    {{ $providerLabels[$provider] ?? ucfirst($provider) }}
-                </span>
-                <span class="mx-2 text-ink/20">|</span>
-                <span>
-                    {{ $catalog === 'database'
-                        ? __('Manage prices in Admin > Prices to activate checkout buttons.')
-                        : __('Use pricing IDs from `.env` to activate checkout buttons.') }}
-                </span>
-            </div>
-        @endif
 
         @if ($errors->has('billing'))
             <div class="px-4 py-3 mt-6 text-sm border rounded-2xl border-rose-200 bg-rose-50/10 text-rose-600 backdrop-blur">
@@ -90,16 +87,23 @@
         @endif
     </section>
 
-    <section class="grid gap-8 lg:grid-cols-3">
+    <section class="grid gap-12 mt-16 lg:grid-cols-3">
         @foreach ($plans as $plan)
             @php
-                $isHighlighted = !empty($plan['highlight']);
-                $isOneTime = ($plan['type'] ?? 'subscription') === 'one_time';
+                $isHighlighted = !empty($plan->highlight);
+                $isOneTime = $plan->isOneTime();
                 $planTypeLabel = $isOneTime ? __('One-time') : __('Subscription');
+                
+                // Calculate available intervals for this plan
+                $planIntervals = collect($plan->prices)->pluck('interval')->unique()->values();
+                $jsIntervals = $planIntervals->map(fn($i) => "'$i'")->implode(',');
             @endphp
             
             <!-- Plan Card -->
-            <div class="glass-panel rounded-[32px] p-8 flex flex-col relative group {{ $isHighlighted ? 'border-primary/50 shadow-primary/10 ring-1 ring-primary/20' : '' }}">
+            <div 
+                x-show="[{{ $jsIntervals }}].includes(interval)"
+                class="glass-panel rounded-[32px] p-8 flex flex-col relative group transition-all duration-300 {{ $isHighlighted ? 'border-primary shadow-[0_0_50px_-12px_rgba(var(--primary-500-rgb),0.3)] ring-1 ring-primary/50 md:scale-110 z-10 bg-primary/5' : 'hover:border-primary/30 hover:shadow-lg' }}"
+            >
                 @if ($isHighlighted)
                     <div class="absolute -translate-x-1/2 -top-4 left-1/2">
                         <span class="px-4 py-1 text-xs font-bold text-white rounded-full shadow-lg bg-gradient-to-r from-primary to-secondary">{{ __('Most Popular') }}</span>
@@ -108,36 +112,36 @@
 
                 <div class="mb-6">
                     <p class="mb-2 text-xs font-bold tracking-widest uppercase text-primary">{{ $planTypeLabel }}</p>
-                    <h2 class="text-3xl font-bold font-display text-ink">{{ $plan['name'] }}</h2>
-                    @if (!empty($plan['summary']))
-                        <p class="mt-2 text-sm text-ink/60">{{ $plan['summary'] }}</p>
+                    <h2 class="text-3xl font-bold font-display text-ink">{{ $plan->name }}</h2>
+                    @if (!empty($plan->summary))
+                        <p class="mt-2 text-sm text-ink/60">{{ $plan->summary }}</p>
                     @endif
                 </div>
 
                 <div class="flex-grow space-y-4">
-                    @if (empty($plan['prices']))
+                    @if (empty($plan->prices))
                         <div class="px-6 py-6 text-sm text-center border border-dashed rounded-2xl border-ink/20 bg-surface/30 text-ink/60">
                             {{ __('Add prices in Admin > Prices to show checkout options for this plan.') }}
                         </div>
                     @else
-                        @foreach ($plan['prices'] as $price)
+                        @foreach ($plan->prices as $price)
                             @php
-                                $amount = $price['amount'] ?? null;
-                                $currency = strtoupper((string) ($price['currency'] ?? 'USD'));
-                                $label = $price['label'] ?? ucfirst($price['key']);
-                                $interval = $price['interval'] ?? null;
+                                $amount = $price->amount ?? null;
+                                $currency = strtoupper((string) ($price->currency ?? 'USD'));
+                                $label = $price->label ?: ucfirst($price->key);
+                                $interval = $price->interval ?? null;
                                 $amountDisplay = __('Custom');
                                 if (is_numeric($amount)) {
                                     $amountValue = (float) $amount;
                                     $amountDisplay = '$' . number_format(
-                                        !empty($price['amount_is_minor']) ? ($amountValue / 100) : $amountValue,
-                                        !empty($price['amount_is_minor']) ? 2 : 0
+                                        !empty($price->amountIsMinor) ? ($amountValue / 100) : $amountValue,
+                                        !empty($price->amountIsMinor) ? 2 : 0
                                     );
                                 }
                             @endphp
                             
                             <!-- Price Option -->
-                            <div class="p-5 transition card-inner hover:border-primary/30">
+                            <div x-show="interval === '{{ $interval }}'" class="p-5 transition card-inner hover:border-primary/30">
                                 <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <p class="text-sm font-semibold text-ink">{{ $label }}</p>
@@ -152,7 +156,7 @@
                                 </div>
 
                                 <div>
-                                    @if (empty($price['is_available']))
+                                    @if (empty($price->providerIds))
                                         @if ($catalog === 'database')
                                             <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">{{ __('Missing Price ID') }}</p>
                                         @else
@@ -168,23 +172,9 @@
                                             <a href="{{ route('billing.index') }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('View billing →') }}</a>
                                         </div>
                                     @elseif ($canCheckout)
-                                        <form method="POST" action="{{ route('billing.checkout', [], false) }}">
-                                            @csrf
-                                            <input type="hidden" name="plan" value="{{ $plan['key'] }}">
-                                            <input type="hidden" name="price" value="{{ $price['key'] }}">
-                                            <input type="hidden" name="provider" value="{{ $provider }}">
-                                            
-                                            @if ($couponEnabled)
-                                                <div class="relative mb-3 group/coupon">
-                                                    <input
-                                                        type="text"
-                                                        name="coupon"
-                                                        value="{{ old('coupon') }}"
-                                                        class="w-full rounded-lg border border-ink/10 bg-surface/50 px-3 py-1.5 text-xs text-ink focus:border-primary focus:ring-1 focus:ring-primary transition placeholder:text-ink/30"
-                                                        placeholder="{{ __('Promo Code') }}"
-                                                    >
-                                                </div>
-                                            @endif
+                                        <form method="GET" action="{{ route('checkout.start') }}">
+                                            <input type="hidden" name="plan" value="{{ $plan->key }}">
+                                            <input type="hidden" name="price" value="{{ $price->key }}">
                                             
                                             <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
                                                 {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
@@ -193,7 +183,7 @@
                                     @elseif (!$user)
                                         <div class="space-y-3">
                                             <a
-                                                href="{{ route('checkout.start', ['provider' => $provider, 'plan' => $plan['key'], 'price' => $price['key']]) }}"
+                                                href="{{ route('checkout.start', ['plan' => $plan->key, 'price' => $price->key]) }}"
                                                 class="flex items-center justify-center px-4 py-2 text-xs font-bold text-white transition rounded-xl bg-primary hover:bg-primary/90"
                                             >
                                                 {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
@@ -211,10 +201,10 @@
                     @endif
                 </div>
 
-                @if (!empty($plan['features']))
+                @if (!empty($plan->features))
                     <div class="pt-8 mt-8 border-t border-ink/5">
                         <ul class="space-y-3">
-                            @foreach ($plan['features'] as $feature)
+                            @foreach ($plan->features as $feature)
                                 <li class="flex items-start gap-3 text-sm text-ink/70">
                                     <svg class="w-5 h-5 text-primary shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                                     <span>{{ $feature }}</span>
@@ -248,4 +238,5 @@
             </div>
         </div>
     </section>
+    </div> <!-- End x-data -->
 @endsection

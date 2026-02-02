@@ -9,7 +9,7 @@ use Stripe\StripeClient;
 /**
  * Archive all products across billing providers.
  *
- * This command archives (soft-deletes) products on Stripe, Paddle, and LemonSqueezy
+ * This command archives (soft-deletes) products on Stripe and Paddle
  * so they won't be synced into the local database. Products are archived, not deleted,
  * to preserve historical data on the provider side.
  *
@@ -21,13 +21,14 @@ use Stripe\StripeClient;
 class ArchiveAllProducts extends Command
 {
     protected $signature = 'billing:archive-all
-        {--provider=all : Provider to archive from (stripe|paddle|lemonsqueezy|all)}
+        {--provider=all : Provider to archive from (stripe|paddle|all)}
         {--dry-run : Preview what would be archived without making changes}
         {--include-prices : Also archive prices (Stripe only)}
         {--batch-size=10 : Number of items to process per batch}
-        {--delay=500 : Delay in milliseconds between API calls}';
+        {--delay=500 : Delay in milliseconds between API calls}
+        {--clear-local : Also delete all products and prices from the local database}';
 
-    protected $description = 'Archive all products (and optionally prices) from billing providers';
+    protected $description = 'Archive all products from billing providers and optionally clear local database';
 
     private bool $dryRun = false;
 
@@ -47,6 +48,7 @@ class ArchiveAllProducts extends Command
         $this->dryRun = (bool) $this->option('dry-run');
         $this->batchSize = (int) $this->option('batch-size');
         $this->delayMs = (int) $this->option('delay');
+        $clearLocal = (bool) $this->option('clear-local');
 
         if ($this->dryRun) {
             $this->warn('🔍 Dry run mode - no changes will be made');
@@ -54,13 +56,21 @@ class ArchiveAllProducts extends Command
         }
 
         $this->warn('⚠️  This will ARCHIVE all products on the selected provider(s).');
-        $this->warn('   Archived products will not sync to local database.');
+        if ($clearLocal) {
+            $this->warn('⚠️  It will ALSO DELETE all products and prices from your LOCAL database.');
+        } else {
+            $this->warn('   Archived products will not sync to local database.');
+        }
         $this->newLine();
 
         if (! $this->dryRun && ! $this->confirm('Are you sure you want to continue?')) {
             $this->info('Cancelled.');
 
             return self::SUCCESS;
+        }
+
+        if ($clearLocal && ! $this->dryRun) {
+            $this->clearLocalDatabase();
         }
 
         $success = true;
@@ -73,9 +83,7 @@ class ArchiveAllProducts extends Command
             $success = $this->archivePaddle() && $success;
         }
 
-        if ($provider === 'all' || $provider === 'lemonsqueezy') {
-            $success = $this->archiveLemonSqueezy() && $success;
-        }
+
 
         $this->newLine();
         $this->info('📊 Summary:');
@@ -86,6 +94,23 @@ class ArchiveAllProducts extends Command
         }
 
         return $success ? self::SUCCESS : self::FAILURE;
+    }
+
+    private function clearLocalDatabase(): void
+    {
+        $this->info('🧹 Clearing local database...');
+
+        // Delete in dependency order (children first) to satisfy Foreign Keys
+        // We use delete() instead of truncate() to be compatible with Postgres
+        // which imposes strict restrictions on TRUNCATE with foreign keys.
+        
+        \App\Domain\Billing\Models\PriceProviderMapping::query()->delete();
+        \App\Domain\Billing\Models\ProductProviderMapping::query()->delete();
+        \App\Domain\Billing\Models\Price::query()->delete();
+        \App\Domain\Billing\Models\Product::query()->delete();
+
+        $this->info('  ✓ Local products and prices cleared.');
+        $this->newLine();
     }
 
     /**
@@ -375,27 +400,6 @@ class ArchiveAllProducts extends Command
         }
     }
 
-    /**
-     * Archive all LemonSqueezy products.
-     */
-    private function archiveLemonSqueezy(): bool
-    {
-        $this->info('🍋 Archiving LemonSqueezy products...');
 
-        $apiKey = config('services.lemonsqueezy.api_key');
-        $storeId = config('services.lemonsqueezy.store_id');
 
-        if (! $apiKey || ! $storeId) {
-            $this->error('  ❌ LemonSqueezy API key or store ID not configured');
-
-            return false;
-        }
-
-        // Note: LemonSqueezy doesn't have a public API for archiving products
-        // Products must be archived via their dashboard
-        $this->warn('  ⚠ LemonSqueezy does not support archiving products via API.');
-        $this->warn('  ⚠ Please archive products manually in the LemonSqueezy dashboard.');
-
-        return true;
-    }
 }

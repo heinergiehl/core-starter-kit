@@ -159,9 +159,8 @@ class CatalogImportService
         $provider = strtolower($provider);
 
         return match ($provider) {
-            'stripe' => app(StripeCatalogImportAdapter::class),
-            'paddle' => app(PaddleCatalogImportAdapter::class),
-            'lemonsqueezy' => app(LemonSqueezyCatalogImportAdapter::class),
+            \App\Enums\BillingProvider::Stripe->value => app(\App\Domain\Billing\Imports\StripeCatalogImportAdapter::class),
+            \App\Enums\BillingProvider::Paddle->value => app(\App\Domain\Billing\Imports\PaddleCatalogImportAdapter::class),
             default => throw new RuntimeException("Catalog import provider [{$provider}] is not supported."),
         };
     }

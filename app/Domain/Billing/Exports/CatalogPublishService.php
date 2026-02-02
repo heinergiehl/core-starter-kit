@@ -129,7 +129,6 @@ class CatalogPublishService
         return match ($provider) {
             'stripe' => app(StripeCatalogPublishAdapter::class),
             'paddle' => app(PaddleCatalogPublishAdapter::class),
-            'lemonsqueezy' => app(LemonSqueezyCatalogPublishAdapter::class),
             default => throw new RuntimeException("Catalog publish provider [{$provider}] is not supported."),
         };
     }

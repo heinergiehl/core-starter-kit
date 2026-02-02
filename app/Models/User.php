@@ -15,11 +15,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Spatie\Permission\Traits\HasRoles;
+use App\Domain\Billing\Traits\HasEntitlements;
 
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles, Notifiable;
+    use HasFactory, HasRoles, Notifiable, HasEntitlements;
 
     /**
      * The attributes that are mass assignable.
@@ -76,32 +77,10 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function activeSubscription(): ?Subscription
     {
-        $subscription = $this->subscriptions()
-            ->whereIn('status', [
-                \App\Enums\SubscriptionStatus::Active,
-                \App\Enums\SubscriptionStatus::Trialing,
-                \App\Enums\SubscriptionStatus::PastDue,
-                \App\Enums\SubscriptionStatus::Canceled,
-            ])
+        return $this->subscriptions()
+            ->active()
             ->latest('id')
             ->first();
-
-        if ($subscription && $subscription->status === \App\Enums\SubscriptionStatus::Canceled) {
-            if ($subscription->ends_at && $subscription->ends_at->isFuture()) {
-                return $subscription;
-            }
-
-            return null;
-        }
-
-        if ($subscription && $subscription->status === \App\Enums\SubscriptionStatus::PastDue) {
-            $graceDays = config('saas.billing.grace_period_days', 5);
-            if ($subscription->updated_at->copy()->addDays($graceDays)->isPast()) {
-                return null;
-            }
-        }
-
-        return $subscription;
     }
 
     public function hasActiveSubscription(): bool
@@ -132,7 +111,7 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function canAccessPanel(Panel $panel): bool
     {
         if ($panel->getId() === 'admin') {
-            return $this->is_admin;
+            return $this->is_admin || $this->can('access_admin_panel');
         }
 
         return true;

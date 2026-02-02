@@ -2,206 +2,184 @@
 
 namespace App\Domain\Billing\Services;
 
+use App\Domain\Billing\Data\Plan;
+use App\Domain\Billing\Data\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product as CatalogProduct;
+use App\Enums\BillingProvider;
+use Illuminate\Support\Collection;
 use RuntimeException;
 
 class BillingPlanService
 {
+    /**
+     * @return array<int, string>
+     */
     public function providers(): array
     {
-        $providers = array_map('strtolower', config('saas.billing.providers', []));
-
-        return array_values(array_unique($providers));
+        return \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
+            ->pluck('slug')
+            ->map(fn ($slug) => strtolower($slug))
+            ->toArray();
     }
 
     public function defaultProvider(): string
     {
-        $provider = strtolower((string) config('saas.billing.default_provider', 'stripe'));
+        $default = strtolower((string) config('saas.billing.default_provider', BillingProvider::Stripe->value));
+        $activeProviders = $this->providers();
 
-        return $provider ?: 'stripe';
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function plans(): array
-    {
-        if ($this->useDatabaseCatalog()) {
-            return $this->plansFromDatabase();
+        if (in_array($default, $activeProviders, true)) {
+            return $default;
         }
 
-        return $this->plansFromConfig();
+        return $activeProviders[0] ?? BillingProvider::Stripe->value;
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return Collection<int, Plan>
      */
-    public function plansForProvider(string $provider): array
+    public function plans(): Collection
     {
-        $provider = strtolower($provider);
-        $plans = $this->plans();
+        return $this->plansFromDatabase();
+    }
 
-        foreach ($plans as &$plan) {
-            $prices = [];
+    /**
+     * @return Collection<int, Plan>
+     */
+    public function plansForProvider(BillingProvider|string $provider): Collection
+    {
+        $provider = $this->normalizeProvider($provider);
 
-            foreach ($plan['prices'] as $priceKey => $price) {
-                $price['key'] = $priceKey;
-                $price['provider_id'] = $this->resolveProviderId($price, $provider);
-                $price['amount'] = $this->resolveProviderValue($price, $provider, 'amounts', 'amount');
-                $price['currency'] = $this->resolveProviderValue($price, $provider, 'currencies', 'currency');
-                $price['is_available'] = ! empty($price['provider_id']);
-                $prices[$priceKey] = $price;
-            }
+        return $this->plans()->map(function (Plan $plan) use ($provider) {
+            $prices = array_map(function (Price $price) use ($provider) {
+                $providerId = $this->resolveProviderId($price, $provider);
+                
+                return new Price(
+                    key: $price->key,
+                    label: $price->label,
+                    amount: $this->resolveProviderValue($price, $provider, 'amounts', 'amount'),
+                    currency: $this->resolveProviderValue($price, $provider, 'currencies', 'currency'),
+                    interval: $price->interval,
+                    intervalCount: $price->intervalCount,
+                    type: $price->type,
+                    hasTrial: $price->hasTrial,
+                    trialInterval: $price->trialInterval,
+                    trialIntervalCount: $price->trialIntervalCount,
+                    providerIds: $price->providerIds,
+                    providerAmounts: $price->providerAmounts,
+                    providerCurrencies: $price->providerCurrencies,
+                    contextProviderId: $providerId,
+                    isAvailable: ! empty($providerId),
+                    amountIsMinor: $price->amountIsMinor,
+                );
+            }, $plan->prices);
 
-            $plan['prices'] = $prices;
-            $plan['is_available'] = (bool) collect($prices)->first(fn (array $price): bool => $price['is_available']);
+            $isAvailable = (bool) collect($prices)->first(fn (Price $price) => $price->isAvailable);
+
+            return new Plan(
+                key: $plan->key,
+                name: $plan->name,
+                summary: $plan->summary,
+                type: $plan->type,
+                highlight: $plan->highlight,
+                features: $plan->features,
+                entitlements: $plan->entitlements,
+                prices: $prices,
+                isAvailable: $isAvailable,
+            );
+        });
+    }
+
+    public function plan(string $planKey): Plan
+    {
+        $plan = $this->planFromDatabase($planKey);
+
+        if ($plan) {
+            return $plan;
         }
 
-        return $plans;
+        throw new RuntimeException("Unknown plan [{$planKey}].");
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function plan(string $planKey): array
-    {
-        if ($this->useDatabaseCatalog()) {
-            $plan = $this->planFromDatabase($planKey);
-
-            if ($plan) {
-                return $plan;
-            }
-        }
-
-        return $this->planFromConfig($planKey);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function price(string $planKey, string $priceKey): array
+    public function price(string $planKey, string $priceKey): Price
     {
         $plan = $this->plan($planKey);
+        $price = $plan->getPrice($priceKey);
 
-        if (! isset($plan['prices'][$priceKey])) {
+        if (! $price) {
             throw new RuntimeException("Unknown price [{$priceKey}] for plan [{$planKey}].");
         }
-
-        $price = $plan['prices'][$priceKey];
-        $price['key'] = $priceKey;
 
         return $price;
     }
 
-    public function providerPriceId(string $provider, string $planKey, string $priceKey): ?string
+    public function providerPriceId(BillingProvider|string $provider, string $planKey, string $priceKey): ?string
     {
-        if ($this->useDatabaseCatalog()) {
-            $providerId = PriceProviderMapping::query()
-                ->where('provider', strtolower($provider))
-                ->whereHas('price', function ($query) use ($planKey, $priceKey) {
-                    $query->whereHas('product', fn ($q) => $q->where('key', $planKey))
-                        ->where(function ($q) use ($priceKey) {
-                            $q->where('key', $priceKey)
-                                ->orWhere('interval', $priceKey);
-                        });
-                })
-                ->value('provider_id');
+        $provider = $this->normalizeProvider($provider);
 
-            if ($providerId) {
-                return $providerId;
-            }
-        }
+        $providerId = PriceProviderMapping::query()
+            ->where('provider', $provider)
+            ->whereHas('price', function ($query) use ($planKey, $priceKey) {
+                $query->whereHas('product', fn ($q) => $q->where('key', $planKey))
+                    ->where(function ($q) use ($priceKey) {
+                        $q->where('key', $priceKey)
+                            ->orWhere('interval', $priceKey);
+                    });
+            })
+            ->value('provider_id');
 
-        $price = $this->price($planKey, $priceKey);
-
-        return $this->resolveProviderId($price, $provider);
+        return $providerId ?: null;
     }
 
-    public function resolvePlanKeyByProviderId(string $provider, string $providerPriceId): ?string
+    public function resolvePlanKeyByProviderId(BillingProvider|string $provider, string $providerPriceId): ?string
     {
-        $provider = strtolower($provider);
+        $provider = $this->normalizeProvider($provider);
 
-        if ($this->useDatabaseCatalog()) {
-            $planKey = PriceProviderMapping::query()
-                ->where('provider', $provider)
-                ->where('provider_id', $providerPriceId)
-                ->with('price.product')
-                ->first()
-                ?->price
-                ?->product
-                ?->key;
+        $planKey = PriceProviderMapping::query()
+            ->where('provider', $provider)
+            ->where('provider_id', $providerPriceId)
+            ->with('price.product')
+            ->first()
+            ?->price
+            ?->product
+            ?->key;
 
-            if ($planKey) {
-                return (string) $planKey;
-            }
-        }
-
-        foreach (config('saas.billing.plans', []) as $planKey => $plan) {
-            foreach (($plan['prices'] ?? []) as $price) {
-                $resolved = $this->resolveProviderId($price, $provider);
-
-                if ($resolved && $resolved === $providerPriceId) {
-                    return (string) $planKey;
-                }
-            }
-        }
-
-        return null;
+        return $planKey ? (string) $planKey : null;
     }
 
-    private function useDatabaseCatalog(): bool
-    {
-        $catalog = strtolower((string) config('saas.billing.catalog', 'database'));
-
-        if ($catalog === 'config') {
-            return false;
-        }
-
-        return CatalogProduct::query()->exists();
-    }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return Collection<int, Plan>
      */
-    private function plansFromConfig(): array
+    private function plansFromDatabase(): Collection
     {
-        $plans = config('saas.billing.plans', []);
-        $normalized = [];
+        $shownPlans = config('saas.billing.pricing.shown_plans', []);
 
-        foreach ($plans as $key => $plan) {
-            $plan['key'] = $key;
-            $plan['type'] = $plan['type'] ?? 'subscription';
-            $plan['prices'] = $plan['prices'] ?? [];
-
-            $normalized[] = $plan;
-        }
-
-        return $normalized;
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function plansFromDatabase(): array
-    {
-        return CatalogProduct::query()
+        $query = CatalogProduct::query()
             ->with(['prices.mappings'])
             ->where('is_active', true)
             ->whereHas('prices', function ($query) {
                 $query->where('is_active', true);
-            })
-            ->orderBy('id')
-            ->get()
-            ->map(fn (CatalogProduct $plan): array => $this->normalizeDatabasePlan($plan))
-            ->values()
-            ->all();
+            });
+
+        if (! empty($shownPlans)) {
+            $query->whereIn('key', $shownPlans);
+        }
+
+        $plans = $query->get()
+            ->map(fn (CatalogProduct $plan): Plan => $this->normalizeDatabasePlan($plan));
+
+        if (! empty($shownPlans)) {
+            // Sort according to the config order
+            $shownPlansMap = array_flip($shownPlans);
+            return $plans->sortBy(fn (Plan $plan) => $shownPlansMap[$plan->key] ?? 999)
+                ->values();
+        }
+
+        return $plans->sortBy('id')->values();
     }
 
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function planFromDatabase(string $planKey): ?array
+    private function planFromDatabase(string $planKey): ?Plan
     {
         $plan = CatalogProduct::query()
             ->with(['prices.mappings'])
@@ -215,107 +193,82 @@ class BillingPlanService
         return $this->normalizeDatabasePlan($plan);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function planFromConfig(string $planKey): array
-    {
-        $plans = config('saas.billing.plans', []);
-
-        if (! isset($plans[$planKey])) {
-            throw new RuntimeException("Unknown plan [{$planKey}].");
-        }
-
-        $plan = $plans[$planKey];
-        $plan['key'] = $planKey;
-        $plan['type'] = $plan['type'] ?? 'subscription';
-        $plan['prices'] = $plan['prices'] ?? [];
-
-        return $plan;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function normalizeDatabasePlan(CatalogProduct $plan): array
+    private function normalizeDatabasePlan(CatalogProduct $plan): Plan
     {
         $prices = [];
 
-        foreach ($plan->prices->where('is_active', true) as $price) {
-            $priceKey = $price->key ?: $price->interval;
+        foreach ($plan->prices->where('is_active', true) as $priceModel) {
+            $priceKey = $priceModel->key ?: $priceModel->interval;
 
             if (! $priceKey) {
                 continue;
             }
 
-            if (! isset($prices[$priceKey])) {
-                $prices[$priceKey] = [
-                    'key' => $priceKey,
-                    'label' => $price->label ?: ucfirst($priceKey),
-                    'interval' => $price->interval,
-                    'interval_count' => $price->interval_count,
-                    'type' => $price->type,
-                    'has_trial' => $price->has_trial,
-                    'trial_interval' => $price->trial_interval,
-                    'trial_interval_count' => $price->trial_interval_count,
-                    'amount_is_minor' => true,
-                    'providers' => [],
-                    'amounts' => [],
-                    'currencies' => [],
-                ];
+            if (isset($prices[$priceKey])) {
+                continue;
             }
 
-            $prices[$priceKey]['providers'] = $price->mappings->pluck('provider_id', 'provider')->toArray();
-
-            // For now, assume amounts/currencies are same across providers or fetched from generic price
-            // If we wanted per-provider amounts, we'd need to store them in the mapping or fetch them.
-            // But 'Price' model is now the single source of truth for amount/currency.
-            foreach ($prices[$priceKey]['providers'] as $prov => $id) {
-                $prices[$priceKey]['amounts'][$prov] = $price->amount;
-                $prices[$priceKey]['currencies'][$prov] = $price->currency;
+            $providerIds = $priceModel->mappings->pluck('provider_id', 'provider')->toArray();
+            
+            $amounts = [];
+            $currencies = [];
+            foreach ($providerIds as $prov => $id) {
+                $amounts[$prov] = $priceModel->amount;
+                $currencies[$prov] = $priceModel->currency;
             }
-            // Add self if no mappings? No, mappings are strictly for provider IDs.
+
+            $prices[$priceKey] = new Price(
+                key: $priceKey,
+                label: $priceModel->label ?: ucfirst($priceKey),
+                amount: $priceModel->amount,
+                currency: $priceModel->currency,
+                interval: $priceModel->interval ?? 'month',
+                intervalCount: $priceModel->interval_count ?? 1,
+                type: $priceModel->type instanceof \BackedEnum ? $priceModel->type : ($priceModel->type ?? \App\Enums\PriceType::Recurring),
+                hasTrial: (bool) $priceModel->has_trial,
+                trialInterval: $priceModel->trial_interval,
+                trialIntervalCount: $priceModel->trial_interval_count,
+                providerIds: $providerIds,
+                providerAmounts: $amounts,
+                providerCurrencies: $currencies,
+                contextProviderId: null,
+                isAvailable: true,
+                amountIsMinor: true, // DB amounts are minor units
+            );
         }
 
-        return [
-            'key' => $plan->key,
-            'name' => $plan->name,
-            'summary' => $plan->summary ?: $plan->description,
-            'type' => $plan->type ?: 'subscription',
-            'highlight' => (bool) $plan->is_featured,
-            'entitlements' => $plan->entitlements ?? [],
-            'features' => $plan->features ?? [],
-            'prices' => $prices,
-        ];
+        return new Plan(
+            key: $plan->key,
+            name: $plan->name,
+            summary: $plan->summary ?: $plan->description ?: '',
+            type: ($plan->type instanceof \BackedEnum ? $plan->type : \App\Enums\PriceType::tryFrom($plan->type)) ?? \App\Enums\PriceType::Recurring,
+            highlight: (bool) $plan->is_featured,
+            features: $plan->features ?? [],
+            entitlements: $plan->entitlements ?? [],
+            prices: $prices,
+            isAvailable: true
+        );
     }
 
-    private function resolveProviderId(array $price, string $provider): ?string
+    private function resolveProviderId(Price $price, string $provider): ?string
     {
-        $provider = strtolower($provider);
-
-        if (isset($price['providers'][$provider])) {
-            return $price['providers'][$provider];
-        }
-
-        if (isset($price['provider_ids'][$provider])) {
-            return $price['provider_ids'][$provider];
-        }
-
-        if (isset($price['provider_id'])) {
-            return $price['provider_id'];
-        }
-
-        return null;
+        return $price->providerIds[$provider] ?? $price->contextProviderId ?? null;
     }
 
-    private function resolveProviderValue(array $price, string $provider, string $key, string $fallbackKey): mixed
+    private function resolveProviderValue(Price $price, string $provider, string $collectionKey, string $valueKey): mixed
     {
-        $provider = strtolower($provider);
-
-        if (isset($price[$key][$provider])) {
-            return $price[$key][$provider];
+        if ($collectionKey === 'amounts') {
+            return $price->providerAmounts[$provider] ?? $price->amount;
         }
+        if ($collectionKey === 'currencies') {
+            return $price->providerCurrencies[$provider] ?? $price->currency;
+        }
+        
+        return $price->$valueKey;
+    }
 
-        return $price[$fallbackKey] ?? null;
+    private function normalizeProvider(BillingProvider|string $provider): string
+    {
+        return $provider instanceof BillingProvider ? $provider->value : strtolower($provider);
     }
 }

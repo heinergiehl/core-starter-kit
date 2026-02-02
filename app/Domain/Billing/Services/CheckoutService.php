@@ -8,6 +8,13 @@ use App\Domain\Billing\Adapters\PaddleAdapter;
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Data\CheckoutUserDTO;
+use App\Domain\Billing\Data\TransactionDTO;
+use App\Enums\BillingProvider;
+use App\Enums\SubscriptionStatus;
+use App\Enums\OrderStatus;
+use App\Domain\Billing\Exceptions\BillingException;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,28 +33,28 @@ use Throwable;
 class CheckoutService
 {
     public function __construct(
-        private readonly PaddleAdapter $paddleAdapter,
+        private readonly BillingProviderManager $providerManager,
     ) {}
 
     /**
      * Resolve or create a user for checkout.
      *
-     * @return array{user: User, created: bool}|RedirectResponse
-     */
-    /**
-     * Resolve or create a user for checkout.
+     * For guest checkouts:
+     * - If user exists with no purchase → reuse (abandoned checkout retry)
+     * - If user exists with purchase → error (prevent duplicate purchase)
+     * - If user doesn't exist → create new
      *
-     * @return array{user: User, created: bool}
+     * @return \App\Domain\Billing\Data\CheckoutUserDTO
      *
      * @throws \Illuminate\Validation\ValidationException
      * @throws \App\Domain\Billing\Exceptions\BillingException
      */
-    public function resolveOrCreateUser(Request $request, ?string $email, ?string $name): array
+    public function resolveOrCreateUser(Request $request, ?string $email, ?string $name): CheckoutUserDTO
     {
         $user = $request->user();
 
         if ($user) {
-            return ['user' => $user, 'created' => false];
+            return new CheckoutUserDTO($user, false);
         }
 
         if (! $email) {
@@ -56,30 +63,27 @@ class CheckoutService
             ]);
         }
 
-        try {
-            return \Illuminate\Support\Facades\DB::transaction(function () use ($email, $name) {
-                $user = User::create([
-                    'name' => ! empty($name) ? $name : $this->nameFromEmail($email),
-                    'email' => $email,
-                    'password' => Str::random(32),
-                ]);
+        // Check if user already exists
+        $existingUser = User::where('email', $email)->first();
 
-                event(new \Illuminate\Auth\Events\Registered($user));
-
-                // Log in the user so they're authenticated when checkout completes
-                \Illuminate\Support\Facades\Auth::login($user);
-
-                return ['user' => $user, 'created' => true];
-            });
-        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
-            throw \App\Domain\Billing\Exceptions\BillingException::userAlreadyExists($email);
-        } catch (\Throwable $e) {
-            // Fallback for other potential race conditions effectively caught by Unique key
-            if (Str::contains($e->getMessage(), 'Integrity constraint violation')) {
-                throw \App\Domain\Billing\Exceptions\BillingException::userAlreadyExists($email);
+        if ($existingUser) {
+            // If user has any completed purchase, block retry
+            if ($this->hasAnyPurchase($existingUser)) {
+                throw BillingException::userAlreadyExists($email);
             }
-            throw $e;
+
+            // Reuse incomplete user (abandoned checkout retry)
+            return new CheckoutUserDTO($existingUser, false);
         }
+
+        // Create new user
+        $user = User::create([
+            'name' => ! empty($name) ? $name : $this->nameFromEmail($email),
+            'email' => $email,
+            'password' => Str::random(32),
+        ]);
+
+        return new CheckoutUserDTO($user, true);
     }
 
     /**
@@ -89,7 +93,7 @@ class CheckoutService
     {
         return Subscription::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing])
+            ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::Trialing])
             ->exists();
     }
 
@@ -107,9 +111,9 @@ class CheckoutService
         }
 
         // Check for any paid one-time order
-        return \App\Domain\Billing\Models\Order::query()
+        return Order::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', [\App\Enums\OrderStatus::Paid, \App\Enums\OrderStatus::Completed])
+            ->whereIn('status', [OrderStatus::Paid, OrderStatus::Completed])
             ->exists();
     }
 
@@ -128,9 +132,12 @@ class CheckoutService
         ?Discount $discount = null,
         array $extraCustomData = [],
         ?string $customerEmail = null,
-    ): string|RedirectResponse {
+    ): TransactionDTO|RedirectResponse {
         try {
-            return $this->paddleAdapter->createTransactionId(
+            /** @var PaddleAdapter $adapter */
+            $adapter = $this->providerManager->runtime(BillingProvider::Paddle->value);
+
+            $dto = $adapter->createTransactionId(
                 $user,
                 $planKey,
                 $priceKey,
@@ -141,6 +148,8 @@ class CheckoutService
                 $extraCustomData,
                 $customerEmail,
             );
+
+            return $dto;
         } catch (Throwable $exception) {
             report($exception);
 
@@ -246,7 +255,7 @@ class CheckoutService
                 'sig' => $this->buildCheckoutSessionSignature($session),
             ], true);
 
-            if ($provider === 'stripe') {
+            if ($provider === BillingProvider::Stripe->value) {
                 $successUrl .= '&stripe_session={CHECKOUT_SESSION_ID}';
             }
         }
@@ -305,7 +314,7 @@ class CheckoutService
     /**
      * Calculate quantity for checkout.
      */
-    public function calculateQuantity(array $plan): int
+    public function calculateQuantity(\App\Domain\Billing\Data\Plan $plan): int
     {
         return 1;
     }

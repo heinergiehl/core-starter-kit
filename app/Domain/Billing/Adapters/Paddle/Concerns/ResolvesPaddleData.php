@@ -26,7 +26,7 @@ trait ResolvesPaddleData
             $customerId = data_get($data, 'customer_id') ?? data_get($data, 'customer.id');
             if ($customerId) {
                 $mappedUserId = BillingCustomer::query()
-                    ->where('provider', 'paddle')
+                    ->where('provider', \App\Enums\BillingProvider::Paddle->value)
                     ->where('provider_id', (string) $customerId)
                     ->value('user_id');
 
@@ -72,7 +72,7 @@ trait ResolvesPaddleData
         }
 
         return app(BillingPlanService::class)
-            ->resolvePlanKeyByProviderId('paddle', $priceId);
+            ->resolvePlanKeyByProviderId(\App\Enums\BillingProvider::Paddle->value, $priceId);
     }
 
     /**

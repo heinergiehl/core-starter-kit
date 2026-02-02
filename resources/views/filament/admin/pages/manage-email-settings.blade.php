@@ -2,7 +2,7 @@
     <form wire:submit="save">
         {{ $this->form }}
 
-        <div style="margin-top: 1rem;">
+        <div class="mt-4">
             <x-filament::button
                 type="submit"
                 wire:loading.attr="disabled"

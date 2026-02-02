@@ -29,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Database\Eloquent\Model::shouldBeStrict(! $this->app->isProduction());
+
         app(AppSettingsService::class)->applyToConfig();
         app(MailSettingsService::class)->applyConfig();
 
@@ -48,11 +50,11 @@ class AppServiceProvider extends ServiceProvider
             }
         });
 
-        \App\Domain\Billing\Models\Subscription::observe(\App\Domain\Billing\Observers\SubscriptionObserver::class);
-        \App\Domain\Billing\Models\Order::observe(\App\Domain\Billing\Observers\OrderObserver::class);
-
         Event::subscribe(\App\Domain\Billing\Listeners\SendSubscriptionNotifications::class);
 
         \Filament\Livewire\DatabaseNotifications::pollingInterval('30s');
+
+        \App\Domain\Billing\Models\Product::observe(\App\Domain\Billing\Observers\ProductObserver::class);
+        \App\Domain\Billing\Models\Price::observe(\App\Domain\Billing\Observers\PriceObserver::class);
     }
 }

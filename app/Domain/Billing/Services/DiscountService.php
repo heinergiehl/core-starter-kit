@@ -19,7 +19,7 @@ class DiscountService
     ): Discount {
         $normalizedCode = strtoupper(trim($code));
         $provider = strtolower($provider);
-        $enabledProviders = array_map('strtolower', config('saas.billing.discounts.providers', ['stripe']));
+        $enabledProviders = array_map('strtolower', config('saas.billing.discounts.providers', [\App\Enums\BillingProvider::Stripe->value]));
 
         if (! in_array($provider, $enabledProviders, true)) {
             throw ValidationException::withMessages([
@@ -74,7 +74,7 @@ class DiscountService
             ]);
         }
 
-        if ($discount->type === 'fixed' && $discount->currency && $currency) {
+        if ($discount->type === \App\Enums\DiscountType::Fixed && $discount->currency && $currency) {
             if (strtoupper($discount->currency) !== strtoupper($currency)) {
                 throw ValidationException::withMessages([
                     'coupon' => 'This coupon is not valid for the selected currency.',

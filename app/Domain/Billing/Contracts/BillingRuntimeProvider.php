@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Domain\Billing\Adapters;
+namespace App\Domain\Billing\Contracts;
 
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\WebhookEvent;
 use App\Models\User;
 use Illuminate\Http\Request;
 
-interface BillingProviderAdapter
+interface BillingRuntimeProvider
 {
     public function provider(): string;
 
@@ -32,7 +32,7 @@ interface BillingProviderAdapter
      *
      * @return array{id: string, type: string|null, payload: array}
      */
-    public function parseWebhook(Request $request): array;
+    public function parseWebhook(Request $request): \App\Domain\Billing\Data\WebhookPayload;
 
     public function processEvent(WebhookEvent $event): void;
 
@@ -44,7 +44,7 @@ interface BillingProviderAdapter
         string $successUrl,
         string $cancelUrl,
         ?Discount $discount = null
-    ): string;
+    ): \App\Domain\Billing\Data\TransactionDTO;
 
     /**
      * Create a discount on the provider and return the provider's ID.

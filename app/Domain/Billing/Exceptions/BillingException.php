@@ -56,10 +56,12 @@ class BillingException extends RuntimeException
     /**
      * Create exception for provider errors.
      */
-    public static function providerError(string $provider, string $message, ?\Throwable $previous = null): self
+    public static function providerError(\App\Enums\BillingProvider|string $provider, string $message, ?\Throwable $previous = null): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "Billing provider [{$provider}] error: {$message}",
+            "Billing provider [{$providerName}] error: {$message}",
+
             'BILLING_PROVIDER_ERROR',
             0,
             $previous
@@ -69,10 +71,11 @@ class BillingException extends RuntimeException
     /**
      * Create exception for missing configuration.
      */
-    public static function missingConfiguration(string $provider, string $key): self
+    public static function missingConfiguration(\App\Enums\BillingProvider|string $provider, string $key): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "{$provider} {$key} is not configured.",
+            "{$providerName} {$key} is not configured.",
             'BILLING_MISSING_CONFIG'
         );
     }
@@ -80,10 +83,11 @@ class BillingException extends RuntimeException
     /**
      * Create exception for missing price ID.
      */
-    public static function missingPriceId(string $provider, string $planKey, string $priceKey): self
+    public static function missingPriceId(\App\Enums\BillingProvider|string $provider, string $planKey, string $priceKey): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "{$provider} price ID is missing for plan [{$planKey}] and price [{$priceKey}].",
+            "{$providerName} price ID is missing for plan [{$planKey}] and price [{$priceKey}].",
             'BILLING_MISSING_PRICE_ID'
         );
     }
@@ -91,10 +95,11 @@ class BillingException extends RuntimeException
     /**
      * Create exception for webhook validation errors.
      */
-    public static function webhookValidationFailed(string $provider, string $reason): self
+    public static function webhookValidationFailed(\App\Enums\BillingProvider|string $provider, string $reason): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "{$provider} webhook validation failed: {$reason}",
+            "{$providerName} webhook validation failed: {$reason}",
             'BILLING_WEBHOOK_INVALID'
         );
     }
@@ -102,10 +107,11 @@ class BillingException extends RuntimeException
     /**
      * Create exception for checkout creation failure.
      */
-    public static function checkoutFailed(string $provider, string $reason): self
+    public static function checkoutFailed(\App\Enums\BillingProvider|string $provider, string $reason): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "{$provider} checkout creation failed: {$reason}",
+            "{$providerName} checkout creation failed: {$reason}",
             'BILLING_CHECKOUT_FAILED'
         );
     }
@@ -113,10 +119,11 @@ class BillingException extends RuntimeException
     /**
      * Create exception for provider action failure.
      */
-    public static function failedAction(string $provider, string $action, string $reason): self
+    public static function failedAction(\App\Enums\BillingProvider|string $provider, string $action, string $reason): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "{$provider} failed to {$action}: {$reason}",
+            "{$providerName} failed to {$action}: {$reason}",
             'BILLING_ACTION_FAILED'
         );
     }
@@ -124,10 +131,11 @@ class BillingException extends RuntimeException
     /**
      * Create exception for seat sync failure.
      */
-    public static function seatSyncFailed(string $provider, string $reason): self
+    public static function seatSyncFailed(\App\Enums\BillingProvider|string $provider, string $reason): self
     {
+        $providerName = $provider instanceof \App\Enums\BillingProvider ? $provider->value : $provider;
         return new self(
-            "{$provider} seat sync failed: {$reason}",
+            "{$providerName} seat sync failed: {$reason}",
             'BILLING_SEAT_SYNC_FAILED'
         );
     }

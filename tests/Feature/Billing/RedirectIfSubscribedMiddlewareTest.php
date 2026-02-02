@@ -15,30 +15,22 @@ class RedirectIfSubscribedMiddlewareTest extends TestCase
     {
         parent::setUp();
 
-        // Mock the plan so 'pro' is valid
-        config(['saas.billing.plans' => [
-            'pro' => [
-                'name' => 'Pro',
-                'prices' => [
-                    'monthly' => [
-                        'amount' => 1000,
-                        'currency' => 'USD',
-                        'type' => 'recurring',
-                        'interval' => 'month',
-                    ],
-                ],
-            ],
-        ]]);
+        // Create the 'pro' product and 'monthly' price in the database
+        // because BillingPlanService now reads from DB, not config.
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
+            'key' => 'pro',
+            'name' => 'Pro',
+            'is_active' => true,
+        ]);
 
-        // Also ensure plan service resolves it (if it uses config directly)
-        // If BillingPlanService loads from file, we might need to mock the service instead.
-        // Let's rely on validation error message check primarily, but for the middleware test
-        // the middleware runs APPROVED routes.
-        // Actually, checkout.start validation happens inside the controller.
-        // The middleware runs BEFORE the controller.
-        // So the invalid plan error in the CONTROLLER means the middleware PASSED (didnt redirect).
-        // Wait, for the 'subscribed_user' test, we EXPECT a redirect.
-        // If it hit the controller and errored, the middleware FAILED to redirect.
+        \App\Domain\Billing\Models\Price::factory()->create([
+            'product_id' => $product->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'amount' => 1000,
+            'currency' => 'USD',
+            'is_active' => true,
+        ]);
     }
 
     public function test_subscribed_user_is_redirected_away_from_checkout()

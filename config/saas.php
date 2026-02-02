@@ -2,32 +2,29 @@
 
 return [
     'billing' => [
-        'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
+        'providers' => ['stripe', 'paddle'],
         'default_provider' => env('BILLING_DEFAULT_PROVIDER', 'stripe'),
         'default_plan' => env('BILLING_DEFAULT_PLAN', 'starter'),
         'sync_catalog_via_webhooks' => env('BILLING_SYNC_CATALOG_VIA_WEBHOOKS', true),
         // Catalog source: 'database' uses products/prices synced from billing providers
-        // All plan management happens in Stripe/Paddle/LemonSqueezy dashboards
+        // All plan management happens in Stripe/Paddle dashboards
         // Features & entitlements are edited via Filament /admin/products
         'catalog' => env('BILLING_CATALOG', 'database'),
         'discounts' => [
-            'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
+            'providers' => ['stripe', 'paddle'],
         ],
         'provider_api' => [
             'timeouts' => [
                 'stripe' => env('BILLING_STRIPE_TIMEOUT', env('BILLING_PROVIDER_TIMEOUT', 15)),
                 'paddle' => env('BILLING_PADDLE_TIMEOUT', env('BILLING_PROVIDER_TIMEOUT', 15)),
-                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_TIMEOUT', env('BILLING_PROVIDER_TIMEOUT', 15)),
             ],
             'connect_timeouts' => [
                 'stripe' => env('BILLING_STRIPE_CONNECT_TIMEOUT', env('BILLING_PROVIDER_CONNECT_TIMEOUT', 5)),
                 'paddle' => env('BILLING_PADDLE_CONNECT_TIMEOUT', env('BILLING_PROVIDER_CONNECT_TIMEOUT', 5)),
-                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_CONNECT_TIMEOUT', env('BILLING_PROVIDER_CONNECT_TIMEOUT', 5)),
             ],
             'retries' => [
                 'stripe' => env('BILLING_STRIPE_RETRIES', env('BILLING_PROVIDER_RETRIES', 2)),
                 'paddle' => env('BILLING_PADDLE_RETRIES', env('BILLING_PROVIDER_RETRIES', 2)),
-                'lemonsqueezy' => env('BILLING_LEMONSQUEEZY_RETRIES', env('BILLING_PROVIDER_RETRIES', 2)),
             ],
             'retry_delay_ms' => env('BILLING_PROVIDER_RETRY_DELAY_MS', 500),
         ],
@@ -39,6 +36,14 @@ return [
 
         // Pricing page display options
         'pricing' => [
+            // Currency for all billing operations
+            'currency' => env('SAAS_CURRENCY', 'USD'),
+
+            // List of plan keys (product keys) to display on the pricing page.
+            // If empty, all active plans are shown.
+            // Use this to curate your unified pricing page (e.g., ['starter', 'pro', 'business'])
+            'shown_plans' => ['hobbyist', 'indie', 'agency'],
+
             // Allow customers to choose their preferred payment provider
             // Useful when serving international customers who may prefer different
             // payment methods (PayPal via Paddle, local methods, etc.)
@@ -50,7 +55,6 @@ return [
             'provider_labels' => [
                 'stripe' => 'Stripe',
                 'paddle' => 'Paddle',
-                'lemonsqueezy' => 'Lemon Squeezy',
             ],
         ],
     ],

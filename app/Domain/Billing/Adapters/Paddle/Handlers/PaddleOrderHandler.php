@@ -78,7 +78,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'amount' => $amount,
                 'currency' => $currency,
                 'paid_at' => now(),
-                'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data']),
+                'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data', 'subscription_id']),
             ]
         );
 
@@ -95,6 +95,18 @@ class PaddleOrderHandler implements PaddleWebhookHandler
         );
 
         if (in_array(strtolower($status), ['paid', 'completed', 'settled'], true)) {
+            $user = User::find($userId);
+            $isSubscription = ! empty(data_get($data, 'subscription_id'));
+
+            if ($user && ! $isSubscription) {
+                 $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
+                    planName: $this->resolvePlanName($order->plan_key),
+                    amount: $order->amount,
+                    currency: $order->currency,
+                    receiptUrl: $invoice->hosted_invoice_url,
+                ));
+            }
+
             app(\App\Domain\Billing\Services\CheckoutService::class)
                 ->verifyUserAfterPayment($userId);
         }
