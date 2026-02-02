@@ -49,7 +49,17 @@ jobs:
       - name: Prepare environment
         run: php -r "file_exists('.env') || copy('.env.example', '.env');"
 
+      # Fix for composer scripts (artisan package:discover) booting the app
+      # while DB config defaults to sqlite and the sqlite file doesn't exist.
+      - name: Prepare SQLite for composer scripts
+        run: |
+          mkdir -p database
+          touch database/database.sqlite
+
       - name: Install PHP dependencies
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: composer install --no-interaction --no-progress --prefer-dist
 
       - name: Generate app key
