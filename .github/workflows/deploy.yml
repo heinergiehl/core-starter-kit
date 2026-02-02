@@ -4,6 +4,10 @@ on:
   push:
     branches: [master, main]
 
+concurrency:
+  group: shipsolid
+  cancel-in-progress: true
+
 jobs:
   # ----------------------------------------------------------------------
   # 1) CI: Test Build & Integrity with Postgres
@@ -99,7 +103,7 @@ jobs:
       - name: Prepare Remote Directory
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "mkdir -p '${VPS_PATH}' && sudo chown -R '${{ secrets.DEPLOY_USER }}':'${{ secrets.DEPLOY_USER }}' '${VPS_PATH}'"
+            "mkdir -p '${VPS_PATH}'"
 
       - name: Sync Files to VPS
         run: |
@@ -149,8 +153,8 @@ jobs:
 
             php artisan up || true
 
-            # Reload PHP-FPM (needs NOPASSWD sudo for this command)
-            sudo systemctl reload php8.2-fpm
+            # Reload PHP-FPM (root user doesn't need sudo)
+            systemctl reload php8.2-fpm
 
             echo "Deployment finished successfully."
           EOF
