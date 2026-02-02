@@ -6,11 +6,12 @@ on:
 
 jobs:
   # ----------------------------------------------------------------------
-  # 1. CI: Test Build & Integrity with Postgres
+  # 1) CI: Test Build & Integrity with Postgres
   # ----------------------------------------------------------------------
   ci:
     name: CI Check
     runs-on: ubuntu-latest
+
     services:
       postgres:
         image: postgres:15
@@ -27,26 +28,29 @@ jobs:
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.3'
+          php-version: "8.3"
           extensions: mbstring, bcmath, intl, pdo_pgsql, pgsql, dom, fileinfo
           coverage: none
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22.12.0'
+          node-version: "22.12.0"
           cache: npm
 
       - name: Install Composer Dependencies
-        run: composer install --no-dev --prefer-dist --optimize-autoloader
+        run: composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
-      - name: Generate App Key
-        run: php -r "file_exists('.env') || copy('.env.example', '.env');" && php artisan key:generate
+      - name: Prepare App Env (CI)
+        run: |
+          php -r "file_exists('.env') || copy('.env.example', '.env');"
+          php artisan key:generate
 
       - name: Install NPM Dependencies & Build
         run: |
@@ -64,72 +68,89 @@ jobs:
         run: php artisan test
 
   # ----------------------------------------------------------------------
-  # 2. CD: Deploy to Hostinger VPS
+  # 2) CD: Deploy to VPS
   # ----------------------------------------------------------------------
   deploy:
     name: Deploy to VPS
     needs: ci
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main'
+
+    env:
+      VPS_PATH: /var/www/myapps/shipsolid
+      APP_PORT: ${{ secrets.APP_PORT }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup SSH
+      - name: Setup SSH Agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
       - name: Prepare Remote Directory
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "mkdir -p /var/www/myapps/shipsolid && chown -R ${{ secrets.VPS_USER }}:${{ secrets.VPS_USER }} /var/www/myapps/shipsolid"
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mkdir -p '${VPS_PATH}' && sudo chown -R '${{ secrets.DEPLOY_USER }}':'${{ secrets.DEPLOY_USER }}' '${VPS_PATH}'"
 
       - name: Sync Files to VPS
-        # Excludes .git, node_modules (we build on server to match env), storage (linked)
         run: |
-          rsync -az --delete --exclude='.git' --exclude='node_modules' --exclude='storage' --exclude='.env' ./ \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/myapps/shipsolid
+          rsync -az --delete \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='storage' \
+            --exclude='.env' \
+            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${VPS_PATH}
 
+      # NOTE:
+      # Create a repository secret named PROD_ENV_FILE containing your full production .env content (multiline).
       - name: Upload Production .env
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-          "printf '%s\n' '${{ secrets.PROD_ENV_FILE }}' > /var/www/myapps/shipsolid/.env"
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cat > '${VPS_PATH}/.env' <<'ENVEOF'
+          ${{ secrets.PROD_ENV_FILE }}
+          ENVEOF"
 
       - name: Execute Remote Deploy Commands
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} <<'EOF'
-            set -e
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'bash -s' <<'EOF'
+            set -euo pipefail
+
             cd /var/www/myapps/shipsolid
 
-            # 1. Install Dependencies
+            # Maintenance mode (don't fail if already down)
+            php artisan down --render="errors::503" || true
+
+            # Install deps + build
             composer install --no-dev --optimize-autoloader --no-interaction
             npm ci
-            
-            # 2. Build Assets
             npm run build
 
-            # 3. Framework Maintenance
-            php artisan down --render="errors::503"
-            
-            # Ensure storage linking if not exists
-            php artisan storage:link
-            
-            # Database & Caches
+            # Storage symlink (don't fail if already linked)
+            php artisan storage:link || true
+
+            # Migrations + caches
             php artisan migrate --force
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
             php artisan event:cache
-            
-            # Filament specific
-            php artisan filament:upgrade
-            php artisan filament:optimize-clear
 
-            php artisan up
+            # Filament (skip if not installed)
+            php artisan filament:upgrade || true
+            php artisan filament:optimize-clear || true
 
-            # 4. Reload Services
+            php artisan up || true
+
+            # Reload PHP-FPM (needs NOPASSWD sudo for this command)
             sudo systemctl reload php8.2-fpm
+
             echo "Deployment finished successfully."
           EOF
