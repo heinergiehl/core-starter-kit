@@ -165,6 +165,9 @@ jobs:
             set -e
             cd ${{ env.VPS_PATH }}
             
+            # Ensure Postgres is running
+            docker compose up -d --wait pgsql
+            
             # Ensure storage structure exists since we exclude it from sync
             mkdir -p storage/framework/{cache,sessions,testing,views}
             mkdir -p storage/logs
