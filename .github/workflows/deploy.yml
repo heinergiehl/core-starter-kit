@@ -90,7 +90,7 @@ jobs:
             LOG_LEVEL=debug
             
             DB_CONNECTION=pgsql
-            DB_HOST=127.0.0.1
+            DB_HOST=${{ secrets.DB_HOST || '172.17.0.1' }}
             DB_PORT=5432
             DB_DATABASE=${{ secrets.DB_DATABASE || 'laravel' }}
             DB_USERNAME=${{ secrets.DB_USERNAME || 'root' }}
@@ -172,9 +172,13 @@ jobs:
             mkdir -p storage/framework/{cache,sessions,testing,views}
             mkdir -p storage/logs
             mkdir -p bootstrap/cache
+            
+            # Fix permissions
+            chmod -R 775 storage bootstrap/cache
 
             php artisan down || true
             php artisan migrate --force
+            php artisan filament:upgrade
             php artisan optimize
             php artisan config:cache
             php artisan route:cache

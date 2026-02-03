@@ -37,6 +37,12 @@ Each provider adapter should:
 
 Note: Ensure the API keys are configured for each provider.
 
+### 3.1 Production Setup
+On production environments, you must manually seed the payment providers once to enable them in the Admin Panel:
+```bash
+php artisan db:seed --class=PaymentProviderSeeder --force
+```
+
 ---
 
 ## 4) Configuration
@@ -237,23 +243,26 @@ Notes:
 
 ---
 
-## 12.1 Catalog publish (app-first, Stripe)
-If you prefer to create products/plans/prices in the Admin Panel first, you can publish them to Stripe and populate provider IDs:
+## 12.1 Catalog publish (app-first)
+If you prefer to create products/plans/prices in the Admin Panel (or via Seeder) first, you can publish them to the providers. This creates the products on the provider side and saves the resulting IDs to your database, linking them.
+
+> **Crucial:** You must run this command to avoid "Price not configured" errors.
 
 Preview:
 ```bash
 php artisan billing:publish-catalog stripe
+php artisan billing:publish-catalog paddle
 ```
 
 Apply changes:
 ```bash
-php artisan billing:publish-catalog stripe --apply
+php artisan billing:publish-catalog stripe --apply --update
+php artisan billing:publish-catalog paddle --apply --update
 ```
 
 Notes:
-- The publish flow creates Stripe products per Plan and Stripe prices per Price.
-- Existing Stripe prices are linked by lookup key when possible.
-- Paddle and Lemon Squeezy publish flows are not implemented yet.
+- Creates products/prices on the provider.
+- Links existing records if keys match.
 
 ---
 

@@ -87,7 +87,8 @@ class SecurityHeaders
         // but Vite might be serving from saas-kit.test or 127.0.0.1
         $viteDevServer = '';
         $viteWss = '';
-        $formAction = "'self'";
+        // Allow https: for form actions to prevent blocking seemingly valid secure submissions
+        $formAction = "'self' https:";
 
         if (app()->isLocal()) {
             $hosts = array_unique([
