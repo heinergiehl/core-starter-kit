@@ -60,4 +60,4 @@ jobs:
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-        run: php artisan test --testdox --no-ansi -v
+        run: php artisan test --testdox --no-ansi
