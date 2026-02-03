@@ -34,7 +34,7 @@ jobs:
           cache: npm
 
       - name: Install PHP dependencies
-        run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader --no-dev
+        run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader --no-dev --no-scripts
 
       - name: Install frontend dependencies
         run: npm ci
