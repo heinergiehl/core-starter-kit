@@ -74,6 +74,12 @@ jobs:
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             set -e
             cd ${{ env.VPS_PATH }}
+            
+            # Ensure storage structure exists since we exclude it from sync
+            mkdir -p storage/framework/{cache,sessions,testing,views}
+            mkdir -p storage/logs
+            mkdir -p bootstrap/cache
+
             php artisan down || true
             php artisan migrate --force
             php artisan optimize
