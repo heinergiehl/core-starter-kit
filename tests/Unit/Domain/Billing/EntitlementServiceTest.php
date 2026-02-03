@@ -28,7 +28,7 @@ class EntitlementServiceTest extends TestCase
     {
         $user = User::factory()->create();
         $cacheKey = "entitlements:user:{$user->id}";
-        $dummyEntitlements = new \App\Domain\Billing\Services\Entitlements([]);
+        $dummyEntitlements = new \App\Domain\Billing\Data\Entitlements([]);
 
         Cache::shouldReceive('remember')
             ->once()

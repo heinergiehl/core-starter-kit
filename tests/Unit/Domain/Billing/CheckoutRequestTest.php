@@ -3,7 +3,10 @@
 namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Data\CheckoutRequest;
+use App\Domain\Billing\Data\Plan;
 use App\Domain\Billing\Models\Discount;
+use App\Enums\PaymentMode;
+use App\Enums\PriceType;
 use App\Models\User;
 use Tests\TestCase;
 
@@ -69,10 +72,19 @@ class CheckoutRequestTest extends TestCase
             cancelUrl: 'https://example.com/cancel',
         );
 
-        $plan = ['type' => 'one_time'];
+        $plan = new Plan(
+            key: 'lifetime',
+            name: 'Lifetime',
+            summary: 'Summary',
+            type: PriceType::OneTime,
+            highlight: false,
+            features: [],
+            entitlements: [],
+            prices: [],
+        );
         $mode = $request->resolveMode($plan);
 
-        $this->assertEquals('payment', $mode);
+        $this->assertEquals(PaymentMode::OneTime, $mode);
     }
 
     public function test_resolve_mode_returns_subscription_for_subscription(): void
@@ -86,10 +98,19 @@ class CheckoutRequestTest extends TestCase
             cancelUrl: 'https://example.com/cancel',
         );
 
-        $plan = ['type' => 'subscription'];
+        $plan = new Plan(
+            key: 'starter',
+            name: 'Starter',
+            summary: 'Summary',
+            type: PriceType::Recurring,
+            highlight: false,
+            features: [],
+            entitlements: [],
+            prices: [],
+        );
         $mode = $request->resolveMode($plan);
 
-        $this->assertEquals('subscription', $mode);
+        $this->assertEquals(PaymentMode::Subscription, $mode);
     }
 
     public function test_resolve_mode_defaults_to_subscription(): void
@@ -103,9 +124,18 @@ class CheckoutRequestTest extends TestCase
             cancelUrl: 'https://example.com/cancel',
         );
 
-        $plan = [];
+        $plan = new Plan(
+            key: 'starter',
+            name: 'Starter',
+            summary: 'Summary',
+            type: PriceType::Recurring, // fallback
+            highlight: false,
+            features: [],
+            entitlements: [],
+            prices: [],
+        );
         $mode = $request->resolveMode($plan);
 
-        $this->assertEquals('subscription', $mode);
+        $this->assertEquals(PaymentMode::Subscription, $mode);
     }
 }

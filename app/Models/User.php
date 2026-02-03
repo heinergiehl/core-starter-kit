@@ -77,8 +77,14 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function activeSubscription(): ?Subscription
     {
-        return $this->subscriptions()
-            ->active()
+        return $this->subscriptions()->getQuery()
+            ->where(function ($q) {
+                $q->whereIn('status', ['active', 'trialing', 'past_due'])
+                  ->orWhere(function ($q2) {
+                      $q2->where('status', 'canceled')
+                         ->where('ends_at', '>', now());
+                  });
+            })
             ->latest('id')
             ->first();
     }

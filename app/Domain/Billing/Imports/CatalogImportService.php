@@ -70,10 +70,13 @@ class CatalogImportService
                 $summary['products'][$productAction]++;
 
                 if ($apply) {
+                    $productAttributes = $productPayload;
+                    unset($productAttributes['provider_id']);
+                    
                     if ($productAction === 'create') {
-                        $product = Product::create($productPayload);
+                        $product = Product::create($productAttributes);
                     } elseif ($productAction === 'update' && $product) {
-                        $product->update($this->filterUpdatablePayload($productPayload));
+                        $product->update($this->filterUpdatablePayload($productAttributes));
                     }
                 }
 

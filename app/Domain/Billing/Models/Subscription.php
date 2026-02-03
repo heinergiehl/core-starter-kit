@@ -21,20 +21,32 @@ class Subscription extends Model
     protected static function booted(): void
     {
         static::created(function (Subscription $subscription) {
-            if (app()->environment('local')) {
-                \Illuminate\Support\Facades\Log::info('Subscription created event fired');
+            if ($subscription->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$subscription->user_id}");
             }
-            $subscription->clearUserCache();
         });
 
-        static::updated(fn (Subscription $subscription) => $subscription->clearUserCache());
-        static::deleted(fn (Subscription $subscription) => $subscription->clearUserCache());
+        static::updated(function (Subscription $subscription) {
+            if ($subscription->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$subscription->user_id}");
+            }
+        });
+
+        static::deleted(function (Subscription $subscription) {
+             if ($subscription->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$subscription->user_id}");
+            }
+        });
     }
 
-    protected function clearUserCache(): void
+    public function clearUserCache(): void
     {
-        if ($this->user_id) {
-            \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$this->user_id}");
+        try {
+            if ($this->user_id) {
+                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$this->user_id}");
+            }
+        } catch (\Throwable $e) {
+            dd("clearUserCache failed: " . $e->getMessage(), $e->getTraceAsString());
         }
     }
 
@@ -82,17 +94,12 @@ class Subscription extends Model
         return $this->trial_ends_at && $this->trial_ends_at->isFuture();
     }
 
-    public function scopeActive($query)
+    public function scopeIsActive($query)
     {
-        return $query->whereIn('status', [
-            SubscriptionStatus::Active,
-            SubscriptionStatus::Trialing,
-            SubscriptionStatus::PastDue,
-            SubscriptionStatus::Canceled,
-        ])->where(function ($q) {
-            $q->where('status', '!=', SubscriptionStatus::Canceled)
+        return $query->where(function ($q) {
+            $q->whereIn('status', ['active', 'trialing', 'past_due'])
               ->orWhere(function ($q2) {
-                  $q2->where('status', SubscriptionStatus::Canceled)
+                  $q2->where('status', 'canceled')
                      ->where('ends_at', '>', now());
               });
         });

@@ -17,7 +17,7 @@ class SubscriptionFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
-            'provider' => fake()->randomElement(\App\Enums\BillingProvider::class),
+            'provider' => fake()->randomElement(\App\Enums\BillingProvider::cases()),
             'provider_id' => 'sub_'.fake()->uuid(),
             'plan_key' => 'pro-monthly',
             'status' => \App\Enums\SubscriptionStatus::Active,

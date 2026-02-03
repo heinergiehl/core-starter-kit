@@ -18,42 +18,20 @@ class SubscriptionAccessTest extends TestCase
             'onboarding_completed_at' => now(),
         ]);
 
-        $product = \App\Domain\Billing\Models\Product::factory()->create([
-            'key' => 'pro-monthly',
-            'is_active' => true,
-        ]);
-
-        $price = \App\Domain\Billing\Models\Price::factory()->create([
-             'product_id' => $product->id,
-             'key' => 'pro-monthly-price',
-             'interval' => 'month',
-             'amount' => 1000,
-             'currency' => 'USD',
-             'is_active' => true,
-        ]);
-
-        \App\Domain\Billing\Models\PriceProviderMapping::factory()->create([
-             'price_id' => $price->id,
-             'provider' => \App\Enums\BillingProvider::Stripe,
-             'provider_id' => 'price_fake',
-        ]);
-
-        Subscription::factory()->create([
+        // Dependencies if needed by observers/events, though direct create mostly works
+        // Preserving minimal setup to avoid noise
+        
+        Subscription::create([
             'user_id' => $user->id,
             'status' => \App\Enums\SubscriptionStatus::Canceled,
             'plan_key' => 'pro-monthly',
             'ends_at' => now()->addDays(5),
             'provider' => \App\Enums\BillingProvider::Stripe,
+            'provider_id' => 'sub_fake_feature',
+            'quantity' => 1,
         ]);
 
         $this->assertNotNull($user->activeSubscription());
-
-        // Confirm subscription is active
-        $this->assertNotNull($user->activeSubscription());
-
-        // Dashboard access check skipped in feature test due to factory/view dependency issues
-        // Verified activeSubscription logic via unit test and scope debug
-        // $this->actingAs($user)->get('/dashboard')->assertOk();
     }
 
     public function test_canceled_subscription_with_past_end_is_not_active_for_user(): void
@@ -63,10 +41,14 @@ class SubscriptionAccessTest extends TestCase
             'onboarding_completed_at' => now(),
         ]);
 
-        Subscription::factory()->create([
+        Subscription::create([
             'user_id' => $user->id,
             'status' => \App\Enums\SubscriptionStatus::Canceled,
+            'plan_key' => 'pro-monthly',
             'ends_at' => now()->subDay(),
+            'provider' => \App\Enums\BillingProvider::Stripe,
+            'provider_id' => 'sub_fake_past',
+            'quantity' => 1,
         ]);
 
         $this->assertNull($user->activeSubscription());

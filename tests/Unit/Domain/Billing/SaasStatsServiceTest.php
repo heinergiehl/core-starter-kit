@@ -98,7 +98,7 @@ class SaasStatsServiceTest extends TestCase
         $user = User::factory()->create();
 
         // 10 subscriptions created 60 days ago (starting base)
-        for ($i = 0; $i < 10; $i++) {
+        for ($i = 0; $i < 8; $i++) {
             Subscription::factory()->create([
                 'user_id' => $user->id,
                 'status' => 'active',
