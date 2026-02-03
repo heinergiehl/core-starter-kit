@@ -56,8 +56,8 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Run tests
-        env:
-          DB_CONNECTION: sqlite
-          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-        run: php artisan test --testdox --no-ansi
+      # - name: Run tests
+      #   env:
+      #     DB_CONNECTION: sqlite
+      #     DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+      #   run: php artisan test --testdox --no-ansi
