@@ -5,6 +5,10 @@ on:
     branches: [master, main]
   pull_request:
 
+concurrency:
+  group: shipsolid-ci-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   ci:
     name: CI Check
