@@ -10,16 +10,6 @@ jobs:
     name: CI Check
     runs-on: ubuntu-24.04
 
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_DB: laravel
-          POSTGRES_USER: root
-          POSTGRES_PASSWORD: password
-        ports:
-          - 5432:5432
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,10 +54,6 @@ jobs:
 
       - name: Run tests
         env:
-          DB_CONNECTION: pgsql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: laravel
-          DB_USERNAME: root
-          DB_PASSWORD: password
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: php artisan test
