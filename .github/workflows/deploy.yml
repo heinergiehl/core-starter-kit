@@ -70,10 +70,8 @@ jobs:
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
 
       - name: Generate .env
-        run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            cd ${{ env.VPS_PATH }}
-            cat <<EOT > .env
+        env:
+          ENV_FILE: |
             APP_NAME="Matador"
             APP_ENV=production
             APP_KEY=${{ secrets.APP_KEY }}
@@ -158,8 +156,8 @@ jobs:
             BRAND_COLOR_ACCENT="239 68 68"
             BRAND_COLOR_BG="250 250 249"
             BRAND_COLOR_FG="15 23 42"
-            EOT
-          EOF
+        run: |
+          printf "%s" "$ENV_FILE" | ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cat > ${{ env.VPS_PATH }}/.env"
 
       - name: Run Remote Scripts
         run: |
