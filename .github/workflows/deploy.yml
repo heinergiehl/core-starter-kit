@@ -172,6 +172,7 @@ jobs:
             # Fix permissions
             chmod -R 775 storage bootstrap/cache
 
+            php artisan storage:link --force
             php artisan down || true
             php artisan migrate --force
             php artisan filament:upgrade

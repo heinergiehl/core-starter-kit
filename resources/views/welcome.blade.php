@@ -2,7 +2,7 @@
 
 @section('title', __('Laravel SaaS starter kit with auth, checkout, and admin workflows') . ' - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', __('Launch faster with built-in authentication, checkout flows, product catalog management, user administration, and SEO-ready marketing pages.'))
-@section('og_image', asset('storage/marketing/checkout-form-stripe-focus.png'))
+@section('og_image', asset('marketing/checkout-form-stripe-focus.png'))
 
 @push('meta')
     <link rel="canonical" href="{{ route('home') }}">
@@ -71,11 +71,11 @@
             'operatingSystem' => 'Web',
             'url' => route('home'),
             'description' => $homeDescription,
-            'image' => asset('storage/marketing/checkout-form-stripe-focus.png'),
+            'image' => asset('marketing/checkout-form-stripe-focus.png'),
             'screenshot' => [
-                asset('storage/marketing/auth-login-focus.png'),
-                asset('storage/marketing/checkout-provider-select-focus.png'),
-                asset('storage/marketing/admin-products-focus.png'),
+                asset('marketing/auth-login-focus.png'),
+                asset('marketing/checkout-provider-select-focus.png'),
+                asset('marketing/admin-products-focus.png'),
             ],
             'featureList' => [
                 'Authentication and social login',
@@ -120,8 +120,8 @@
                 'title' => __('Start with conversion-ready login and social sign-in'),
                 'description' => __('Reduce drop-off at first touch with clean login UX, remember-me support, and social authentication entry points.'),
                 'seo' => __('Improves top-of-funnel activation for SaaS onboarding.'),
-                'image' => asset('storage/marketing/auth-login.png'),
-                'preview' => asset('storage/marketing/auth-login-focus.png'),
+                'image' => asset('marketing/auth-login.png'),
+                'preview' => asset('marketing/auth-login-focus.png'),
                 'alt' => __('Login screen with email, password, and social sign-in options'),
                 'callout' => __('Email + social sign-in in one step'),
             ],
@@ -131,8 +131,8 @@
                 'title' => __('Let users choose Stripe or Paddle in one flow'),
                 'description' => __('Expose provider selection and plan context before payment so customers understand price, billing mode, and next step.'),
                 'seo' => __('Supports multi-provider billing without split implementations.'),
-                'image' => asset('storage/marketing/checkout-provider-select.png'),
-                'preview' => asset('storage/marketing/checkout-provider-select-focus.png'),
+                'image' => asset('marketing/checkout-provider-select.png'),
+                'preview' => asset('marketing/checkout-provider-select-focus.png'),
                 'alt' => __('Checkout screen showing Stripe and Paddle provider options'),
                 'callout' => __('Provider choice before charge'),
             ],
@@ -142,8 +142,8 @@
                 'title' => __('Complete checkout with structured customer details'),
                 'description' => __('Capture email, name, and promo input in a polished payment handoff that keeps your checkout funnel trustworthy.'),
                 'seo' => __('Structured checkout UX improves paid conversion quality.'),
-                'image' => asset('storage/marketing/checkout-form-stripe.png'),
-                'preview' => asset('storage/marketing/checkout-form-stripe-focus.png'),
+                'image' => asset('marketing/checkout-form-stripe.png'),
+                'preview' => asset('marketing/checkout-form-stripe-focus.png'),
                 'alt' => __('Checkout form with customer details and continue to payment action'),
                 'callout' => __('Guided details -> payment handoff'),
             ],
@@ -153,8 +153,8 @@
                 'title' => __('Manage products, plans, and lifecycle in admin'),
                 'description' => __('Operate monetization from one panel: active catalog, provider imports, statuses, and quick edit actions for product rollout.'),
                 'seo' => __('Keeps pricing and catalog governance centralized for teams.'),
-                'image' => asset('storage/marketing/admin-products.png'),
-                'preview' => asset('storage/marketing/admin-products-focus.png'),
+                'image' => asset('marketing/admin-products.png'),
+                'preview' => asset('marketing/admin-products-focus.png'),
                 'alt' => __('Admin products table with filters, provider mapping, and status badges'),
                 'callout' => __('Catalog, provider, status in one table'),
             ],
@@ -164,16 +164,16 @@
             [
                 'title' => __('User lifecycle control'),
                 'copy' => __('Review accounts, roles, verification state, and support actions from one operational view so your team can resolve customer requests quickly.'),
-                'image' => asset('storage/marketing/admin-users.png'),
-                'preview' => asset('storage/marketing/admin-users-focus.png'),
+                'image' => asset('marketing/admin-users.png'),
+                'preview' => asset('marketing/admin-users-focus.png'),
                 'alt' => __('Admin users table with role tags and actions'),
                 'callout' => __('Roles + support actions'),
             ],
             [
                 'title' => __('Blog creation and publishing workflow'),
                 'copy' => __('Create long-form posts with structured metadata, media handling, status control, and SEO fields in the same content workflow.'),
-                'image' => asset('storage/marketing/admin-blog-editor.png'),
-                'preview' => asset('storage/marketing/admin-blog-editor-focus.png'),
+                'image' => asset('marketing/admin-blog-editor.png'),
+                'preview' => asset('marketing/admin-blog-editor-focus.png'),
                 'alt' => __('Blog editor screen for long-form content in admin panel'),
                 'callout' => __('Draft -> Schedule -> Publish'),
             ],
@@ -340,7 +340,7 @@
             <div class="relative">
                 <figure class="glass-panel rounded-3xl p-3 shadow-2xl shadow-ink/10">
                     <img
-                        src="{{ asset('storage/marketing/localhost_8000_admin.png') }}"
+                        src="{{ asset('marketing/localhost_8000_admin.png') }}"
                         alt="{{ __('Main admin dashboard with business metrics and management shortcuts') }}"
                         class="h-full w-full rounded-2xl border border-ink/10 object-cover"
                         loading="eager"
@@ -350,7 +350,7 @@
 
                 <figure class="absolute -bottom-6 -left-6 hidden w-56 overflow-hidden rounded-2xl border border-ink/10 bg-white/80 p-2 shadow-xl shadow-ink/10 backdrop-blur-md lg:block dark:bg-white/10">
                     <img
-                        src="{{ asset('storage/marketing/localhost_8000_admin_stats.png') }}"
+                        src="{{ asset('marketing/localhost_8000_admin_stats.png') }}"
                         alt="{{ __('Admin analytics view showing SaaS performance statistics') }}"
                         class="rounded-xl border border-ink/10"
                         loading="lazy"
@@ -375,9 +375,9 @@
 
                     <div class="mt-5 flex items-center gap-4">
                         <div class="flex -space-x-3">
-                            <img src="{{ asset('storage/marketing/auth-login-focus.png') }}" alt="{{ __('Authentication screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
-                            <img src="{{ asset('storage/marketing/checkout-provider-select-focus.png') }}" alt="{{ __('Checkout screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
-                            <img src="{{ asset('storage/marketing/admin-products-focus.png') }}" alt="{{ __('Operations screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
+                            <img src="{{ asset('marketing/auth-login-focus.png') }}" alt="{{ __('Authentication screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
+                            <img src="{{ asset('marketing/checkout-provider-select-focus.png') }}" alt="{{ __('Checkout screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
+                            <img src="{{ asset('marketing/admin-products-focus.png') }}" alt="{{ __('Operations screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
                         </div>
                         <p class="text-sm font-medium text-ink/75">{{ __('Each card links to its full screenshot for inspection.') }}</p>
                     </div>

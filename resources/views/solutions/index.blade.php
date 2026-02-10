@@ -2,7 +2,7 @@
 
 @section('title', 'Laravel SaaS solution pages for billing, admin operations, and SEO growth - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', 'Explore long-tail Laravel SaaS solution pages: Stripe and Paddle billing, Filament admin operations, blog SEO workflows, and onboarding localization implementation.')
-@section('og_image', asset('storage/marketing/localhost_8000_admin.png'))
+@section('og_image', asset('marketing/localhost_8000_admin.png'))
 
 @push('meta')
     <link rel="canonical" href="{{ route('solutions.index') }}">
@@ -50,7 +50,7 @@
 
             <figure class="glass-panel rounded-3xl p-3 shadow-xl shadow-ink/10">
                 <img
-                    src="{{ asset('storage/marketing/localhost_8000_admin.png') }}"
+                    src="{{ asset('marketing/localhost_8000_admin.png') }}"
                     alt="Admin dashboard with operations and billing controls"
                     class="h-full w-full rounded-2xl border border-ink/10 object-cover"
                     loading="eager"
