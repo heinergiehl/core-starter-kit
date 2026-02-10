@@ -3,23 +3,42 @@ name: Deploy Shipsolid
 on:
   workflow_run:
     workflows: ["CI"]
-    branches: [master, main]
+    branches: [main]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref (branch, tag, or SHA) to deploy to production"
+        required: false
+        default: "main"
+
+concurrency:
+  group: shipsolid-deploy-${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to VPS
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    name: Deploy to ${{ github.event_name == 'workflow_run' && 'Staging' || 'Production' }}
+    if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
 
     env:
-      VPS_PATH: /var/www/myapps/shipsolid
+      DEPLOY_ENV: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
+      DEPLOY_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.ref || 'main' }}
+      PADDLE_ENV_DEFAULT: ${{ github.event_name == 'workflow_run' && 'sandbox' || 'production' }}
+      VPS_PATH: ${{ vars.VPS_PATH || (github.event_name == 'workflow_run' && '/var/www/myapps/shipsolid-staging' || '/var/www/myapps/shipsolid') }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ env.DEPLOY_REF }}
+
+      - name: Deploy context
+        run: |
+          echo "Deploy environment: $DEPLOY_ENV"
+          echo "Deploy ref: $DEPLOY_REF"
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -73,7 +92,7 @@ jobs:
         env:
           ENV_FILE: |
             APP_NAME="Matador"
-            APP_ENV=production
+            APP_ENV=${{ env.DEPLOY_ENV }}
             APP_KEY=${{ secrets.APP_KEY }}
             APP_DEBUG=false
             APP_URL=${{ secrets.APP_URL }}
@@ -87,7 +106,7 @@ jobs:
             
             LOG_CHANNEL=stack
             LOG_STACK=single
-            LOG_LEVEL=debug
+            LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
             
             DB_CONNECTION=pgsql
             DB_HOST=${{ secrets.DB_HOST || '172.17.0.1' }}
@@ -143,7 +162,7 @@ jobs:
             PADDLE_VENDOR_ID=${{ secrets.PADDLE_VENDOR_ID }}
             PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY }}
             PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET }}
-            PADDLE_ENV=${{ secrets.PADDLE_ENV }}
+            PADDLE_ENV=${{ secrets.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
             
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
