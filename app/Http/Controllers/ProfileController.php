@@ -34,11 +34,15 @@ class ProfileController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email,'.$user->id],
         ]);
 
-        if ($validated['email'] !== $user->email) {
-            $validated['email_verified_at'] = null;
+        $resetVerification = $validated['email'] !== $user->email;
+
+        $user->fill($validated);
+
+        if ($resetVerification) {
+            $user->forceFill(['email_verified_at' => null]);
         }
 
-        $user->update($validated);
+        $user->save();
 
         return redirect()->route('profile.edit')->with('success', 'Profile updated.');
     }

@@ -19,7 +19,6 @@ Update this file on every release that changes dependencies.
 ## Billing adapters
 - Stripe SDK or package: stripe/stripe-php 19.x
 - Paddle SDK or package: not installed
-- Lemon Squeezy SDK or package: not installed
 
 ## Frontend
 - Node.js: >= 20

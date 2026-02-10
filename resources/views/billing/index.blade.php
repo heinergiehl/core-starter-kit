@@ -48,7 +48,7 @@
                         <div>
                             <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Current Plan') }}</p>
                             <h2 class="mt-2 text-2xl font-display font-bold text-ink">
-                                {{ $plan['name'] ?? ucfirst($subscription->plan_key) }}
+                                {{ $plan?->name ?? ucfirst($subscription->plan_key) }}
                             </h2>
                             <div class="mt-3 inline-flex items-center gap-2">
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border {{ $statusColor }}">
@@ -105,7 +105,7 @@
                         @endif
 
                         @if ($canResume)
-                            <form method="POST" action="{{ route('billing.resume') }}" class="inline">
+                            <form method="POST" action="{{ route('billing.resume') }}" class="inline" data-submit-lock>
                                 @csrf
                                 <button type="submit" class="btn-secondary">
                                     {{ __('Resume Subscription') }}
@@ -286,7 +286,7 @@
                     {{ __('Are you sure you want to cancel? You will retain access until the end of your current billing period.') }}
                 </p>
 
-                <form method="POST" action="{{ route('billing.cancel') }}" class="mt-6">
+                <form method="POST" action="{{ route('billing.cancel') }}" class="mt-6" data-submit-lock>
                     @csrf
                     <label class="flex items-start gap-3 cursor-pointer">
                         <input type="checkbox" name="confirm" value="1" required class="mt-0.5 rounded border-ink/20 text-primary focus:ring-primary">

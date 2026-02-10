@@ -17,7 +17,7 @@ class PaymentProviderSeeder extends Seeder
                 'configuration' => [
                     'secret_key' => config('services.stripe.secret'),
                     'publishable_key' => config('services.stripe.key'),
-                    'webhook_secret' => config('services.stripe.webhook.secret'),
+                    'webhook_secret' => config('services.stripe.webhook_secret'),
                 ],
             ]
         );
@@ -29,12 +29,12 @@ class PaymentProviderSeeder extends Seeder
                 'is_active' => true,
                 'configuration' => [
                     'vendor_id' => config('services.paddle.vendor_id'),
-                    'auth_code' => config('services.paddle.auth_code'),
-                    'public_key' => config('services.paddle.public_key'),
+                    'api_key' => config('services.paddle.api_key'),
+                    'environment' => config('services.paddle.environment', 'production'),
+                    'webhook_secret' => config('services.paddle.webhook_secret'),
                 ],
             ]
         );
-
 
     }
 }

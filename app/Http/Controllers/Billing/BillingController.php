@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
-use App\Domain\Billing\Services\BillingProviderManager;
-use App\Notifications\SubscriptionPlanChangedNotification;
+use App\Enums\SubscriptionStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -14,7 +14,6 @@ class BillingController
 {
     public function __construct(
         private readonly BillingPlanService $planService,
-        private readonly BillingProviderManager $providerManager,
         private readonly \App\Domain\Billing\Services\BillingDashboardService $dashboardService,
         private readonly \App\Domain\Billing\Services\SubscriptionService $subscriptionService
     ) {}
@@ -88,7 +87,7 @@ class BillingController
             // Check if it's already active (user might have double clicked or race condition)
             $activeSub = Subscription::query()
                 ->where('user_id', $user->id)
-                ->whereIn('status', ['active', 'trialing'])
+                ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
                 ->whereNull('canceled_at')
                 ->latest('id')
                 ->first();
@@ -143,6 +142,14 @@ class BillingController
                 ->with('success', __('Your subscription has been updated to :plan.', [
                     'plan' => $newPlanName,
                 ]));
+        } catch (BillingException $e) {
+            report($e);
+
+            if ($e->getErrorCode() === 'BILLING_PLAN_ALREADY_ACTIVE') {
+                return back()->with('info', $e->getMessage());
+            }
+
+            return back()->with('error', $this->formatPlanChangeError($e));
         } catch (\Throwable $e) {
             report($e);
 
@@ -159,7 +166,7 @@ class BillingController
         try {
             $plan = $this->planService->plan($planKey);
 
-            return $plan['name'] ?? ucfirst($planKey);
+            return $plan->name ?: ucfirst($planKey);
         } catch (\Throwable) {
             return ucfirst($planKey);
         }
@@ -174,5 +181,24 @@ class BillingController
         }
 
         return __('Failed to cancel subscription. Please try again or contact support.');
+    }
+
+    private function formatPlanChangeError(\Throwable $exception): string
+    {
+        if ($exception instanceof BillingException) {
+            return match ($exception->getErrorCode()) {
+                'BILLING_SUBSCRIPTION_PENDING_CANCELLATION' => __('Please resume your pending cancellation before changing plans.'),
+                'BILLING_PROVIDER_PRICE_UNAVAILABLE' => __('The selected plan is not available for your billing provider.'),
+                'BILLING_PLAN_CHANGE_INVALID_TARGET' => __('You can only switch between recurring subscription plans.'),
+                'BILLING_UNKNOWN_PLAN', 'BILLING_UNKNOWN_PRICE' => __('The selected plan or billing interval is invalid.'),
+                default => __('Failed to change plan. Please try again or contact support.'),
+            };
+        }
+
+        if (str_contains($exception->getMessage(), 'subscription_locked_pending_changes')) {
+            return __('Your subscription has a pending provider change. Please wait for it to complete or use the billing portal.');
+        }
+
+        return __('Failed to change plan. Please try again or contact support.');
     }
 }

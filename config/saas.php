@@ -28,6 +28,18 @@ return [
             ],
             'retry_delay_ms' => env('BILLING_PROVIDER_RETRY_DELAY_MS', 500),
         ],
+        'webhooks' => [
+            'tries' => env('BILLING_WEBHOOK_TRIES', 5),
+            'max_exceptions' => env('BILLING_WEBHOOK_MAX_EXCEPTIONS', 3),
+            'timeout' => env('BILLING_WEBHOOK_TIMEOUT', 120),
+            'backoff_seconds' => array_values(array_filter(array_map(
+                'intval',
+                preg_split('/\s*,\s*/', (string) env('BILLING_WEBHOOK_BACKOFF_SECONDS', '5,15,60')) ?: []
+            ), static fn (int $value): bool => $value >= 0)),
+            'unique_for_seconds' => env('BILLING_WEBHOOK_UNIQUE_FOR', 300),
+            'redispatch_received_after_seconds' => env('BILLING_WEBHOOK_REDISPATCH_RECEIVED_AFTER', 30),
+            'processing_stale_after_minutes' => env('BILLING_WEBHOOK_PROCESSING_STALE_AFTER', 15),
+        ],
         'outbox' => [
             // Reserved for future use
         ],
@@ -67,7 +79,8 @@ return [
     ],
     'branding' => [
         'app_name' => env('APP_NAME', 'SaaS Kit'),
-        'logo_path' => env('APP_LOGO_PATH'),
+        'logo_path' => env('APP_LOGO_PATH') ?: 'branding/shipsolid-s-mark.svg',
+        'favicon_path' => env('APP_FAVICON_PATH') ?: (env('APP_LOGO_PATH') ?: 'branding/shipsolid-s-mark.svg'),
         'fonts' => [
             'sans' => env('BRAND_FONT_SANS', 'Instrument Sans'),
             'display' => env('BRAND_FONT_DISPLAY', 'Instrument Serif'),

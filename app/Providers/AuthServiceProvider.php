@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Enums\PermissionName;
 use App\Models\User;
+use App\Support\Authorization\PermissionGuardrails;
 use App\Policies\PermissionPolicy;
 use App\Policies\RolePolicy;
 use App\Policies\UserPolicy;
@@ -23,12 +25,33 @@ class AuthServiceProvider extends ServiceProvider
     {
         $this->registerPolicies();
 
-        Gate::before(function (User $user): ?bool {
-            return $user->is_admin ? true : null;
+        Gate::before(function (User $user, mixed $ability, mixed $arguments): ?bool {
+            if (! $user->is_admin) {
+                return null;
+            }
+
+            $abilityName = is_string($ability) ? $ability : null;
+            $record = is_array($arguments) ? ($arguments[0] ?? null) : $arguments;
+
+            if ($abilityName === 'delete') {
+                if ($record instanceof User && PermissionGuardrails::isLastAdminUser($record)) {
+                    return false;
+                }
+
+                if ($record instanceof Role && PermissionGuardrails::isProtectedRole($record)) {
+                    return false;
+                }
+
+                if ($record instanceof Permission && PermissionGuardrails::isProtectedPermission($record)) {
+                    return false;
+                }
+            }
+
+            return true;
         });
 
         Gate::define('impersonate', function (User $user, User $target): bool {
-            if (! $user->is_admin && ! $user->can('users.impersonate')) {
+            if (! $user->is_admin && ! $user->can(PermissionName::UsersImpersonate->value)) {
                 return false;
             }
 

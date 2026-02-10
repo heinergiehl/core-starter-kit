@@ -7,6 +7,8 @@ use App\Domain\Billing\Contracts\StripeWebhookHandler;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Billing\Services\CheckoutService;
 use App\Notifications\PaymentFailedNotification;
 use Illuminate\Support\Arr;
 use Stripe\StripeClient;
@@ -23,7 +25,9 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
     use ResolvesStripeData;
 
     public function __construct(
-        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService
+        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService,
+        private readonly BillingPlanService $billingPlanService,
+        private readonly CheckoutService $checkoutService,
     ) {}
 
     /**
@@ -101,17 +105,23 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $quantity = (int) (data_get($object, 'items.data.0.quantity') ?? data_get($object, 'quantity') ?? 1);
         $trialEnd = $this->timestampToDateTime(data_get($object, 'trial_end'));
         $renewsAt = $this->timestampToDateTime(data_get($object, 'current_period_end'));
+        $cancelAt = $this->timestampToDateTime(data_get($object, 'cancel_at'));
         $canceledAt = $this->timestampToDateTime(data_get($object, 'canceled_at'));
+        if (! $canceledAt && data_get($object, 'cancel_at_period_end')) {
+            $canceledAt = $cancelAt ?? now();
+        }
 
         $endsAt = $this->timestampToDateTime(data_get($object, 'ended_at'));
-        if (! $endsAt && data_get($object, 'cancel_at_period_end') && $renewsAt) {
-            $endsAt = $renewsAt;
+        if (! $endsAt && data_get($object, 'cancel_at_period_end')) {
+            $endsAt = $cancelAt ?? $renewsAt;
         }
 
         $metadata = data_get($object, 'metadata', []);
         $metadata['stripe_item_id'] = data_get($object, 'items.data.0.id');
         $metadata['stripe_price_id'] = data_get($object, 'items.data.0.price.id');
         $metadata['stripe_status'] = $status;
+        $metadata['stripe_cancel_at_period_end'] = (bool) data_get($object, 'cancel_at_period_end', false);
+        $metadata['stripe_cancel_at'] = data_get($object, 'cancel_at');
         $metadata['event_type'] = $eventType;
         $metadata['items'] = data_get($object, 'items');
         $metadata['currency'] = data_get($object, 'currency');
@@ -137,8 +147,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $this->syncBillingCustomer($userId, $customerId, data_get($object, 'customer_email'));
 
         if ($status === 'active') {
-            app(\App\Domain\Billing\Services\CheckoutService::class)
-                ->verifyUserAfterPayment($userId);
+            $this->checkoutService->verifyUserAfterPayment($userId);
         }
     }
 
@@ -162,6 +171,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
             }
         } catch (\Throwable $exception) {
             // Keep checkout flow resilient; webhook processing will update later.
+            report($exception);
         }
     }
 
@@ -172,13 +182,14 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         }
 
         try {
-            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+            $plan = $this->billingPlanService->plan($planKey);
 
-            return $plan['name'] ?? ucfirst($planKey);
+            return $plan->name ?: ucfirst($planKey);
         } catch (\Throwable) {
             return ucfirst($planKey);
         }
     }
+
     /**
      * Handle paid invoice - syncs invoice and updates subscription.
      */

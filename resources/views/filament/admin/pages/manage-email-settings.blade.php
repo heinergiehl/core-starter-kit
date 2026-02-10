@@ -1,8 +1,8 @@
 <x-filament-panels::page>
-    <form wire:submit="save">
+    <form wire:submit.prevent="save">
         {{ $this->form }}
 
-        <div class="mt-4">
+        <div style="margin-top: 1.5rem; display: flex; justify-content: flex-start;">
             <x-filament::button
                 type="submit"
                 wire:loading.attr="disabled"

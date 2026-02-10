@@ -18,7 +18,7 @@ class SaasStatsServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new SaasStatsService;
+        $this->service = app(SaasStatsService::class);
     }
 
     public function test_gets_active_subscription_count(): void
@@ -88,9 +88,17 @@ class SaasStatsServiceTest extends TestCase
             'canceled_at' => now()->subMonth(),
         ]);
 
+        // Some providers may send status/ends_at but no canceled_at
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'canceled',
+            'canceled_at' => null,
+            'ends_at' => now(),
+        ]);
+
         $count = $this->service->getCancellationsThisMonth();
 
-        $this->assertEquals(1, $count);
+        $this->assertEquals(2, $count);
     }
 
     public function test_calculates_churn_rate(): void
@@ -153,7 +161,8 @@ class SaasStatsServiceTest extends TestCase
 
     public function test_calculates_arpu(): void
     {
-        $user = User::factory()->create();
+        $userOne = User::factory()->create();
+        $userTwo = User::factory()->create();
 
         $product = \App\Domain\Billing\Models\Product::factory()->create([
             'key' => 'starter',
@@ -167,9 +176,14 @@ class SaasStatsServiceTest extends TestCase
             'is_active' => true,
         ]);
 
-        // 2 subscriptions
-        Subscription::factory()->count(2)->create([
-            'user_id' => $user->id,
+        Subscription::factory()->create([
+            'user_id' => $userOne->id,
+            'plan_key' => 'starter',
+            'status' => 'active',
+            'canceled_at' => null,
+        ]);
+        Subscription::factory()->create([
+            'user_id' => $userTwo->id,
             'plan_key' => 'starter',
             'status' => 'active',
             'canceled_at' => null,
@@ -177,7 +191,7 @@ class SaasStatsServiceTest extends TestCase
 
         $arpu = $this->service->calculateARPU();
 
-        // $29 * 2 subscriptions = $58 MRR / 2 users = $29 ARPU
+        // $29 * 2 subscriptions = $58 MRR / 2 active customers = $29 ARPU
         $this->assertEquals(29.0, $arpu);
     }
 
@@ -193,5 +207,14 @@ class SaasStatsServiceTest extends TestCase
         $arpu = $this->service->calculateARPU();
 
         $this->assertEquals(0, $arpu);
+    }
+
+    public function test_plan_distribution_is_empty_when_no_active_subscriptions(): void
+    {
+        Subscription::factory()->canceled()->create();
+
+        $distribution = $this->service->getPlanDistribution();
+
+        $this->assertSame([], $distribution);
     }
 }

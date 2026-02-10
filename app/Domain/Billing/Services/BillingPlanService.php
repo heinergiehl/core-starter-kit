@@ -12,6 +12,8 @@ use RuntimeException;
 
 class BillingPlanService
 {
+    // "Plan" is a read model DTO built from Product + Price records.
+    // There is no separate plans table.
     /**
      * @return array<int, string>
      */
@@ -176,7 +178,7 @@ class BillingPlanService
                 ->values();
         }
 
-        return $plans->sortBy('id')->values();
+        return $plans->sortBy(fn (Plan $plan) => $plan->key)->values();
     }
 
     private function planFromDatabase(string $planKey): ?Plan

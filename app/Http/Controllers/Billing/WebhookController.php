@@ -48,7 +48,42 @@ class WebhookController
                 ]
             );
 
-            if ($webhookEvent->wasRecentlyCreated) {
+            $shouldDispatch = $webhookEvent->wasRecentlyCreated;
+
+            if (! $shouldDispatch) {
+                $status = (string) $webhookEvent->status;
+                $lastTouchedAt = $webhookEvent->updated_at ?? $webhookEvent->created_at ?? $webhookEvent->received_at;
+
+                if ($status === 'failed') {
+                    $webhookEvent->update([
+                        'status' => 'received',
+                        'error_message' => null,
+                    ]);
+                    $shouldDispatch = true;
+                } elseif (
+                    $status === 'received'
+                    && (
+                        ! $lastTouchedAt
+                        || $lastTouchedAt->lt(now()->subSeconds(max(5, (int) config('saas.billing.webhooks.redispatch_received_after_seconds', 30))))
+                    )
+                ) {
+                    $shouldDispatch = true;
+                } elseif (
+                    $status === 'processing'
+                    && (
+                        ! $lastTouchedAt
+                        || $lastTouchedAt->lt(now()->subMinutes(max(1, (int) config('saas.billing.webhooks.processing_stale_after_minutes', 15))))
+                    )
+                ) {
+                    $webhookEvent->update([
+                        'status' => 'received',
+                        'error_message' => null,
+                    ]);
+                    $shouldDispatch = true;
+                }
+            }
+
+            if ($shouldDispatch) {
                 ProcessWebhookEvent::dispatch($webhookEvent->id);
             }
 

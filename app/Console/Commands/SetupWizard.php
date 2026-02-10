@@ -414,12 +414,16 @@ class SetupWizard extends Command
     {
         $this->components->info('  → Paddle Configuration');
 
+        $currentEnvironment = $this->envValues['PADDLE_ENV']
+            ?? $this->envValues['PADDLE_ENVIRONMENT']
+            ?? 'sandbox';
+
         $environment = $this->choice(
             'Paddle environment?',
             ['sandbox' => 'Sandbox (testing)', 'production' => 'Production'],
-            $this->envValues['PADDLE_ENVIRONMENT'] ?? 'sandbox'
+            $currentEnvironment
         );
-        $this->envValues['PADDLE_ENVIRONMENT'] = $environment;
+        $this->envValues['PADDLE_ENV'] = $environment;
 
         $currentKey = $this->envValues['PADDLE_API_KEY'] ?? '';
         $masked = $currentKey ? Str::mask($currentKey, '*', 7, -4) : '(not set)';
@@ -432,7 +436,7 @@ class SetupWizard extends Command
 
             $clientToken = $this->secret('Paddle Client-Side Token');
             if ($clientToken) {
-                $this->envValues['PADDLE_CLIENT_TOKEN'] = $clientToken;
+                $this->envValues['PADDLE_CLIENT_SIDE_TOKEN'] = $clientToken;
             }
 
             $webhookSecret = $this->secret('Paddle Webhook Secret [optional]');
@@ -489,10 +493,13 @@ class SetupWizard extends Command
                 [
                     'name' => $name,
                     'password' => Hash::make($password),
-                    'email_verified_at' => now(),
-                    'is_admin' => true,
                 ]
             );
+
+            $user->forceFill([
+                'email_verified_at' => now(),
+                'is_admin' => true,
+            ])->save();
 
             return $user->exists;
         });

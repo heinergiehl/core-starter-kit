@@ -11,10 +11,10 @@ Status legend:
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Subscriptions + one-time purchases | Done | Webhook-driven subscriptions + orders. |
-| Stripe / Paddle / Lemon Squeezy adapters | Done | Checkout and webhook ingestion implemented for all providers. |
-| Product, plan, price catalog in Admin | Done | `products`, `plans`, `prices` resources + DB-backed catalog. |
+| Stripe / Paddle adapters | Done | Checkout and webhook ingestion implemented for supported providers. |
+| Plan catalog in Admin | Done | `products` (plan definitions) + `prices` resources, DB-backed catalog. |
 | Discounts / coupons | Done | Coupons supported across providers and recorded in redemptions. |
-| Customer portal | Done | Stripe + Lemon portal supported; Paddle uses management URLs from webhook payloads. |
+| Customer portal | Done | Stripe portal supported; Paddle uses management URLs from webhook payloads. |
 | Transactions view | Done | Orders + invoices resources available. |
 
 ## 2) Admin + Dashboard
@@ -53,6 +53,6 @@ Status legend:
 ---
 
 ## Next targets (based on SaaSykit parity)
-1) Harden webhook verification for Paddle/Lemon.
+1) Harden webhook verification for Paddle.
 2) Branded email templates.
 3) One-command deploy workflow.

@@ -20,7 +20,7 @@ This document explains the architecture of the SaaS kit: boundaries, core domain
 ### Billing (canonical)
 Canonical tables (provider-agnostic):
 - `billing_customers`
-- `products`, `plans`, `prices`
+- `products`, `prices`
 - `subscriptions`
 - `orders`
 - `webhook_events`
@@ -29,10 +29,10 @@ Canonical tables (provider-agnostic):
 Provider adapters:
 - StripeAdapter
 - PaddleAdapter
-- LemonSqueezyAdapter
 
 Catalog source:
-- `config/saas.php` (default) or database-backed catalog (`BILLING_CATALOG=database`).
+- `BILLING_CATALOG=database` is the current default.
+- In the current schema, a "plan" is represented by `products.key` plus one or more related `prices`.
 
 ### Content
 - Blog posts, categories/tags

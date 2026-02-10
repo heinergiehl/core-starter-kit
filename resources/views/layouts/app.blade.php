@@ -11,15 +11,20 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <script>
-            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark')
-            } else {
-                document.documentElement.classList.remove('dark')
-            }
-        </script>
+        <x-theme-init />
 
         <title>{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</title>
+
+        @php
+            $faviconPath = $appFaviconPath ?? null;
+            $defaultFaviconPath = (string) config('saas.branding.favicon_path', 'branding/shipsolid-s-favicon.svg');
+            $faviconUrl = asset(filled($faviconPath) ? $faviconPath : $defaultFaviconPath);
+            $faviconVersion = rawurlencode((string) ($appBrandingVersion ?? config('app.asset_version', '1')));
+        @endphp
+
+        <link rel="icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}" sizes="any">
+        <link rel="shortcut icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
+        <link rel="apple-touch-icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
 
         @php
             $brandFonts = config('saas.branding.fonts', []);

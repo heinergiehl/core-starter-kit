@@ -13,10 +13,9 @@ use App\Notifications\SubscriptionPlanChangedNotification;
 use App\Notifications\SubscriptionResumedNotification;
 use App\Notifications\SubscriptionStartedNotification;
 use App\Notifications\SubscriptionTrialStartedNotification;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Log;
 
-class SendSubscriptionNotifications implements ShouldQueue
+class SendSubscriptionNotifications
 {
     public function handleSubscriptionStarted(SubscriptionStarted $event): void
     {
@@ -135,7 +134,7 @@ class SendSubscriptionNotifications implements ShouldQueue
         try {
             $plan = app(BillingPlanService::class)->plan($planKey);
 
-            return $plan['name'] ?? ucfirst($planKey);
+            return $plan->name ?: ucfirst($planKey);
         } catch (\Throwable) {
             return ucfirst($planKey);
         }

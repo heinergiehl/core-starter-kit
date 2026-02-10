@@ -66,6 +66,10 @@ body {
     transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+[x-cloak] {
+    display: none !important;
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 8px;
@@ -164,5 +168,234 @@ body {
     .tiptap img:hover,
     [contenteditable="true"] img:hover {
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .docs-page .bg-hero-glow {
+        background: rgb(var(--color-bg));
+    }
+
+    .docs-shell {
+        @apply mx-auto max-w-7xl;
+    }
+
+    .docs-hero {
+        @apply max-w-3xl rounded-3xl border border-ink/10 bg-white/70 px-6 py-8 shadow-sm sm:px-10 sm:py-10;
+    }
+
+    .dark .docs-hero {
+        @apply border-white/10 bg-white/5;
+    }
+
+    .docs-eyebrow {
+        @apply text-xs font-semibold uppercase text-primary;
+        letter-spacing: 0.2em;
+    }
+
+    .docs-title {
+        @apply mt-3 font-display text-4xl text-ink sm:text-5xl;
+    }
+
+    .docs-subtitle {
+        @apply mt-4 max-w-2xl text-sm text-ink/70 sm:text-base;
+    }
+
+    .docs-empty-state {
+        @apply mt-8 rounded-2xl border border-dashed border-ink/20 bg-surface/20 p-6 text-sm text-ink/70;
+    }
+
+    .docs-index-grid {
+        @apply mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3;
+    }
+
+    .docs-index-card {
+        @apply block rounded-2xl border border-ink/10 bg-white/80 p-5 transition duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/10;
+    }
+
+    .dark .docs-index-card {
+        @apply bg-white/5 border-white/10 hover:border-primary/40;
+    }
+
+    .docs-index-card-title {
+        @apply text-base font-semibold text-ink;
+    }
+
+    .docs-index-card-arrow {
+        @apply mt-0.5 text-ink/30 transition group-hover:text-primary;
+    }
+
+    .docs-index-card-summary {
+        @apply mt-3 text-sm leading-6 text-ink/70;
+    }
+
+    .docs-index-card-meta {
+        @apply mt-4 text-xs font-semibold uppercase text-ink/35;
+        letter-spacing: 0.18em;
+    }
+
+    .docs-back-link {
+        @apply inline-flex items-center gap-2 text-sm font-medium text-ink/70 transition hover:text-ink;
+    }
+
+    .docs-layout {
+        @apply grid gap-8;
+    }
+
+    @media (min-width: 1024px) {
+        .docs-layout {
+            grid-template-columns: 240px minmax(0, 1fr);
+        }
+    }
+
+    @media (min-width: 1280px) {
+        .docs-layout {
+            grid-template-columns: 240px minmax(0, 1fr) 220px;
+        }
+    }
+
+    .docs-sidebar {
+        @apply h-fit rounded-2xl border border-ink/10 bg-white/80 p-4 lg:sticky lg:top-24;
+    }
+
+    .dark .docs-sidebar {
+        @apply border-white/10 bg-white/5;
+    }
+
+    .docs-sidebar-label {
+        @apply px-2 pb-3 text-xs font-semibold uppercase text-ink/45;
+        letter-spacing: 0.18em;
+    }
+
+    .docs-sidebar-nav {
+        @apply space-y-1;
+    }
+
+    .docs-sidebar-link {
+        @apply block rounded-lg px-3 py-2 text-sm text-ink/70 transition hover:bg-ink/5 hover:text-ink;
+    }
+
+    .dark .docs-sidebar-link {
+        @apply hover:bg-white/10;
+    }
+
+    .docs-sidebar-link-active {
+        @apply bg-primary/10 font-semibold text-primary;
+    }
+
+    .docs-article {
+        @apply rounded-3xl border border-ink/10 bg-white/90 px-6 py-8 shadow-sm sm:px-10 sm:py-10;
+    }
+
+    .dark .docs-article {
+        @apply border-white/10 bg-white/5;
+    }
+
+    .docs-article-header {
+        @apply border-b border-ink/10 pb-6;
+    }
+
+    .dark .docs-article-header {
+        @apply border-white/10;
+    }
+
+    .docs-article-title {
+        @apply font-display text-3xl font-semibold text-ink sm:text-4xl;
+    }
+
+    .docs-article-summary {
+        @apply mt-3 max-w-3xl text-sm leading-6 text-ink/70 sm:text-base;
+    }
+
+    .docs-prose {
+        @apply prose prose-slate mt-8 max-w-none text-ink/80;
+    }
+
+    .dark .docs-prose {
+        @apply prose-invert;
+    }
+
+    .docs-prose h2,
+    .docs-prose h3 {
+        scroll-margin-top: 7rem;
+    }
+
+    .docs-prose :where(a):not(:where([class~="not-prose"] *)) {
+        @apply font-medium text-primary no-underline;
+    }
+
+    .docs-prose :where(a):not(:where([class~="not-prose"] *)):hover {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+
+    .docs-prose :where(code):not(:where([class~="not-prose"] *))::before,
+    .docs-prose :where(code):not(:where([class~="not-prose"] *))::after {
+        content: none;
+    }
+
+    .docs-prose :where(code):not(:where(pre code, [class~="not-prose"] *)) {
+        @apply rounded bg-ink/10 px-1.5 py-0.5 text-[0.85em] font-medium text-ink;
+    }
+
+    .dark .docs-prose :where(code):not(:where(pre code, [class~="not-prose"] *)) {
+        @apply bg-white/10 text-white;
+    }
+
+    .docs-prose :where(pre):not(:where([class~="not-prose"] *)) {
+        @apply overflow-x-auto rounded-xl border border-slate-800/80 bg-slate-950 px-4 py-4 text-[0.875rem] text-slate-100 shadow-none;
+    }
+
+    .docs-prose :where(pre code):not(:where([class~="not-prose"] *)) {
+        @apply bg-transparent p-0 text-inherit;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+        font-size: inherit;
+    }
+
+    .docs-prose :where(hr):not(:where([class~="not-prose"] *)) {
+        @apply my-8 border-ink/10;
+    }
+
+    .docs-prose :where(blockquote):not(:where([class~="not-prose"] *)) {
+        @apply rounded-r-lg border-l-4 border-primary/50 bg-primary/5 py-1 pl-4 text-ink/70;
+    }
+
+    .docs-prose :where(table):not(:where([class~="not-prose"] *)) {
+        @apply w-full text-sm;
+    }
+
+    .docs-prose :where(thead th):not(:where([class~="not-prose"] *)) {
+        @apply border-b border-ink/20 text-ink/85;
+    }
+
+    .docs-prose :where(tbody td):not(:where([class~="not-prose"] *)) {
+        @apply border-b border-ink/10;
+    }
+
+    .docs-toc {
+        @apply hidden h-fit rounded-2xl border border-ink/10 bg-white/70 p-4 xl:block xl:sticky xl:top-24;
+    }
+
+    .dark .docs-toc {
+        @apply border-white/10 bg-white/5;
+    }
+
+    .docs-toc-label {
+        @apply text-xs font-semibold uppercase text-ink/45;
+        letter-spacing: 0.18em;
+    }
+
+    .docs-toc-nav {
+        @apply mt-3 space-y-1;
+    }
+
+    .docs-toc-link {
+        @apply block rounded-md px-2 py-1.5 text-sm text-ink/65 transition hover:bg-ink/5 hover:text-ink;
+    }
+
+    .dark .docs-toc-link {
+        @apply hover:bg-white/10;
+    }
+
+    .docs-toc-link-nested {
+        @apply pl-5 text-xs;
     }
 }

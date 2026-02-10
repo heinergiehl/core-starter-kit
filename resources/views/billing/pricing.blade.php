@@ -1,25 +1,32 @@
 @extends('layouts.marketing')
 
 @section('title', __('Pricing') . ' - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
-@section('meta_description', __('Choose a subscription or one-time plan with Stripe, Paddle, or Lemon Squeezy.'))
+@section('meta_description', __('Choose a subscription or one-time plan with Stripe or Paddle.'))
 
 @section('content')
     @php
         $user = auth()->user();
-        $canCheckout = (bool) $user;
-        
-        // Check if user already has any purchase (subscription OR one-time)
-        $hasPurchased = $canCheckout && app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($user);
-        
-        $catalog = strtolower((string) config('saas.billing.catalog', 'config'));
+        $canCheckout = (bool) ($canCheckout ?? $user);
+        $canChangeSubscription = (bool) ($canChangeSubscription ?? false);
+        $catalog = strtolower((string) ($catalog ?? config('saas.billing.catalog', 'config')));
+        $priceStates = is_array($priceStates ?? null) ? $priceStates : [];
 
-        // Determine available intervals for toggle
-        // $plans is a Collection<Plan>
-        $allIntervals = collect($plans)->pluck('prices')->collapse()->pluck('interval')->unique()->values();
-        $hasMonthly = $allIntervals->contains('month');
-        $hasYearly = $allIntervals->contains('year');
-        $hasOneTime = $allIntervals->contains('once');
-        $defaultInterval = $hasMonthly ? 'month' : ($hasYearly ? 'year' : 'once');
+        $allIntervals = collect($plans)
+            ->pluck('prices')
+            ->collapse()
+            ->pluck('interval')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $defaultInterval = (string) ($allIntervals->first() ?? 'month');
+        $intervalLabels = [
+            'month' => __('Monthly'),
+            'year' => __('Yearly'),
+            'week' => __('Weekly'),
+            'day' => __('Daily'),
+            'once' => __('Lifetime'),
+        ];
     @endphp
 
     <div x-data="{ interval: '{{ $defaultInterval }}' }">
@@ -33,37 +40,25 @@
                 <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data.') }}</p>
             </div>
             
-            @if (($hasMonthly || $hasYearly) && $hasOneTime || ($hasMonthly && $hasYearly))
+            @if ($allIntervals->count() > 1)
                 <!-- Interval Toggle -->
                 <div class="flex items-center gap-1 p-1 rounded-full bg-surface-highlight/10 border border-ink/5 backdrop-blur-md">
-                    @if ($hasMonthly)
-                    <button 
-                        @click="interval = 'month'"
-                        class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
-                        :class="interval === 'month' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
-                    >
-                        {{ __('Monthly') }}
-                    </button>
-                    @endif
-                    @if ($hasYearly)
-                    <button 
-                        @click="interval = 'year'"
-                        class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
-                        :class="interval === 'year' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
-                    >
-                        {{ __('Yearly') }}
-                        <span class="ml-1 text-[10px] font-bold uppercase tracking-wider bg-white/20 px-1.5 py-0.5 rounded text-white">{{ __('Save') }}</span>
-                    </button>
-                    @endif
-                    @if ($hasOneTime)
-                    <button 
-                        @click="interval = 'once'"
-                        class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
-                        :class="interval === 'once' ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
-                    >
-                        {{ __('Lifetime') }}
-                    </button>
-                    @endif
+                    @foreach ($allIntervals as $intervalOption)
+                        @php
+                            $intervalLabel = $intervalLabels[$intervalOption]
+                                ?? \Illuminate\Support\Str::of($intervalOption)->replace('_', ' ')->title()->value();
+                        @endphp
+                        <button 
+                            @click="interval = @js($intervalOption)"
+                            class="px-4 py-2 text-sm font-semibold rounded-full transition-all duration-300"
+                            :class="interval === @js($intervalOption) ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'text-ink/60 hover:text-ink hover:bg-surface/50'"
+                        >
+                            {{ $intervalLabel }}
+                            @if ($intervalOption === 'year' && $allIntervals->contains('month'))
+                                <span class="ml-1 text-[10px] font-bold uppercase tracking-wider bg-white/20 px-1.5 py-0.5 rounded text-white">{{ __('Save') }}</span>
+                            @endif
+                        </button>
+                    @endforeach
                 </div>
             @endif
         </div>
@@ -95,13 +90,12 @@
                 $planTypeLabel = $isOneTime ? __('One-time') : __('Subscription');
                 
                 // Calculate available intervals for this plan
-                $planIntervals = collect($plan->prices)->pluck('interval')->unique()->values();
-                $jsIntervals = $planIntervals->map(fn($i) => "'$i'")->implode(',');
+                $planIntervals = collect($plan->prices)->pluck('interval')->filter()->unique()->values()->all();
             @endphp
             
             <!-- Plan Card -->
             <div 
-                x-show="[{{ $jsIntervals }}].includes(interval)"
+                x-show="@js($planIntervals).includes(interval)"
                 class="glass-panel rounded-[32px] p-8 flex flex-col relative group transition-all duration-300 {{ $isHighlighted ? 'border-primary shadow-[0_0_50px_-12px_rgba(var(--primary-500-rgb),0.3)] ring-1 ring-primary/50 md:scale-110 z-10 bg-primary/5' : 'hover:border-primary/30 hover:shadow-lg' }}"
             >
                 @if ($isHighlighted)
@@ -141,7 +135,7 @@
                             @endphp
                             
                             <!-- Price Option -->
-                            <div x-show="interval === '{{ $interval }}'" class="p-5 transition card-inner hover:border-primary/30">
+                            <div x-show="interval === @js($interval)" class="p-5 transition card-inner hover:border-primary/30">
                                 <div class="flex items-center justify-between mb-4">
                                     <div>
                                         <p class="text-sm font-semibold text-ink">{{ $label }}</p>
@@ -156,30 +150,65 @@
                                 </div>
 
                                 <div>
-                                    @if (empty($price->providerIds))
+                                    @php
+                                        $priceState = data_get($priceStates, "{$plan->key}.{$price->key}", []);
+                                        $priceIdForActiveProvider = $priceState['price_id_for_active_provider'] ?? null;
+                                        $isCurrentSubscriptionPrice = (bool) ($priceState['is_current_subscription_price'] ?? false);
+                                        $checkoutEligibility = $priceState['checkout_eligibility'] ?? null;
+                                    @endphp
+
+                                    @if ($canChangeSubscription && !$isOneTime)
+                                        @if (empty($priceIdForActiveProvider))
+                                            <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">
+                                                {{ __('Not available for your billing provider') }}
+                                            </p>
+                                        @elseif ($isCurrentSubscriptionPrice)
+                                            <p class="inline-block px-3 py-1.5 text-xs font-medium rounded-lg text-emerald-500 bg-emerald-500/10">
+                                                {{ __('Current plan') }}
+                                            </p>
+                                        @else
+                                            <form method="POST" action="{{ route('billing.change-plan') }}" data-submit-lock>
+                                                @csrf
+                                                <input type="hidden" name="plan" value="{{ $plan->key }}">
+                                                <input type="hidden" name="price" value="{{ $price->key }}">
+                                                <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
+                                                    {{ __('Switch plan') }}
+                                                </button>
+                                            </form>
+                                        @endif
+                                    @elseif (empty($price->providerIds))
                                         @if ($catalog === 'database')
                                             <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">{{ __('Missing Price ID') }}</p>
                                         @else
                                             <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">{{ __('Missing Env ID') }}</p>
                                         @endif
-                                    @elseif ($hasPurchased)
-                                        {{-- User already has a purchase - show link to billing instead --}}
-                                        <div class="space-y-2 text-center">
-                                            <p class="text-xs font-medium text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
-                                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
-                                                {{ __('Already purchased') }}
-                                            </p>
-                                            <a href="{{ route('billing.index') }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('View billing →') }}</a>
-                                        </div>
                                     @elseif ($canCheckout)
-                                        <form method="GET" action="{{ route('checkout.start') }}">
-                                            <input type="hidden" name="plan" value="{{ $plan->key }}">
-                                            <input type="hidden" name="price" value="{{ $price->key }}">
-                                            
-                                            <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
-                                                {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
-                                            </button>
-                                        </form>
+                                        @if ($checkoutEligibility?->allowed)
+                                            @php
+                                                $checkoutCta = $isOneTime ? __('Buy Now') : __('Subscribe');
+                                                if ($checkoutEligibility->isUpgrade && $isOneTime) {
+                                                    $checkoutCta = __('Upgrade One-time');
+                                                } elseif ($checkoutEligibility->isUpgrade && ! $isOneTime) {
+                                                    $checkoutCta = __('Switch to Subscription');
+                                                }
+                                            @endphp
+
+                                            <form method="GET" action="{{ route('checkout.start') }}">
+                                                <input type="hidden" name="plan" value="{{ $plan->key }}">
+                                                <input type="hidden" name="price" value="{{ $price->key }}">
+                                                
+                                                <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
+                                                    {{ $checkoutCta }}
+                                                </button>
+                                            </form>
+                                        @else
+                                            <div class="space-y-2 text-center">
+                                                <p class="text-xs font-medium text-ink/60 bg-surface/40 px-3 py-1.5 rounded-lg">
+                                                    {{ $checkoutEligibility?->message ?? __('Checkout unavailable for this option.') }}
+                                                </p>
+                                                <a href="{{ route('billing.index') }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('View billing ->') }}</a>
+                                            </div>
+                                        @endif
                                     @elseif (!$user)
                                         <div class="space-y-3">
                                             <a
@@ -192,8 +221,6 @@
                                                 <a href="{{ route('login') }}" class="underline underline-offset-2 hover:text-ink">{{ __('Log In') }}</a>
                                             </div>
                                         </div>
-                                    @else
-                                        <p class="text-xs italic text-center text-ink/50">{{ __('Upgrade required') }}</p>
                                     @endif
                                 </div>
                             </div>
@@ -240,3 +267,4 @@
     </section>
     </div> <!-- End x-data -->
 @endsection
+

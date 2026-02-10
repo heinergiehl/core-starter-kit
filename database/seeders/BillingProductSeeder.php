@@ -22,7 +22,7 @@ class BillingProductSeeder extends Seeder
                 'features' => [
                     '1 Commercial Project License',
                     'Complete Billing: Subscriptions & One-time',
-                    'Payments via Stripe, Paddle & Lemon Squeezy',
+                    'Payments via Stripe & Paddle',
                     'Beautiful, Conversion-Optimized Checkout',
                     'Fully Customizable Themes & UI Components',
                     'Secure Authentication & Social Login',
@@ -48,7 +48,7 @@ class BillingProductSeeder extends Seeder
                 'features' => [
                     'Unlimited Commercial Projects',
                     'Complete Billing: Subscriptions & One-time',
-                    'Payments via Stripe, Paddle & Lemon Squeezy',
+                    'Payments via Stripe & Paddle',
                     'Beautiful, Conversion-Optimized Checkout',
                     'Fully Customizable Themes & UI Components',
                     'Secure Authentication & Social Login',
@@ -74,7 +74,7 @@ class BillingProductSeeder extends Seeder
                 'features' => [
                     'Unlimited Commercial Projects',
                     'Complete Billing: Subscriptions & One-time',
-                    'Payments via Stripe, Paddle & Lemon Squeezy',
+                    'Payments via Stripe & Paddle',
                     'Beautiful, Conversion-Optimized Checkout',
                     'Fully Customizable Themes & UI Components',
                     'Secure Authentication & Social Login',
@@ -154,7 +154,7 @@ class BillingProductSeeder extends Seeder
             foreach ($providers as $provider) {
                 $hasApiKey = $this->hasApiConfig($provider);
                 $placeholderId = sprintf('%s_%s_%s', $provider, $definition['plan'], $definition['key']);
-                
+
                 // If we have an API key, we should NOT use placeholders.
                 // We delete any existing placeholder so that the Sync service can create/link the real ID.
                 if ($hasApiKey) {
@@ -162,6 +162,7 @@ class BillingProductSeeder extends Seeder
                         ->where('provider', $provider)
                         ->where('provider_id', $placeholderId)
                         ->delete();
+
                     continue;
                 }
 
@@ -174,14 +175,14 @@ class BillingProductSeeder extends Seeder
                 }
             }
         }
-        
+
         // Attempt to sync to providers if keys are present
         $this->syncToProviders();
     }
 
     private function syncToProviders(): void
     {
-        // Only run sync in local dev or if explicitly requested in CI/Prod 
+        // Only run sync in local dev or if explicitly requested in CI/Prod
         // to avoid accidental spamming of production accounts from a seeder in wrong env
         if (! App::environment('local') && ! App::environment('testing')) {
             return;
@@ -195,12 +196,12 @@ class BillingProductSeeder extends Seeder
                 // Simple check if API keys exist to avoid mostly-error logs
                 if ($this->hasApiConfig($provider)) {
                     $this->command->info("🔄 Auto-publishing catalog to {$provider}...");
-                    
+
                     $result = $publishService->apply($provider, true); // true = ensure existing are updated
-                    
+
                     $created = $result['summary']['products']['create'] ?? 0;
                     $updated = $result['summary']['products']['update'] ?? 0;
-                    
+
                     $this->command->info("   ✓ {$created} created, {$updated} updated.");
                 }
             } catch (\Throwable $e) {

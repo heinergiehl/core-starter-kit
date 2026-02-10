@@ -5,10 +5,10 @@ A production-grade, SSR-first SaaS starter kit that helps you ship a reliable pr
 Highlights:
 - SSR-first UI (Blade + Filament + Livewire) with minimal JS
 - Auth (email/password + social login)
-- Billing adapters for Stripe, Paddle, Lemon Squeezy
+- Billing adapters for Stripe and Paddle
 - Admin Panel (operators) + App Panel (customers)
-- Product/plan/price catalog in Admin (optional DB-backed)
-- Discount/coupon support (Stripe/Paddle/Lemon checkout)
+- Plan catalog in Admin (`products` + `prices`, optional DB-backed)
+- Discount/coupon support (Stripe/Paddle checkout)
 - SaaS metrics (MRR, ARR, churn, ARPU)
 - Roadmap + feedback board
 - Blog + SEO (sitemap, OG tags, RSS, OG images)
@@ -134,11 +134,10 @@ This kit follows a domain-first structure to keep boundaries clear. See `docs/ar
 This kit supports:
 - Stripe
 - Paddle
-- Lemon Squeezy
 
 Billing is webhook-driven. Webhooks must be configured for your environment. See `docs/billing.md`.
 Set plan price IDs in `.env` (see `.env.example`) to enable checkout on the pricing page.
-Use `BILLING_CATALOG=database` to manage products/plans/prices in the Admin Panel.
+Use `BILLING_CATALOG=database` to manage plans via `products` + `prices` in the Admin Panel.
 
 ---
 
@@ -167,7 +166,7 @@ High level checklist:
 4) Run migrations: `php artisan migrate --force`
 5) Run queue workers
 6) Configure scheduler cron
-7) Configure billing webhooks (Stripe/Paddle/Lemon)
+7) Configure billing webhooks (Stripe/Paddle)
 
 See:
 - `docs/security.md` for hardening

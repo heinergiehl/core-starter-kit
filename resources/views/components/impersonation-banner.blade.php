@@ -20,7 +20,7 @@
                         ({{ auth()->user()->email }})
                     </span>
                 </div>
-                <form action="{{ route('impersonate.stop') }}" method="POST" class="flex items-center gap-2">
+                <form action="{{ route('impersonate.stop') }}" method="POST" class="flex items-center gap-2" data-submit-lock>
                     @csrf
                     <span class="text-xs text-white/80 hidden sm:inline">
                         Return as {{ $impersonator?->name }}

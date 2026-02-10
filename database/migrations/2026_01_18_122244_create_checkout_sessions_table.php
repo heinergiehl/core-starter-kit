@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->uuid('uuid')->unique();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->string('provider'); // paddle, stripe, lemonsqueezy
+            $table->string('provider'); // paddle, stripe
             $table->string('provider_session_id')->nullable(); // Paddle transaction ID, Stripe session ID
             $table->string('plan_key');
             $table->string('price_key');

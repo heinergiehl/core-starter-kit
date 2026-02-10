@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\DiscountResource\Pages;
 
+use App\Domain\Billing\Services\BillingProviderManager;
 use App\Filament\Admin\Resources\DiscountResource;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -16,16 +17,10 @@ class CreateDiscount extends CreateRecord
 
             try {
                 $provider = $data['provider'];
-                $adapter = match ($provider) {
-                    'paddle' => app(\App\Domain\Billing\Adapters\PaddleAdapter::class),
-                    'stripe' => app(\App\Domain\Billing\Adapters\StripeAdapter::class),
-                    default => null,
-                };
+                $adapter = app(BillingProviderManager::class)->adapter((string) $provider);
 
-                if ($adapter) {
-                    $providerId = $adapter->createDiscount($discount);
-                    $discount->update(['provider_id' => $providerId]);
-                }
+                $providerId = $adapter->createDiscount($discount);
+                $discount->update(['provider_id' => $providerId]);
             } catch (\Exception $e) {
                 // We rely on the transaction rollback to undo the local creation
                 // if we re-throw.

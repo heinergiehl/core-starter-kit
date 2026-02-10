@@ -44,7 +44,7 @@ class AppSettingsService
         $type = $type ?? $this->inferType($value);
         $encoded = $this->encodeValue($value, $type, $encrypted);
 
-        return AppSetting::query()->updateOrCreate(
+        $setting = AppSetting::query()->updateOrCreate(
             ['key' => $key],
             [
                 'group' => $group,
@@ -53,6 +53,10 @@ class AppSettingsService
                 'is_encrypted' => $encrypted,
             ]
         );
+
+        Cache::forget(self::CACHE_KEY);
+
+        return $setting;
     }
 
     public function featureEnabled(string $key, bool $default = true): bool
@@ -89,6 +93,11 @@ class AppSettingsService
             if ($flag !== null) {
                 config(["saas.features.{$feature}" => (bool) $flag]);
             }
+        }
+
+        $billingDefaultProvider = $this->get('billing.default_provider');
+        if (filled($billingDefaultProvider)) {
+            config(['saas.billing.default_provider' => strtolower((string) $billingDefaultProvider)]);
         }
     }
 

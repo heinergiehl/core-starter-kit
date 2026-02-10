@@ -17,10 +17,10 @@
             this.toasts = this.toasts.filter(t => t.id !== id);
         },
         init() {
-            @if (session()->has('success')) this.add('{{ session('success') }}', 'success'); @endif
-            @if (session()->has('error')) this.add('{{ session('error') }}', 'error'); @endif
-            @if (session()->has('warning')) this.add('{{ session('warning') }}', 'warning'); @endif
-            @if (session()->has('info')) this.add('{{ session('info') }}', 'info'); @endif
+            @if (session()->has('success')) this.add(@js(session('success')), 'success'); @endif
+            @if (session()->has('error')) this.add(@js(session('error')), 'error'); @endif
+            @if (session()->has('warning')) this.add(@js(session('warning')), 'warning'); @endif
+            @if (session()->has('info')) this.add(@js(session('info')), 'info'); @endif
         }
     }"
     x-on:notify.window="add($event.detail.message, $event.detail.type)"

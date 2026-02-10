@@ -40,7 +40,7 @@
                         @endif
                         
                         @if($announcement->is_dismissible)
-                            <form method="POST" action="{{ route('announcements.dismiss', $announcement) }}" class="inline">
+                            <form method="POST" action="{{ route('announcements.dismiss', $announcement) }}" class="inline" data-submit-lock>
                                 @csrf
                                 <button 
                                     type="submit" 

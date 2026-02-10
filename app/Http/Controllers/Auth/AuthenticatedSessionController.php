@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -55,7 +56,7 @@ class AuthenticatedSessionController extends Controller
             $request->session()->put('2fa_user_id', $user->id);
             $request->session()->put('2fa_remember', $request->boolean('remember'));
 
-            Auth::guard('web')->logout();
+            Auth::guard(PermissionGuardrails::guardName())->logout();
 
             $request->session()->regenerate();
             $request->session()->regenerateToken();
@@ -72,8 +73,8 @@ class AuthenticatedSessionController extends Controller
         $request->session()->regenerate();
 
         // Determine redirect destination based on user role
-        $redirectTo = $user->is_admin
-            ? route('filament.admin.pages.dashboard', absolute: false)
+        $redirectTo = $user->canAccessAdminPanel()
+            ? route(PermissionGuardrails::ADMIN_DASHBOARD_ROUTE, absolute: false)
             : route('dashboard', absolute: false);
 
         if (app()->environment('local')) {
@@ -92,7 +93,7 @@ class AuthenticatedSessionController extends Controller
      */
     public function destroy(Request $request): RedirectResponse
     {
-        Auth::guard('web')->logout();
+        Auth::guard(PermissionGuardrails::guardName())->logout();
 
         $request->session()->invalidate();
 

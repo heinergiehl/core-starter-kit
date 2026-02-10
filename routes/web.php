@@ -10,9 +10,11 @@ use App\Http\Controllers\Billing\PaddleCheckoutController;
 use App\Http\Controllers\Billing\PricingController;
 use App\Http\Controllers\Billing\WebhookController;
 use App\Http\Controllers\Blog\BlogController;
+use App\Http\Controllers\Content\DocsController;
 use App\Http\Controllers\Content\OgImageController;
 use App\Http\Controllers\Content\RssController;
 use App\Http\Controllers\Content\SitemapController;
+use App\Http\Controllers\Content\SolutionPageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Feedback\RoadmapController;
 use App\Http\Controllers\ImpersonationController;
@@ -23,10 +25,19 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', fn () => view('welcome'))->name('home');
+Route::get('/features', fn () => view('features'))->name('features');
 
 Route::get('/pricing', PricingController::class)->name('pricing');
+Route::get('/solutions', [SolutionPageController::class, 'index'])->name('solutions.index');
+Route::get('/solutions/{slug}', [SolutionPageController::class, 'show'])
+    ->where('slug', '[a-z0-9-]+')
+    ->name('solutions.show');
 Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
 Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
+Route::get('/docs', [DocsController::class, 'index'])->name('docs.index');
+Route::get('/docs/{page}', [DocsController::class, 'show'])
+    ->where('page', '[A-Za-z0-9-]+')
+    ->name('docs.show');
 Route::get('/roadmap', [RoadmapController::class, 'index'])->name('roadmap');
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])

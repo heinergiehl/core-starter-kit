@@ -68,12 +68,7 @@ class SubscriptionResource extends Resource
                     ->label('Plan')
                     ->searchable(),
                 TextColumn::make('status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'active', 'trialing' => 'success',
-                        'canceled', 'cancelled' => 'danger',
-                        default => 'warning',
-                    }),
+                    ->badge(),
                 TextColumn::make('quantity')
                     ->sortable(),
                 TextColumn::make('renews_at')

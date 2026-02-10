@@ -4,6 +4,7 @@ namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\EntitlementService;
+use App\Enums\PriceType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -99,5 +100,40 @@ class EntitlementServiceTest extends TestCase
 
         // Should fallback
         $this->assertNull($entitlements->storage_limit_mb);
+    }
+
+    #[Test]
+    public function it_reads_entitlements_from_database_backed_plan_projection(): void
+    {
+        $user = User::factory()->create();
+
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
+            'key' => 'agency',
+            'type' => PriceType::Recurring->value,
+            'entitlements' => ['storage_limit_mb' => 8192],
+            'is_active' => true,
+        ]);
+
+        \App\Domain\Billing\Models\Price::factory()->create([
+            'product_id' => $product->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'interval_count' => 1,
+            'amount' => 9900,
+            'is_active' => true,
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'plan_key' => 'agency',
+            'status' => 'active',
+        ]);
+
+        Cache::shouldReceive('remember')
+            ->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
+
+        $entitlements = $this->service->forUser($user);
+
+        $this->assertSame(8192, $entitlements->storage_limit_mb);
     }
 }

@@ -145,10 +145,6 @@ jobs:
             PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET }}
             PADDLE_ENV=${{ secrets.PADDLE_ENV }}
             
-            LEMON_SQUEEZY_API_KEY=${{ secrets.LEMON_SQUEEZY_API_KEY }}
-            LEMON_SQUEEZY_WEBHOOK_SECRET=${{ secrets.LEMON_SQUEEZY_WEBHOOK_SECRET }}
-            LEMON_SQUEEZY_STORE_ID=${{ secrets.LEMON_SQUEEZY_STORE_ID }}
-            
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
             BRAND_COLOR_PRIMARY="14 116 144"

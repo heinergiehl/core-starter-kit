@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('product_provider_mappings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('product_id')->constrained('products')->cascadeOnDelete();
-            $table->string('provider'); // stripe, paddle, lemonsqueezy
+            $table->string('provider'); // stripe, paddle
             $table->string('provider_id'); // prod_123, pro_456
             $table->timestamps();
 

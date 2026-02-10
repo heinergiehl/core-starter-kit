@@ -23,16 +23,8 @@ class RedirectIfSubscribed
         $user = $request->user();
 
         if ($user && $this->checkoutService->hasActiveSubscription($user)) {
-            $planType = $request->input('type');
-            $planKey = $request->input('plan');
-
-            // Exception: Allow One-Time Purchases (if applicable) even if subscribed?
-            // For now, based on user request, we block checkout completely if subscribed.
-            // But usually one-time addons are allowed.
-            // Let's stick to the strict "No checkout if subscribed" for now as requested.
-
             return redirect()->route('billing.index')
-                ->with('info', __('You already have an active subscription. Manage it here.'));
+                ->with('info', __('You already have an active subscription. Use billing to change your plan.'));
         }
 
         return $next($request);

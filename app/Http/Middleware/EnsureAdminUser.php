@@ -12,7 +12,7 @@ class EnsureAdminUser
     {
         $user = $request->user();
 
-        if (! $user || ! $user->is_admin) {
+        if (! $user || ! $user->canAccessAdminPanel()) {
             abort(403);
         }
 

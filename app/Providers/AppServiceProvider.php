@@ -6,9 +6,13 @@ use App\Domain\Billing\Services\EntitlementService;
 use App\Domain\Settings\Services\AppSettingsService;
 use App\Domain\Settings\Services\BrandingService;
 use App\Domain\Settings\Services\MailSettingsService;
+use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Validation\ValidationException;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -39,6 +43,8 @@ class AppServiceProvider extends ServiceProvider
             $branding = app(BrandingService::class);
             $view->with('appBrandName', $branding->appName());
             $view->with('appLogoPath', $branding->logoPath());
+            $view->with('appFaviconPath', $branding->faviconPath());
+            $view->with('appBrandingVersion', $branding->assetVersion());
         });
 
         // Entitlements only for authenticated app layout
@@ -56,5 +62,57 @@ class AppServiceProvider extends ServiceProvider
 
         \App\Domain\Billing\Models\Product::observe(\App\Domain\Billing\Observers\ProductObserver::class);
         \App\Domain\Billing\Models\Price::observe(\App\Domain\Billing\Observers\PriceObserver::class);
+
+        Role::saving(function (Role $role): void {
+            if (! $role->exists || ! $role->isDirty('name')) {
+                return;
+            }
+
+            if (! PermissionGuardrails::isProtectedRoleName((string) $role->getOriginal('name'))) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'name' => PermissionGuardrails::protectedRoleRenameMessage(),
+            ]);
+        });
+
+        Role::deleting(function (Role $role): void {
+            $roleName = (string) ($role->getOriginal('name') ?: $role->name);
+
+            if (! PermissionGuardrails::isProtectedRoleName($roleName)) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'name' => PermissionGuardrails::protectedRoleDeleteMessage(),
+            ]);
+        });
+
+        Permission::saving(function (Permission $permission): void {
+            if (! $permission->exists || ! $permission->isDirty('name')) {
+                return;
+            }
+
+            if (! PermissionGuardrails::isProtectedPermissionName((string) $permission->getOriginal('name'))) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'name' => PermissionGuardrails::protectedPermissionRenameMessage(),
+            ]);
+        });
+
+        Permission::deleting(function (Permission $permission): void {
+            $permissionName = (string) ($permission->getOriginal('name') ?: $permission->name);
+
+            if (! PermissionGuardrails::isProtectedPermissionName($permissionName)) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'name' => PermissionGuardrails::protectedPermissionDeleteMessage(),
+            ]);
+        });
     }
 }

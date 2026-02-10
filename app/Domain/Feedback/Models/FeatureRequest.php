@@ -20,23 +20,23 @@ class FeatureRequest extends Model
                 return;
             }
 
-            $baseSlug = Str::slug($request->title ?? '') ?: Str::random(8);
-            $slug = $baseSlug;
-            $counter = 1;
-            // Prevent infinite loops in high concurrency
-            $maxAttempts = 10;
-
-            while (static::query()->where('slug', $slug)->exists()) {
-                if ($counter > $maxAttempts) {
-                    $slug = "{$baseSlug}-".Str::random(6);
-                    break;
-                }
-                $slug = "{$baseSlug}-{$counter}";
-                $counter++;
-            }
-
-            $request->slug = $slug;
+            $request->slug = static::slugCandidate((string) ($request->title ?? ''));
         });
+    }
+
+    public static function slugCandidate(string $title, int $attempt = 0): string
+    {
+        $baseSlug = Str::slug($title) ?: Str::lower(Str::random(8));
+
+        if ($attempt <= 0) {
+            return $baseSlug;
+        }
+
+        if ($attempt <= 3) {
+            return "{$baseSlug}-{$attempt}";
+        }
+
+        return "{$baseSlug}-".Str::lower(Str::random(6));
     }
 
     protected $fillable = [

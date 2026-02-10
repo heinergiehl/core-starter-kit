@@ -26,6 +26,24 @@ class BrandingService
         return $this->globalSetting()?->logo_path ?: config('saas.branding.logo_path');
     }
 
+    public function faviconPath(): ?string
+    {
+        $setting = $this->globalSetting();
+
+        return $setting?->favicon_path ?: $setting?->logo_path ?: config('saas.branding.favicon_path');
+    }
+
+    public function assetVersion(): string
+    {
+        $updatedAt = $this->globalSetting()?->updated_at;
+
+        if ($updatedAt) {
+            return (string) $updatedAt->getTimestamp();
+        }
+
+        return (string) config('app.asset_version', '1');
+    }
+
     public function templateForGuest(): string
     {
         $globalTemplate = $this->globalSetting()?->template;
@@ -65,6 +83,7 @@ class BrandingService
             'branding.global',
             now()->addMinutes(self::CACHE_TTL_MINUTES),
             fn () => BrandSetting::query()->find(BrandSetting::GLOBAL_ID)
+                ?? BrandSetting::query()->first()
         );
     }
 

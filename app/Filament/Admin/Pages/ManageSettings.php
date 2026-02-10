@@ -2,7 +2,9 @@
 
 namespace App\Filament\Admin\Pages;
 
+use App\Domain\Billing\Models\PaymentProvider;
 use App\Domain\Settings\Services\AppSettingsService;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
@@ -35,6 +37,7 @@ class ManageSettings extends Page implements HasForms
         $this->form->fill([
             'support_email' => $settings->get('support.email'),
             'support_discord' => $settings->get('support.discord'),
+            'billing_default_provider' => $settings->get('billing.default_provider', config('saas.billing.default_provider', 'stripe')),
             'feature_blog' => $settings->get('features.blog', true),
             'feature_roadmap' => $settings->get('features.roadmap', true),
             'feature_announcements' => $settings->get('features.announcements', true),
@@ -58,6 +61,17 @@ class ManageSettings extends Page implements HasForms
                             ->maxLength(255),
                     ])
                     ->columns(2),
+                Section::make('Billing')
+                    ->description('Configure checkout defaults. Add and enable providers in Settings > Payment Providers.')
+                    ->schema([
+                        Select::make('billing_default_provider')
+                            ->label('Default billing provider')
+                            ->options(fn (): array => $this->activeBillingProviderOptions())
+                            ->native(false)
+                            ->searchable()
+                            ->helperText('Only active providers are available here.')
+                            ->placeholder('No active payment provider configured'),
+                    ]),
                 Section::make('Feature Flags')
                     ->description('Toggle optional sections in the marketing UI.')
                     ->schema([
@@ -80,17 +94,52 @@ class ManageSettings extends Page implements HasForms
         $data = $this->form->getState();
         $settings = app(AppSettingsService::class);
 
+        $defaultProvider = strtolower((string) ($data['billing_default_provider'] ?? ''));
+        $activeProviderOptions = $this->activeBillingProviderOptions();
+
+        if ($defaultProvider !== '') {
+            if (empty($activeProviderOptions)) {
+                $defaultProvider = '';
+            } elseif (! array_key_exists($defaultProvider, $activeProviderOptions)) {
+                Notification::make()
+                    ->title('Default provider must be active')
+                    ->body('Enable the provider first in Settings > Payment Providers.')
+                    ->danger()
+                    ->send();
+
+                return;
+            }
+        }
+
         $settings->set('support.email', $data['support_email'] ?? null, 'support');
         $settings->set('support.discord', $data['support_discord'] ?? null, 'support');
+        $settings->set('billing.default_provider', $defaultProvider !== '' ? $defaultProvider : null, 'billing');
 
         $settings->set('features.blog', (bool) ($data['feature_blog'] ?? true), 'features');
         $settings->set('features.roadmap', (bool) ($data['feature_roadmap'] ?? true), 'features');
         $settings->set('features.announcements', (bool) ($data['feature_announcements'] ?? true), 'features');
         $settings->set('features.onboarding', (bool) ($data['feature_onboarding'] ?? true), 'features');
 
+        if ($defaultProvider !== '') {
+            config(['saas.billing.default_provider' => $defaultProvider]);
+        }
+
         Notification::make()
             ->title('Settings updated.')
             ->success()
             ->send();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function activeBillingProviderOptions(): array
+    {
+        return PaymentProvider::query()
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->pluck('name', 'slug')
+            ->mapWithKeys(fn ($name, $slug): array => [strtolower((string) $slug) => (string) $name])
+            ->all();
     }
 }

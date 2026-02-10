@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Adapters\PaddleAdapter;
+use App\Domain\Billing\Data\CheckoutEligibility;
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Discount;
-use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Data\Plan;
+use App\Domain\Billing\Data\Price;
 use App\Domain\Billing\Data\CheckoutUserDTO;
 use App\Domain\Billing\Data\TransactionDTO;
 use App\Enums\BillingProvider;
+use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
 use App\Enums\OrderStatus;
 use App\Domain\Billing\Exceptions\BillingException;
@@ -93,7 +97,7 @@ class CheckoutService
     {
         return Subscription::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', [SubscriptionStatus::Active, SubscriptionStatus::Trialing])
+            ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
             ->exists();
     }
 
@@ -113,8 +117,96 @@ class CheckoutService
         // Check for any paid one-time order
         return Order::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', [OrderStatus::Paid, OrderStatus::Completed])
+            ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->exists();
+    }
+
+    public function latestPaidOneTimeOrder(User $user): ?Order
+    {
+        $order = Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
+            ->where(function ($query): void {
+                $query->whereNull('metadata->subscription_id')
+                    ->whereNull('metadata->provider_subscription_id');
+            })
+            ->latest('id')
+            ->first();
+
+        if ($order) {
+            return $order;
+        }
+
+        return Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
+            ->latest('id')
+            ->cursor()
+            ->first(fn (Order $candidate): bool => $this->isOneTimeOrder($candidate));
+    }
+
+    public function evaluateCheckoutEligibility(
+        User $user,
+        Plan $targetPlan,
+        Price $targetPrice,
+        ?Subscription $activeSubscription = null,
+        ?Order $latestOneTimeOrder = null,
+    ): CheckoutEligibility {
+        $activeSubscription ??= $user->activeSubscription();
+
+        // Active/trialing subscriptions are managed via change-plan, not fresh checkout.
+        if ($activeSubscription) {
+            return CheckoutEligibility::deny(
+                'BILLING_CHECKOUT_BLOCKED_ACTIVE_SUBSCRIPTION',
+                __('You already have an active subscription. Use billing to change your plan.')
+            );
+        }
+
+        $latestOneTimeOrder ??= $this->latestPaidOneTimeOrder($user);
+
+        // First-time checkout.
+        if (! $latestOneTimeOrder) {
+            return CheckoutEligibility::allow();
+        }
+
+        $targetMode = $targetPrice->mode();
+
+        // One-time customer converting to subscription is allowed.
+        if ($targetMode === PaymentMode::Subscription) {
+            return CheckoutEligibility::allow(isUpgrade: true);
+        }
+
+        $targetCurrency = strtoupper((string) $targetPrice->currency);
+        $currentCurrency = strtoupper((string) ($latestOneTimeOrder->currency ?? ''));
+
+        if ($targetCurrency !== '' && $currentCurrency !== '' && $targetCurrency !== $currentCurrency) {
+            return CheckoutEligibility::deny(
+                'BILLING_ONE_TIME_UPGRADE_CURRENCY_MISMATCH',
+                __('One-time upgrades require the same billing currency. Please contact support for manual assistance.')
+            );
+        }
+
+        $currentPriceKey = (string) data_get($latestOneTimeOrder->metadata, 'price_key', '');
+        if ($latestOneTimeOrder->plan_key === $targetPlan->key
+            && ($currentPriceKey === '' || $currentPriceKey === $targetPrice->key)
+        ) {
+            return CheckoutEligibility::deny(
+                'BILLING_ONE_TIME_ALREADY_PURCHASED',
+                __('You already own this one-time plan.')
+            );
+        }
+
+        $targetAmount = (int) round((float) $targetPrice->amount);
+        $currentAmount = (int) ($latestOneTimeOrder->amount ?? 0);
+
+        if ($targetAmount <= $currentAmount) {
+            return CheckoutEligibility::deny(
+                'BILLING_ONE_TIME_UPGRADE_ONLY',
+                __('You can only upgrade to a higher one-time plan.')
+            );
+        }
+
+        return CheckoutEligibility::allow(isUpgrade: true);
     }
 
     /**
@@ -166,8 +258,8 @@ class CheckoutService
         string $provider,
         string $planKey,
         string $priceKey,
-        array $plan,
-        array $price,
+        Plan $plan,
+        Price $price,
         ?string $priceCurrency,
         int $quantity,
         string $providerPriceId,
@@ -179,14 +271,14 @@ class CheckoutService
             'mode' => 'inline',
             'provider' => $provider,
             'plan_key' => $planKey,
-            'plan_name' => $plan['name'] ?? $planKey,
+            'plan_name' => $plan->name ?: $planKey,
             'price_key' => $priceKey,
-            'price_label' => $price['label'] ?? ucfirst($priceKey),
-            'amount' => $price['amount'] ?? null,
-            'amount_is_minor' => $price['amount_is_minor'] ?? true,
+            'price_label' => $price->label ?: ucfirst($priceKey),
+            'amount' => $price->amount,
+            'amount_is_minor' => $price->amountIsMinor,
             'currency' => $priceCurrency,
-            'interval' => $price['interval'] ?? null,
-            'interval_count' => $price['interval_count'] ?? 1,
+            'interval' => $price->interval ?: null,
+            'interval_count' => $price->intervalCount,
             'quantity' => $quantity,
             'price_id' => $providerPriceId,
             'transaction_id' => $transactionId,
@@ -368,5 +460,14 @@ class CheckoutService
         $name = trim(preg_replace('/\s+/', ' ', $name) ?? $name);
 
         return $name !== '' ? ucwords($name) : 'Customer';
+    }
+
+    private function isOneTimeOrder(Order $order): bool
+    {
+        $metadata = $order->metadata ?? [];
+        $subscriptionId = data_get($metadata, 'subscription_id')
+            ?? data_get($metadata, 'provider_subscription_id');
+
+        return empty($subscriptionId);
     }
 }

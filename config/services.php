@@ -62,8 +62,9 @@ return [
     'paddle' => [
         'vendor_id' => env('PADDLE_VENDOR_ID'),
         'api_key' => env('PADDLE_API_KEY'),
+        'client_side_token' => env('PADDLE_CLIENT_SIDE_TOKEN', env('PADDLE_CLIENT_TOKEN')),
         'webhook_secret' => env('PADDLE_WEBHOOK_SECRET'),
-        'environment' => env('PADDLE_ENV', 'production'),
+        'environment' => env('PADDLE_ENV', env('PADDLE_ENVIRONMENT', 'production')),
     ],
 
 ];

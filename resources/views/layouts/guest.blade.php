@@ -13,13 +13,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <script>
-            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark')
-            } else {
-                document.documentElement.classList.remove('dark')
-            }
-        </script>
+        <x-theme-init />
 
         @php
             $defaultTitle = $appBrandName ?? config('app.name', 'SaaS Kit');
@@ -34,6 +28,17 @@
         <meta property="og:type" content="@yield('og_type', 'website')">
         <meta property="og:url" content="{{ url()->current() }}">
         @stack('meta')
+
+        @php
+            $faviconPath = $appFaviconPath ?? null;
+            $defaultFaviconPath = (string) config('saas.branding.favicon_path', 'branding/shipsolid-s-favicon.svg');
+            $faviconUrl = asset(filled($faviconPath) ? $faviconPath : $defaultFaviconPath);
+            $faviconVersion = rawurlencode((string) ($appBrandingVersion ?? config('app.asset_version', '1')));
+        @endphp
+
+        <link rel="icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}" sizes="any">
+        <link rel="shortcut icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
+        <link rel="apple-touch-icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
 
         @php
             $brandFonts = config('saas.branding.fonts', []);
@@ -57,7 +62,7 @@
         <div class="min-h-screen bg-hero-glow flex flex-col justify-center items-center px-6 py-10">
             <div class="flex items-center gap-3 text-lg font-semibold">
                 <a href="/" class="flex items-center gap-3">
-                    <x-application-logo class="h-10 w-10 text-primary" />
+                    <x-application-logo class="h-14 w-14 text-primary" />
                     <span class="font-display text-2xl tracking-tight">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
                 </a>
                 <div class="ml-auto">

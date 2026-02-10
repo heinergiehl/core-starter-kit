@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Billing;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingProviderManager;
+use BackedEnum;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -30,21 +31,26 @@ class BillingPortalController
             return redirect()->route('pricing');
         }
 
-        $provider = $provider ? strtolower($provider) : $subscription->provider;
+        $providerSlug = $this->normalizeProviderSlug($provider ?? $subscription->provider);
 
-        if ($provider === 'stripe') {
-            return $this->stripePortal($user->id);
+        try {
+            if ($providerSlug === 'stripe') {
+                return $this->stripePortal($user->id);
+            }
+
+            if ($providerSlug === 'paddle') {
+                return $this->paddlePortal($subscription);
+            }
+
+            app(BillingProviderManager::class)->adapter($providerSlug);
+
+            throw new RuntimeException("Billing portal is not available for provider [{$providerSlug}].");
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('billing.index')
+                ->with('error', $this->formatPortalError($exception));
         }
-
-
-
-        if ($provider === 'paddle') {
-            return $this->paddlePortal($subscription);
-        }
-
-        app(BillingProviderManager::class)->adapter($provider);
-
-        throw new RuntimeException("Billing portal is not available for provider [{$provider}].");
     }
 
     private function stripePortal(int $userId): RedirectResponse
@@ -110,7 +116,9 @@ class BillingPortalController
                         return redirect()->away($portalUrl);
                     }
                 }
-            } catch (\Throwable) {
+            } catch (\Throwable $exception) {
+                report($exception);
+
                 // Fall through
             }
         }
@@ -142,5 +150,23 @@ class BillingPortalController
         }
 
         return app()->environment('local');
+    }
+
+    private function normalizeProviderSlug(string|BackedEnum|null $provider): string
+    {
+        if ($provider instanceof BackedEnum) {
+            return strtolower((string) $provider->value);
+        }
+
+        return strtolower((string) $provider);
+    }
+
+    private function formatPortalError(\Throwable $exception): string
+    {
+        if (app()->environment('local')) {
+            return $exception->getMessage();
+        }
+
+        return __('Billing portal is currently unavailable. Please try again shortly or contact support.');
     }
 }

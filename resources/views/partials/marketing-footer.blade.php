@@ -1,11 +1,11 @@
 {{-- Shared Marketing Footer --}}
 <footer class="border-t border-ink/10 bg-surface-highlight/10 backdrop-blur-md py-12">
     <div class="mx-auto max-w-6xl px-6">
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
             {{-- Brand --}}
             <div class="col-span-2 md:col-span-1">
                 <a href="/" class="flex items-center gap-2 mb-4">
-                    <x-application-logo class="h-8 w-8 text-primary" />
+                    <x-application-logo class="h-10 w-10 text-primary" />
                     <span class="font-display text-lg font-bold text-ink">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
                 </a>
                 <p class="text-sm text-ink/50 max-w-xs">{{ __('The boilerplate for high-ambition SaaS. Ship faster with senior-dev quality code.') }}</p>
@@ -15,9 +15,21 @@
             <div>
                 <h4 class="font-semibold text-ink mb-4">{{ __('Product') }}</h4>
                 <ul class="space-y-2 text-sm">
-                    <li><a href="/#features" class="text-ink/60 hover:text-ink transition">{{ __('Features') }}</a></li>
+                    <li><a href="{{ route('features') }}" class="text-ink/60 hover:text-ink transition">{{ __('Features') }}</a></li>
+                    <li><a href="{{ route('solutions.index') }}" class="text-ink/60 hover:text-ink transition">{{ __('Solutions') }}</a></li>
                     <li><a href="{{ route('pricing') }}" class="text-ink/60 hover:text-ink transition">{{ __('Pricing') }}</a></li>
                     <li><a href="{{ route('roadmap') }}" class="text-ink/60 hover:text-ink transition">{{ __('Roadmap') }}</a></li>
+                </ul>
+            </div>
+
+            {{-- SEO Solutions --}}
+            <div>
+                <h4 class="font-semibold text-ink mb-4">{{ __('SEO Pages') }}</h4>
+                <ul class="space-y-2 text-sm">
+                    <li><a href="{{ route('solutions.show', 'laravel-stripe-paddle-billing-starter') }}" class="text-ink/60 hover:text-ink transition">{{ __('Billing Starter') }}</a></li>
+                    <li><a href="{{ route('solutions.show', 'filament-admin-operations-for-saas') }}" class="text-ink/60 hover:text-ink transition">{{ __('Admin Operations') }}</a></li>
+                    <li><a href="{{ route('solutions.show', 'laravel-saas-blog-and-seo-starter') }}" class="text-ink/60 hover:text-ink transition">{{ __('Blog + SEO') }}</a></li>
+                    <li><a href="{{ route('solutions.show', 'laravel-saas-onboarding-and-localization') }}" class="text-ink/60 hover:text-ink transition">{{ __('Onboarding + i18n') }}</a></li>
                 </ul>
             </div>
 
@@ -26,7 +38,7 @@
                 <h4 class="font-semibold text-ink mb-4">{{ __('Resources') }}</h4>
                 <ul class="space-y-2 text-sm">
                     <li><a href="{{ route('blog.index') }}" class="text-ink/60 hover:text-ink transition">{{ __('Blog') }}</a></li>
-                    <li><a href="/#architecture" class="text-ink/60 hover:text-ink transition">{{ __('Documentation') }}</a></li>
+                    <li><a href="{{ route('docs.index') }}" class="text-ink/60 hover:text-ink transition">{{ __('Documentation') }}</a></li>
                 </ul>
             </div>
 

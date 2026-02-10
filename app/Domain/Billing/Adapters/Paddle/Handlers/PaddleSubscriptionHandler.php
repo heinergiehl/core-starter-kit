@@ -8,6 +8,7 @@ use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Enums\BillingProvider;
 use App\Enums\SubscriptionStatus;
@@ -24,7 +25,9 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
     use ResolvesPaddleData;
 
     public function __construct(
-        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService
+        protected \App\Domain\Billing\Services\SubscriptionService $subscriptionService,
+        private readonly CheckoutService $checkoutService,
+        private readonly DiscountService $discountService,
     ) {}
 
     public function eventTypes(): array
@@ -68,6 +71,9 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         $scheduledCancelAt = $scheduledAction === 'cancel'
             ? $this->timestampToDateTime(data_get($scheduledChange, 'effective_at'))
             : null;
+        if (! $canceledAt && $scheduledCancelAt) {
+            $canceledAt = now();
+        }
 
         $endsAt = $scheduledCancelAt ?? $canceledAt;
 
@@ -85,7 +91,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                     'ends_at' => $endsAt,
                     'canceled_at' => $canceledAt,
                 ],
-                metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'customer_id', 'customer'])
+                metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'scheduled_change', 'customer_id', 'customer'])
             )
         );
 
@@ -104,8 +110,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         );
 
         if ($status === SubscriptionStatus::Active->value) {
-            app(\App\Domain\Billing\Services\CheckoutService::class)
-                ->verifyUserAfterPayment($userId);
+            $this->checkoutService->verifyUserAfterPayment($userId);
         }
 
         return $subscription;
@@ -192,7 +197,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
 
         $user = User::find($userId);
 
-        app(DiscountService::class)->recordRedemption(
+        $this->discountService->recordRedemption(
             $discount,
             $user,
             BillingProvider::Paddle->value,
@@ -205,18 +210,4 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
         );
     }
 
-    private function resolvePlanName(?string $planKey): string
-    {
-        if (! $planKey) {
-            return 'subscription';
-        }
-
-        try {
-            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
-
-            return $plan['name'] ?? ucfirst($planKey);
-        } catch (\Throwable) {
-            return ucfirst($planKey);
-        }
-    }
 }

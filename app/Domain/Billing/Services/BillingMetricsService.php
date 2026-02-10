@@ -2,28 +2,47 @@
 
 namespace App\Domain\Billing\Services;
 
+use App\Domain\Billing\Data\Plan;
+use App\Domain\Billing\Data\Price;
 use App\Domain\Billing\Models\Subscription;
+use App\Enums\SubscriptionStatus;
+use Illuminate\Support\Carbon;
 
 class BillingMetricsService
 {
+    /**
+     * @var array<string, Plan|null>
+     */
+    private array $planCache = [];
+
+    /**
+     * @var array<string, array<string, Plan>>
+     */
+    private array $providerPlanCache = [];
+
+    public function __construct(
+        private readonly BillingPlanService $planService
+    ) {}
+
     public function snapshot(): array
     {
-        $activeStatuses = ['active', 'trialing'];
+        $activeStatuses = [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value];
         $subscriptions = Subscription::query()
             ->whereIn('status', $activeStatuses)
             ->get();
 
+        $windowStart = now()->subDays(30);
         $mrr = $subscriptions->sum(fn (Subscription $subscription): float => $this->monthlyAmount($subscription));
         $activeCount = $subscriptions->count();
-        $trialingCount = $subscriptions->where('status', 'trialing')->count();
+        $trialingCount = $subscriptions->filter(
+            fn (Subscription $subscription): bool => $subscription->status === SubscriptionStatus::Trialing
+        )->count();
         $userCount = $subscriptions->pluck('user_id')->unique()->count();
 
-        $canceledLast30 = Subscription::query()
-            ->whereNotNull('canceled_at')
-            ->where('canceled_at', '>=', now()->subDays(30))
-            ->count();
+        $canceledLast30 = $this->countRecentCancellations($windowStart);
+        $startingSubscriptions = $this->countStartingSubscriptions($windowStart);
 
-        $churnRate = $activeCount > 0 ? ($canceledLast30 / $activeCount) * 100 : 0.0;
+        $churnRate = $startingSubscriptions > 0 ? ($canceledLast30 / $startingSubscriptions) * 100 : 0.0;
         $arpu = $userCount > 0 ? $mrr / $userCount : 0.0;
 
         return [
@@ -32,27 +51,77 @@ class BillingMetricsService
             'active_subscriptions' => $activeCount,
             'trialing_subscriptions' => $trialingCount,
             'active_customers' => $userCount,
+            'cancellations_last_30_days' => $canceledLast30,
             'churn_rate' => $churnRate,
             'arpu' => $arpu,
         ];
     }
 
+    private function countStartingSubscriptions(Carbon $since): int
+    {
+        return Subscription::query()
+            ->where('created_at', '<', $since)
+            ->where(function ($query) use ($since) {
+                $query
+                    ->whereIn('status', [
+                        SubscriptionStatus::Active->value,
+                        SubscriptionStatus::Trialing->value,
+                    ])
+                    ->orWhere(function ($q) use ($since) {
+                        $q->whereNotNull('canceled_at')
+                            ->where('canceled_at', '>=', $since);
+                    })
+                    ->orWhere(function ($q) use ($since) {
+                        $q->where('status', SubscriptionStatus::Canceled->value)
+                            ->whereNull('canceled_at')
+                            ->where(function ($q2) use ($since) {
+                                $q2->where('ends_at', '>=', $since)
+                                    ->orWhereNull('ends_at');
+                            });
+                    });
+            })
+            ->count();
+    }
+
+    private function countRecentCancellations(Carbon $since): int
+    {
+        return Subscription::query()
+            ->where(function ($query) use ($since) {
+                $query
+                    ->where(function ($q) use ($since) {
+                        $q->whereNotNull('canceled_at')
+                            ->where('canceled_at', '>=', $since);
+                    })
+                    ->orWhere(function ($q) use ($since) {
+                        $q->where('status', SubscriptionStatus::Canceled->value)
+                            ->whereNull('canceled_at')
+                            ->where(function ($q2) use ($since) {
+                                $q2->where('ends_at', '>=', $since)
+                                    ->orWhere(function ($q3) use ($since) {
+                                        $q3->whereNull('ends_at')
+                                            ->where('updated_at', '>=', $since);
+                                    });
+                            });
+                    });
+            })
+            ->count();
+    }
+
     private function monthlyAmount(Subscription $subscription): float
     {
-        $planService = app(BillingPlanService::class);
         $planKey = $subscription->plan_key;
 
         if (! $planKey) {
             return 0.0;
         }
 
-        try {
-            $plan = $planService->plan($planKey);
-        } catch (\RuntimeException $exception) {
+        $plan = $this->resolvePlan($planKey);
+
+        if (! $plan) {
             return 0.0;
         }
 
-        if (($plan['type'] ?? 'subscription') !== 'subscription') {
+        if ($plan->isOneTime()) {
             return 0.0;
         }
 
@@ -62,15 +131,14 @@ class BillingMetricsService
             return 0.0;
         }
 
-        $amount = (float) ($price['amount'] ?? 0);
+        $amount = (float) $price->amount;
 
-        if (! empty($price['amount_is_minor'])) {
+        if ($price->amountIsMinor) {
             $amount /= 100;
         }
 
-        $interval = $price['interval'] ?? 'month';
-        $intervalCount = (int) ($price['interval_count'] ?? 1);
-        $intervalCount = max($intervalCount, 1);
+        $interval = $price->interval ?: 'month';
+        $intervalCount = max($price->intervalCount, 1);
 
         $monthly = match ($interval) {
             'year' => $amount / (12 * $intervalCount),
@@ -82,10 +150,14 @@ class BillingMetricsService
         return $monthly;
     }
 
-    private function priceForSubscription(Subscription $subscription, array $plan): ?array
+    private function priceForSubscription(Subscription $subscription, Plan $plan): ?Price
     {
         $provider = strtolower((string) $subscription->provider->value);
-        $prices = $this->pricesForProvider($provider, $plan['key'] ?? '');
+        $prices = $this->pricesForProvider($provider, $plan->key);
+
+        if (empty($prices)) {
+            $prices = $plan->prices;
+        }
 
         if (empty($prices)) {
             return null;
@@ -102,7 +174,7 @@ class BillingMetricsService
 
         if ($providerPriceId) {
             foreach ($prices as $price) {
-                if (($price['provider_id'] ?? null) === $providerPriceId) {
+                if ($price->idFor($provider) === $providerPriceId) {
                     return $price;
                 }
             }
@@ -113,11 +185,16 @@ class BillingMetricsService
 
     private function pricesForProvider(string $provider, string $planKey): array
     {
-        $planService = app(BillingPlanService::class);
-        $plans = collect($planService->plansForProvider($provider));
-        $plan = $plans->firstWhere('key', $planKey);
+        if (! isset($this->providerPlanCache[$provider])) {
+            $this->providerPlanCache[$provider] = $this->planService
+                ->plansForProvider($provider)
+                ->keyBy('key')
+                ->all();
+        }
 
-        return $plan['prices'] ?? [];
+        $plan = $this->providerPlanCache[$provider][$planKey] ?? null;
+
+        return $plan?->prices ?? [];
     }
 
     private function resolveProviderPriceId(Subscription $subscription): ?string
@@ -129,5 +206,20 @@ class BillingMetricsService
             ?? data_get($metadata, 'items.0.price.id')
             ?? data_get($metadata, 'price_id')
             ?? data_get($metadata, 'variant_id');
+    }
+
+    private function resolvePlan(string $planKey): ?Plan
+    {
+        if (array_key_exists($planKey, $this->planCache)) {
+            return $this->planCache[$planKey];
+        }
+
+        try {
+            $this->planCache[$planKey] = $this->planService->plan($planKey);
+        } catch (\RuntimeException) {
+            $this->planCache[$planKey] = null;
+        }
+
+        return $this->planCache[$planKey];
     }
 }

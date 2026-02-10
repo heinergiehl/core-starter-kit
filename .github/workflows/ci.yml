@@ -21,7 +21,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.4"
+          php-version: "8.2.29"
           extensions: mbstring, bcmath, intl, pdo_pgsql, pgsql, dom, fileinfo
           coverage: none
 
@@ -56,8 +56,8 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      # - name: Run tests
-      #   env:
-      #     DB_CONNECTION: sqlite
-      #     DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
-      #   run: php artisan test --testdox --no-ansi
+      - name: Run tests
+        env:
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
+        run: php artisan test --testdox --no-ansi

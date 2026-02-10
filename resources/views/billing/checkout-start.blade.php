@@ -86,7 +86,7 @@
                             </div>
                         @endif
 
-                        <form method="POST" action="{{ route('billing.checkout', [], false) }}" class="space-y-4">
+                        <form method="POST" action="{{ route('billing.checkout', [], false) }}" class="space-y-4" data-submit-lock>
                             @csrf
                             <input type="hidden" name="provider" value="{{ $provider }}">
                             <input type="hidden" name="plan" value="{{ $plan->key ?? '' }}">

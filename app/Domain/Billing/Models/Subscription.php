@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Enums\SubscriptionStatus;
 use App\Enums\BillingProvider;
 
+use App\Domain\Billing\Services\EntitlementService;
+
 class Subscription extends Model
 {
     use HasFactory;
@@ -20,33 +22,27 @@ class Subscription extends Model
 
     protected static function booted(): void
     {
-        static::created(function (Subscription $subscription) {
-            if ($subscription->user_id) {
-                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$subscription->user_id}");
-            }
-        });
-
-        static::updated(function (Subscription $subscription) {
-            if ($subscription->user_id) {
-                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$subscription->user_id}");
-            }
+        static::saved(function (Subscription $subscription) {
+            self::forgetUserEntitlements($subscription->user_id, $subscription->id);
         });
 
         static::deleted(function (Subscription $subscription) {
-             if ($subscription->user_id) {
-                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$subscription->user_id}");
-            }
+            self::forgetUserEntitlements($subscription->user_id, $subscription->id);
         });
     }
 
-    public function clearUserCache(): void
+    private static function forgetUserEntitlements(?int $userId, ?int $subscriptionId = null): void
     {
         try {
-            if ($this->user_id) {
-                \Illuminate\Support\Facades\Cache::forget("entitlements:user:{$this->user_id}");
+            if ($userId) {
+                \Illuminate\Support\Facades\Cache::forget(EntitlementService::CACHE_KEY_PREFIX . $userId);
             }
         } catch (\Throwable $e) {
-            dd("clearUserCache failed: " . $e->getMessage(), $e->getTraceAsString());
+            report($e);
+            \Illuminate\Support\Facades\Log::warning('clearUserCache failed', [
+                'subscription_id' => $subscriptionId,
+                'user_id' => $userId,
+            ]);
         }
     }
 
@@ -96,12 +92,18 @@ class Subscription extends Model
 
     public function scopeIsActive($query)
     {
-        return $query->where(function ($q) {
-            $q->whereIn('status', ['active', 'trialing', 'past_due'])
-              ->orWhere(function ($q2) {
-                  $q2->where('status', 'canceled')
-                     ->where('ends_at', '>', now());
-              });
+        $activeStatuses = [
+            SubscriptionStatus::Active->value,
+            SubscriptionStatus::Trialing->value,
+            SubscriptionStatus::PastDue->value,
+        ];
+
+        return $query->where(function ($q) use ($activeStatuses) {
+            $q->whereIn('status', $activeStatuses)
+                ->orWhere(function ($q2) {
+                    $q2->where('status', SubscriptionStatus::Canceled->value)
+                        ->where('ends_at', '>', now());
+                });
         });
     }
 

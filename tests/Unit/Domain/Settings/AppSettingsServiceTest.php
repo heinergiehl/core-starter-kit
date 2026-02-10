@@ -35,4 +35,29 @@ class AppSettingsServiceTest extends TestCase
         $this->assertNotSame('secret-token', $raw);
         $this->assertSame('secret-token', $service->get('mail.postmark.token'));
     }
+
+    public function test_it_applies_billing_default_provider_to_config(): void
+    {
+        config(['saas.billing.default_provider' => 'stripe']);
+
+        $service = app(AppSettingsService::class);
+        $service->set('billing.default_provider', 'paddle', 'billing');
+
+        $service->applyToConfig();
+
+        $this->assertSame('paddle', config('saas.billing.default_provider'));
+    }
+
+    public function test_it_invalidates_cached_settings_when_updating_a_key(): void
+    {
+        $service = app(AppSettingsService::class);
+
+        $service->set('support.email', 'first@example.com', 'support');
+
+        $this->assertSame('first@example.com', $service->get('support.email'));
+
+        $service->set('support.email', 'second@example.com', 'support');
+
+        $this->assertSame('second@example.com', $service->get('support.email'));
+    }
 }

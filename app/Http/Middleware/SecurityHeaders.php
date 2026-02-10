@@ -87,10 +87,12 @@ class SecurityHeaders
         // but Vite might be serving from saas-kit.test or 127.0.0.1
         $viteDevServer = '';
         $viteWss = '';
+        $unsafeEval = '';
         // Allow https: for form actions to prevent blocking seemingly valid secure submissions
         $formAction = "'self' https:";
 
         if (app()->isLocal()) {
+            $unsafeEval = " 'unsafe-eval'";
             $hosts = array_unique([
                 $request->getHost(),
                 'localhost',
@@ -115,8 +117,8 @@ class SecurityHeaders
 
         $cspDirectives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' ".implode(' ', config('saas.security.csp_domains.script', [])).($viteDevServer ? " {$viteDevServer}" : ''),
-            "script-src-elem 'self' 'unsafe-inline' ".implode(' ', config('saas.security.csp_domains.script', [])).($viteDevServer ? " {$viteDevServer}" : ''),
+            "script-src 'self' 'unsafe-inline'{$unsafeEval} ".implode(' ', config('saas.security.csp_domains.script', [])).($viteDevServer ? " {$viteDevServer}" : ''),
+            "script-src-elem 'self' 'unsafe-inline'{$unsafeEval} ".implode(' ', config('saas.security.csp_domains.script', [])).($viteDevServer ? " {$viteDevServer}" : ''),
             "style-src 'self' 'unsafe-inline' ".implode(' ', config('saas.security.csp_domains.style', [])).($viteDevServer ? " {$viteDevServer}" : ''),
             "style-src-elem 'self' 'unsafe-inline' ".implode(' ', config('saas.security.csp_domains.style', [])).($viteDevServer ? " {$viteDevServer}" : ''),
             "font-src 'self' ".implode(' ', config('saas.security.csp_domains.font', [])),

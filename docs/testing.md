@@ -50,12 +50,12 @@ npm run build
 - Verify entitlements are reflected in the UI.
 
 ### Admin Panel (`/admin`)
-- Create products, plans, and prices.
+- Create products (plans) and prices.
 - Confirm pricing page reflects DB catalog when `BILLING_CATALOG=database`.
 - Create a discount and verify the coupon field appears.
 
 ### Billing test flow
-- Configure Stripe/Paddle/Lemon test keys in `.env`.
+- Configure Stripe/Paddle test keys in `.env`.
 - Start checkout from `/pricing`.
 - Verify webhook logs in Admin.
 

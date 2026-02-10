@@ -5,16 +5,16 @@ namespace App\Filament\Admin\Resources;
 use App\Filament\Admin\Resources\PermissionResource\Pages\CreatePermission;
 use App\Filament\Admin\Resources\PermissionResource\Pages\EditPermission;
 use App\Filament\Admin\Resources\PermissionResource\Pages\ListPermissions;
-use Filament\Actions\BulkActionGroup;
+use App\Support\Authorization\PermissionGuardrails;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Spatie\Permission\Models\Permission;
 
 class PermissionResource extends Resource
@@ -38,10 +38,11 @@ class PermissionResource extends Resource
                 TextInput::make('name')
                     ->required()
                     ->maxLength(150)
-                    ->unique(ignoreRecord: true),
+                    ->unique(ignoreRecord: true)
+                    ->disabled(fn (?Permission $record): bool => PermissionGuardrails::isProtectedPermission($record)),
                 TextInput::make('guard_name')
                     ->label('Guard')
-                    ->default('web')
+                    ->default(PermissionGuardrails::guardName())
                     ->disabled()
                     ->dehydrated(),
             ])
@@ -70,13 +71,18 @@ class PermissionResource extends Resource
             ->defaultSort('name')
             ->actions([
                 EditAction::make(),
-                DeleteAction::make(),
-            ])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                DeleteAction::make()
+                    ->hidden(fn (Permission $record): bool => PermissionGuardrails::isProtectedPermission($record)),
             ]);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        if ($record instanceof Permission && PermissionGuardrails::isProtectedPermission($record)) {
+            return false;
+        }
+
+        return parent::canDelete($record);
     }
 
     public static function getPages(): array

@@ -37,7 +37,14 @@ class AppPanelProvider extends PanelProvider
                 'primary' => Color::Teal,
             ])
             ->brandName(fn (): string => app(BrandingService::class)->appName())
-            ->brandLogoHeight('2rem')
+            ->brandLogoHeight('3rem')
+            ->favicon(function (): string {
+                $branding = app(BrandingService::class);
+                $faviconPath = $branding->faviconPath() ?: (string) config('saas.branding.favicon_path', 'branding/shipsolid-s-favicon.svg');
+                $version = rawurlencode($branding->assetVersion());
+
+                return asset($faviconPath).'?v='.$version;
+            })
             ->brandLogo(function (): HtmlString {
                 $branding = app(BrandingService::class);
                 $name = $branding->appName();
@@ -49,7 +56,7 @@ class AppPanelProvider extends PanelProvider
 
                 if ($logoUrl) {
                     $logoMarkup = sprintf(
-                        '<img src="%s" alt="%s" style="width:28px;height:28px;border-radius:10px;object-fit:cover;display:block;" />',
+                        '<img src="%s" alt="%s" style="width:48px;height:48px;object-fit:contain;display:block;" />',
                         e($logoUrl),
                         $nameEscaped
                     );

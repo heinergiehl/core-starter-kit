@@ -13,18 +13,30 @@ return [
     'logout' => 'Log out',
 
     // Hero Section
-    'hero_badge' => 'v1.0 is now live',
-    'hero_title' => 'The boilerplate for',
-    'hero_title_highlight' => 'high-ambition SaaS',
-    'hero_description' => 'Stop wasting weeks on billing, auth, and onboarding. Start with a "Senior Dev" quality foundation.',
-    'hero_tagline' => 'Domain-driven, event-sourced, upgrade-ready.',
+    'home_meta_title' => ':name | Laravel SaaS Starter Kit for Billing and Auth',
+    'home_meta_description' => 'Launch faster with a production-ready Laravel SaaS starter kit with authentication, subscription billing, onboarding flows, admin panels, and event-driven architecture.',
+    'hero_badge' => 'Laravel SaaS Starter Kit v2.0',
+    'hero_title' => 'The Laravel SaaS starter kit for',
+    'hero_title_highlight' => 'subscription products',
+    'hero_description' => 'Launch your SaaS in days with production-ready authentication, account management, checkout, and billing workflows.',
+    'hero_tagline' => 'Build product value instead of boilerplate: onboarding, emails, and webhooks are already wired.',
     'hero_cta' => 'Launch Console',
     'hero_cta_secondary' => 'View Demo',
     'built_with' => 'Built with modern standards',
 
     // Features
-    'features_title' => 'Everything you need',
-    'features_description' => 'Built with modern standards to help you ship faster.',
+    'features_title' => 'Core features for a faster SaaS launch',
+    'features_description' => 'Everything essential in a modern SaaS starter kit, optimized for speed to market and maintainability.',
+    'feature_accounts_title' => 'Multi-tenant accounts and auth',
+    'feature_accounts_description' => 'Secure sign-up, login, password reset, and clean customer data isolation for both B2C and B2B products.',
+    'feature_billing_title' => 'Subscription billing integrations',
+    'feature_billing_description' => 'Stripe and Paddle with checkout, plan changes, webhooks, and invoicing out of the box.',
+    'feature_panels_title' => 'Admin and customer panels',
+    'feature_panels_description' => 'Filament-powered panels for operations, customer management, content, and internal workflows.',
+    'feature_events_title' => 'Event-driven Laravel architecture',
+    'feature_events_description' => 'Domain events and decoupled services that keep features scalable, testable, and easy to extend.',
+    'cta_title' => 'Stop rebuilding SaaS foundation code',
+    'cta_description' => 'Ship your next Laravel SaaS faster with an upgrade-ready starter kit built for real production workloads.',
 
     // Pricing
     'pricing_title' => 'Simple, transparent pricing',

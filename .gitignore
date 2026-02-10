@@ -12,6 +12,9 @@
 /.vscode
 /.zed
 /auth.json
+/bootstrap/cache/*.php
+/debug_*.php
+/debug_*.txt
 /node_modules
 /public/build
 /public/hot
@@ -19,8 +22,13 @@
 /public/js/filament
 /public/fonts/filament
 /public/storage
+/repro.php
 /storage/*.key
 /storage/pail
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+/test_*.txt
 /vendor
 Homestead.json
 Homestead.yaml

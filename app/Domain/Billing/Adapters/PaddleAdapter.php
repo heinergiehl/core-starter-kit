@@ -171,7 +171,7 @@ class PaddleAdapter implements BillingRuntimeProvider
         $handlers = [
             // PaddleProductHandler and PaddlePriceHandler REMOVED for app-first mode
             app(PaddleSubscriptionHandler::class),
-            new PaddleOrderHandler,
+            app(PaddleOrderHandler::class),
         ];
 
         foreach ($handlers as $handler) {
@@ -397,8 +397,7 @@ class PaddleAdapter implements BillingRuntimeProvider
         $timeout = (int) ($this->config['timeout'] ?? 15);
         $connectTimeout = (int) ($this->config['connect_timeout'] ?? 5);
         $retries = (int) ($this->config['retries'] ?? 2);
-        // Retry delay is usually standard, but can be config'd if needed.
-        $retryDelay = 500;
+        $retryDelay = (int) ($this->config['retry_delay_ms'] ?? 500);
 
         return Http::withToken($apiKey)
             ->acceptJson()
@@ -441,6 +440,9 @@ class PaddleAdapter implements BillingRuntimeProvider
     public function updateSubscription(Subscription $subscription, string $newPriceId): void
     {
         $apiKey = $this->config['api_key'] ?? null;
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
+        }
 
         // Get current subscription to find quantity
         $quantity = $subscription->quantity ?? 1;
@@ -465,6 +467,9 @@ class PaddleAdapter implements BillingRuntimeProvider
     public function cancelSubscription(Subscription $subscription): \Carbon\Carbon
     {
         $apiKey = $this->config['api_key'] ?? null;
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
+        }
 
         // Cancel at next billing date (graceful cancellation)
         $response = $this->paddleRequest($apiKey)
@@ -500,6 +505,9 @@ class PaddleAdapter implements BillingRuntimeProvider
     public function resumeSubscription(Subscription $subscription): void
     {
         $apiKey = $this->config['api_key'] ?? null;
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
+        }
 
         // Remove scheduled cancellation by setting scheduled_change to null
         $response = $this->paddleRequest($apiKey)

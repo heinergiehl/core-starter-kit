@@ -15,6 +15,7 @@ class BrandSetting extends Model
     protected $fillable = [
         'app_name',
         'logo_path',
+        'favicon_path',
         'template',
         'invoice_name',
         'invoice_email',

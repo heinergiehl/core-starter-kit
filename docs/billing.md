@@ -1,4 +1,4 @@
-# Billing (Stripe, Paddle, Lemon Squeezy)
+# Billing (Stripe, Paddle)
 
 This kit implements a provider-agnostic billing domain with adapter implementations per provider.
 
@@ -13,7 +13,7 @@ This kit implements a provider-agnostic billing domain with adapter implementati
 ## 2) Canonical data model
 Canonical tables (do not leak provider-specific logic into your app):
 - `billing_customers`
-- `products`, `plans`, `prices`
+- `products`, `prices`
 - `subscriptions`
 - `orders` (one-time purchases)
 - `invoices`
@@ -21,7 +21,7 @@ Canonical tables (do not leak provider-specific logic into your app):
 - `discounts`, `discount_redemptions`
 
 Admin Panel resources:
-- Products, Plans, Prices
+- Products (plans), Prices
 - Subscriptions, Orders, Invoices, Customers, Webhook Events
 - Discounts
 
@@ -43,40 +43,34 @@ On production environments, you must manually seed the payment providers once to
 php artisan db:seed --class=PaymentProviderSeeder --force
 ```
 
+### 3.2 Supported providers (where to configure)
+Supported billing providers are code-defined, not free-form database entries.
+
+- Enum list: `app/Enums/BillingProvider.php`
+- Adapter/runtime wiring: `app/Domain/Billing/Services/BillingProviderManager.php`
+- Admin page lets you add only these supported providers.
+
 ---
 
 ## 4) Configuration
 
 ### 4.1 `config/saas.php`
-Central config should include enabled providers and plan definitions.
+Central config should include enabled providers and catalog behavior.
 
 Example shape:
 ```php
 return [
   'billing' => [
-    'providers' => ['stripe', 'paddle', 'lemonsqueezy'],
+    'providers' => ['stripe', 'paddle'],
     'default_provider' => env('BILLING_DEFAULT_PROVIDER', 'stripe'),
+    'default_plan' => env('BILLING_DEFAULT_PLAN', 'starter'),
+    'catalog' => env('BILLING_CATALOG', 'database'),
     'success_url' => env('BILLING_SUCCESS_URL'),
     'cancel_url' => env('BILLING_CANCEL_URL'),
-    'plans' => [
-      'starter' => [
-        'name' => 'Starter',
-        'type' => 'subscription',
-        'entitlements' => [
-          'storage_limit_mb' => 2048,
-        ],
-        'prices' => [
-          'monthly' => [
-            'amount' => 29,
-            'interval' => 'month',
-            'providers' => [
-              'stripe' => env('BILLING_STARTER_MONTHLY_STRIPE_ID'),
-              'paddle' => env('BILLING_STARTER_MONTHLY_PADDLE_ID'),
-              'lemonsqueezy' => env('BILLING_STARTER_MONTHLY_LEMON_SQUEEZY_ID'),
-            ],
-          ],
-        ],
-      ],
+    'pricing' => [
+      // product keys shown on /pricing
+      'shown_plans' => ['hobbyist', 'indie', 'agency'],
+      'provider_choice_enabled' => env('BILLING_PROVIDER_CHOICE_ENABLED', true),
     ],
   ],
   'support' => [
@@ -87,22 +81,23 @@ return [
 ```
 
 Notes:
-- `amount` and `interval` are display-only.
+- `shown_plans` contains product keys (`products.key`).
+- In domain terms, a "plan" is a Product record plus one or more related Prices.
 
 ### 4.2 Catalog source
-By default the kit reads plan data from `config/saas.php`. You can switch to the database-backed catalog:
+The active catalog is database-backed by default:
 
-- `BILLING_CATALOG=config` (default)
-- `BILLING_CATALOG=database` (use Admin Panel resources)
+- `BILLING_CATALOG=database` (default, use Admin Panel resources)
+- `BILLING_CATALOG=config` (legacy/static setups)
 
 When using the database catalog:
 1) Run migrations.
-2) Create `Products`, `Plans`, and `Prices` in the Admin Panel.
-3) Ensure every plan has at least one price per provider.
+2) Create `Products` and `Prices` in the Admin Panel (`Product` = plan definition).
+3) Ensure every product/plan has at least one active price per provider.
 4) Provider IDs can be left blank until you publish the catalog.
-5) Publish the catalog to Stripe to generate provider IDs:
-   `php artisan billing:publish-catalog stripe --apply`
-If no active plans exist, the kit falls back to `config/saas.php`.
+5) Publish the catalog to providers to generate/link provider IDs:
+   `php artisan billing:publish-catalog stripe --apply --update`
+   `php artisan billing:publish-catalog paddle --apply --update`
 
 Discount providers are controlled via `saas.billing.discounts.providers`.
 
@@ -121,13 +116,11 @@ BILLING_CANCEL_URL=
 
 BILLING_STARTER_MONTHLY_STRIPE_ID=
 BILLING_STARTER_MONTHLY_PADDLE_ID=
-BILLING_STARTER_MONTHLY_LEMON_SQUEEZY_ID=
 BILLING_STARTER_YEARLY_STRIPE_ID=
 BILLING_STARTER_YEARLY_PADDLE_ID=
-BILLING_STARTER_YEARLY_LEMON_SQUEEZY_ID=
 ```
 Add the `BILLING_GROWTH_*` and `BILLING_LIFETIME_*` IDs from `.env.example` for subscription and one-time plans.
-When using the database catalog, provider IDs live in the `prices` table (`provider_id`), not `.env`.
+When using the database catalog, provider IDs live on `price_provider_mappings.provider_id` (linked from `prices`), not `.env`.
 
 ### 5.1 Stripe
 Typical keys:
@@ -140,12 +133,6 @@ Typical keys:
 - `PADDLE_VENDOR_ID`
 - `PADDLE_API_KEY`
 - `PADDLE_WEBHOOK_SECRET`
-
-### 5.3 Lemon Squeezy
-Typical keys:
-- `LEMON_SQUEEZY_API_KEY`
-- `LEMON_SQUEEZY_WEBHOOK_SECRET`
-- `LEMON_SQUEEZY_STORE_ID` (if required by your implementation)
 
 Exact keys depend on the adapter package you use. Keep them documented here.
 
@@ -174,7 +161,6 @@ Redirect does not confirm payment. Show a processing screen that waits for webho
 ### 7.1 Endpoints
 - `/webhooks/stripe`
 - `/webhooks/paddle`
-- `/webhooks/lemonsqueezy`
 
 ### 7.2 Mandatory behavior
 - verify signature
@@ -192,14 +178,14 @@ Redirect does not confirm payment. Show a processing screen that waits for webho
 ---
 
 ## 8) Entitlements
-Entitlements are computed from canonical billing state and plan definitions. Do not branch on plan names.
+Entitlements are computed from canonical billing state and plan definitions (`products` + `prices`). Do not branch on plan names.
 
 ---
 
 ## 9) Discounts & coupons
 - Manage coupons in the Admin Panel (`discounts` table).
 - Redemptions are recorded on webhook confirmation (`discount_redemptions`).
-- Coupons are supported for Stripe, Paddle, and Lemon Squeezy checkout flows.
+- Coupons are supported for Stripe and Paddle checkout flows.
 
 Required fields for a Stripe coupon:
 - `provider = stripe`
@@ -238,13 +224,13 @@ php artisan billing:import-catalog stripe --apply --update
 
 Notes:
 - The import never deletes records.
-- Stripe products become Plans, Stripe prices become Prices.
+- Stripe products become Products (plans), Stripe prices become Prices.
 - For stable keys, set Stripe product metadata `plan_key` and optional `product_key`.
 
 ---
 
 ## 12.1 Catalog publish (app-first)
-If you prefer to create products/plans/prices in the Admin Panel (or via Seeder) first, you can publish them to the providers. This creates the products on the provider side and saves the resulting IDs to your database, linking them.
+If you prefer to create products/prices in the Admin Panel (or via Seeder) first, you can publish them to the providers. This creates the products on the provider side and saves the resulting IDs to your database, linking them.
 
 > **Crucial:** You must run this command to avoid "Price not configured" errors.
 
@@ -266,6 +252,25 @@ Notes:
 
 ---
 
+## 12.2 Production Update Workflow
+
+When you need to add or change products/prices (plans/prices) on production, follow this sequence to ensure everything stays in sync:
+
+1.  **Update Code:** Modify `BillingProductSeeder.php` (or use Admin Panel on local).
+2.  **Deploy:** Push your changes to production.
+3.  **Seed (Optional):** Run the seeder to update your local database values.
+    ```bash
+    php artisan db:seed --class=PaymentProviderSeeder --force
+    php artisan db:seed --class=BillingProductSeeder --force
+    ```
+4.  **Publish (CRITICAL):** Push the changes to your providers to generate/link IDs.
+    ```bash
+    php artisan billing:publish-catalog stripe --apply --update
+    php artisan billing:publish-catalog paddle --apply --update
+    ```
+
+---
+
 ## 13) Troubleshooting
 - If checkout redirect succeeds but subscription stays inactive:
   - verify webhook endpoint is reachable from the provider
@@ -274,7 +279,39 @@ Notes:
 
 ---
 
-## 14) Archive Products (Provider Cleanup)
+## 14) Staging / Production Readiness Check
+
+Run the built-in checklist command before go-live:
+
+```bash
+php artisan billing:check-readiness
+```
+
+Use strict mode in CI to fail on warnings too:
+
+```bash
+php artisan billing:check-readiness --strict
+```
+
+What it validates:
+- `APP_URL` and webhook URL shape
+- queue mode for webhook processing
+- failed-job persistence configuration
+- active provider secrets (`Stripe` / `Paddle`)
+- route availability for `/webhooks/{provider}`
+
+Recommended release gate:
+1. `php artisan migrate --force`
+2. `php artisan db:seed --class=PaymentProviderSeeder --force`
+3. `php artisan billing:publish-catalog stripe --apply --update`
+4. `php artisan billing:publish-catalog paddle --apply --update`
+5. `php artisan billing:check-readiness --strict`
+6. Confirm queue worker(s) are running and consuming jobs
+7. Send one Stripe + one Paddle test webhook and confirm both are marked `processed`
+
+---
+
+## 15) Archive Products (Provider Cleanup)
 
 Use the `billing:archive-all` command to archive (soft-delete) products directly on billing provider dashboards. Archived products won't sync into the local database.
 
@@ -303,7 +340,6 @@ php artisan billing:archive-all --provider=stripe --include-prices
 |----------|--------|
 | Stripe | Sets `active: false` on products (and optionally prices) |
 | Paddle | Sets `status: archived` on products and prices |
-| LemonSqueezy | ⚠️ Not supported via API - archive manually in dashboard |
 
 ### When to use
 - **Development cleanup** - Clear out test products

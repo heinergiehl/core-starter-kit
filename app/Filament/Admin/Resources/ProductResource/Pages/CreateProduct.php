@@ -20,6 +20,6 @@ class CreateProduct extends CreateRecord
         return Notification::make()
             ->success()
             ->title('Product created')
-            ->body('Product is being synced to providers. Next: add at least one plan and its prices.');
+            ->body('Product is being synced to providers. Next: add at least one price.');
     }
 }

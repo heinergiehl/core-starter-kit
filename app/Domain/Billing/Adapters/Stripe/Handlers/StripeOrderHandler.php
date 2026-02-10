@@ -8,6 +8,8 @@ use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Domain\Billing\Jobs\SyncSubscriptionFromStripeJob;
 use App\Models\User;
@@ -24,6 +26,9 @@ class StripeOrderHandler implements StripeWebhookHandler
 
     public function __construct(
         protected StripeSubscriptionHandler $subscriptionHandler,
+        private readonly CheckoutService $checkoutService,
+        private readonly DiscountService $discountService,
+        private readonly BillingPlanService $billingPlanService,
     ) {}
 
     /**
@@ -195,8 +200,7 @@ class StripeOrderHandler implements StripeWebhookHandler
 
         // Verify user email after successful payment
         if ($paymentStatus === 'paid') {
-            app(\App\Domain\Billing\Services\CheckoutService::class)
-                ->verifyUserAfterPayment($userId);
+            $this->checkoutService->verifyUserAfterPayment($userId);
         }
     }
 
@@ -235,7 +239,7 @@ class StripeOrderHandler implements StripeWebhookHandler
 
         $user = User::find($userId);
 
-        app(DiscountService::class)->recordRedemption(
+        $this->discountService->recordRedemption(
             $discount,
             $user,
             $this->provider(),
@@ -259,9 +263,9 @@ class StripeOrderHandler implements StripeWebhookHandler
         }
 
         try {
-            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+            $plan = $this->billingPlanService->plan($planKey);
 
-            return $plan['name'] ?? ucfirst($planKey);
+            return $plan->name ?: ucfirst($planKey);
         } catch (\Throwable) {
             return ucfirst($planKey);
         }

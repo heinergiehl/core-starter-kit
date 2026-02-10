@@ -5,7 +5,7 @@
     $current = app()->getLocale();
 @endphp
 
-<form method="POST" action="{{ route('locale.update') }}" class="{{ $class }}">
+<form method="POST" action="{{ route('locale.update') }}" class="{{ $class }}" data-submit-lock>
     @csrf
     <input type="hidden" name="redirect" value="{{ url()->current() }}">
     <label class="sr-only" for="locale-switcher">{{ __('Language') }}</label>
@@ -21,4 +21,3 @@
         @endforeach
     </select>
 </form>
-

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('payment_providers', function (Blueprint $table) {
             $table->id();
             $table->string('name');
-            $table->string('slug')->unique(); // stripe, paddle, lemonsqueezy
+            $table->string('slug')->unique(); // stripe, paddle
             $table->boolean('is_active')->default(false);
             $table->text('configuration')->nullable(); // Encrypted JSON store for API keys
             $table->json('connection_settings')->nullable(); // Timeouts, retries

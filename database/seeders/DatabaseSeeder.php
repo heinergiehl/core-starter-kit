@@ -8,9 +8,12 @@ use App\Domain\Billing\Models\Product;
 use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;
+use App\Enums\SystemRoleName;
 use App\Models\User;
+use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
@@ -33,9 +36,13 @@ class DatabaseSeeder extends Seeder
         ])->toArray();
 
         $admin = User::firstOrCreate(
-            ['email' => 'admin@example.com'],
-            $adminData
+            ['email' => $adminData['email']],
+            Arr::only($adminData, ['name', 'email', 'password', 'locale', 'onboarding_completed_at'])
         );
+        $admin->forceFill([
+            'is_admin' => true,
+            'email_verified_at' => $adminData['email_verified_at'] ?? now(),
+        ])->save();
         if (! $admin->password) {
             $admin->update(['password' => 'password']);
         }
@@ -47,41 +54,31 @@ class DatabaseSeeder extends Seeder
         ])->toArray();
 
         $customer = User::firstOrCreate(
-            ['email' => 'test@example.com'],
-            $customerData
+            ['email' => $customerData['email']],
+            Arr::only($customerData, ['name', 'email', 'password', 'locale', 'onboarding_completed_at'])
         );
+        $customer->forceFill([
+            'email_verified_at' => $customerData['email_verified_at'] ?? now(),
+        ])->save();
         if (! $customer->password) {
             $customer->update(['password' => 'password']);
         }
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        $permissions = [
-            'users.view',
-            'users.create',
-            'users.update',
-            'users.delete',
-            'users.impersonate',
-            'roles.view',
-            'roles.create',
-            'roles.update',
-            'roles.delete',
-            'permissions.view',
-            'permissions.create',
-            'permissions.update',
-            'permissions.delete',
-        ];
+        $guard = PermissionGuardrails::guardName();
+        $permissions = PermissionGuardrails::corePermissionNames();
 
         foreach ($permissions as $permission) {
             Permission::firstOrCreate([
                 'name' => $permission,
-                'guard_name' => 'web',
+                'guard_name' => $guard,
             ]);
         }
 
         $adminRole = Role::firstOrCreate([
-            'name' => 'admin',
-            'guard_name' => 'web',
+            'name' => SystemRoleName::Admin->value,
+            'guard_name' => $guard,
         ]);
 
         $adminRole->syncPermissions($permissions);

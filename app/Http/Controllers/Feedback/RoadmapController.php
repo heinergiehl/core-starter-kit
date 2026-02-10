@@ -6,12 +6,14 @@ use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
 use App\Enums\FeatureCategory;
 use App\Enums\FeatureStatus;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Throwable;
 
 class RoadmapController
 {
@@ -53,28 +55,29 @@ class RoadmapController
             'title' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:2000'],
             'category' => ['required', Rule::enum(FeatureCategory::class)],
+            'idempotency_key' => ['required', 'uuid'],
         ]);
 
         $user = $request->user();
 
-        $baseSlug = Str::slug($data['title']) ?: Str::random(8);
-        $slug = $baseSlug;
-        $counter = 1;
-
-        while (FeatureRequest::query()->where('slug', $slug)->exists()) {
-            $slug = "{$baseSlug}-{$counter}";
-            $counter++;
+        if (! $user) {
+            abort(403);
         }
 
-        FeatureRequest::query()->create([
-            'user_id' => $user?->id,
-            'title' => $data['title'],
-            'slug' => $slug,
-            'description' => $data['description'] ?? null,
-            'category' => $data['category'],
-            'status' => FeatureStatus::Pending,
-            'is_public' => false,
-        ]);
+        $idempotencyCacheKey = sprintf('roadmap:store:%d:%s', $user->id, $data['idempotency_key']);
+
+        // Prevent duplicate creates when the same submission is retried.
+        if (! Cache::add($idempotencyCacheKey, true, now()->addDay())) {
+            return redirect()->route('roadmap')->with('status', 'Thanks for the feedback!');
+        }
+
+        try {
+            $this->createFeatureRequestWithRetry($user->id, $data);
+        } catch (Throwable $exception) {
+            Cache::forget($idempotencyCacheKey);
+
+            throw $exception;
+        }
 
         return redirect()->route('roadmap')->with('status', 'Thanks for the feedback!');
     }
@@ -92,26 +95,79 @@ class RoadmapController
         }
 
         DB::transaction(function () use ($feature, $user): void {
+            $lockedFeature = FeatureRequest::query()
+                ->whereKey($feature->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $lockedFeature || ! $lockedFeature->is_public) {
+                abort(404);
+            }
+
             $vote = FeatureVote::query()
-                ->where('feature_request_id', $feature->id)
+                ->where('feature_request_id', $lockedFeature->id)
                 ->where('user_id', $user->id)
+                ->lockForUpdate()
                 ->first();
 
             if ($vote) {
                 $vote->delete();
-                $feature->decrement('votes_count');
-
-                return;
+            } else {
+                FeatureVote::query()->create([
+                    'feature_request_id' => $lockedFeature->id,
+                    'user_id' => $user->id,
+                ]);
             }
 
-            FeatureVote::query()->create([
-                'feature_request_id' => $feature->id,
-                'user_id' => $user->id,
+            $lockedFeature->update([
+                'votes_count' => FeatureVote::query()
+                    ->where('feature_request_id', $lockedFeature->id)
+                    ->count(),
             ]);
-
-            $feature->increment('votes_count');
         });
 
         return redirect()->route('roadmap', ['status' => $request->query('status')]);
+    }
+
+    /**
+     * @param array{title: string, description?: string|null, category: string} $data
+     */
+    private function createFeatureRequestWithRetry(int $userId, array $data): void
+    {
+        $maxAttempts = 6;
+
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            try {
+                FeatureRequest::query()->create([
+                    'user_id' => $userId,
+                    'title' => $data['title'],
+                    'slug' => FeatureRequest::slugCandidate($data['title'], $attempt),
+                    'description' => $data['description'] ?? null,
+                    'category' => $data['category'],
+                    'status' => FeatureStatus::Pending,
+                    'is_public' => false,
+                ]);
+
+                return;
+            } catch (QueryException $exception) {
+                if (! $this->isUniqueConstraintViolation($exception) || $attempt === $maxAttempts - 1) {
+                    throw $exception;
+                }
+            }
+        }
+    }
+
+    private function isUniqueConstraintViolation(QueryException $exception): bool
+    {
+        $code = (string) $exception->getCode();
+
+        if (in_array($code, ['23000', '23505'], true)) {
+            return true;
+        }
+
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'unique')
+            || str_contains($message, 'duplicate');
     }
 }

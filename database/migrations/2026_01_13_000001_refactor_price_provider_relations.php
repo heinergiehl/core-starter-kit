@@ -16,7 +16,7 @@ return new class extends Migration
         Schema::create('price_provider_mappings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('price_id')->constrained('prices')->cascadeOnDelete();
-            $table->string('provider'); // 'stripe', 'paddle', 'lemonsqueezy'
+            $table->string('provider'); // 'stripe', 'paddle'
             $table->string('provider_id');
             $table->timestamps();
 

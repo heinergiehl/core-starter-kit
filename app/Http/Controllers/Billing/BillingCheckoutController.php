@@ -8,6 +8,7 @@ use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 use Throwable;
 
 class BillingCheckoutController
@@ -29,20 +30,39 @@ class BillingCheckoutController
         ]);
 
         $provider = strtolower($data['provider'] ?? $plans->defaultProvider());
+        $availableProviders = $plans->providers();
 
-        // Get generic plan/price first for validation
-        $genericPlan = $plans->plan($data['plan']);
-        $price = $genericPlan->getPrice($data['price']); // Generic price
+        if (! in_array($provider, $availableProviders, true)) {
+            return back()
+                ->withErrors(['billing' => 'Selected payment provider is not available.'])
+                ->withInput();
+        }
+
+        try {
+            // Get generic plan/price first for validation
+            $genericPlan = $plans->plan($data['plan']);
+            $price = $genericPlan->getPrice($data['price']); // Generic price
+        } catch (RuntimeException) {
+            return back()
+                ->withErrors(['billing' => 'The selected plan or price is invalid.'])
+                ->withInput();
+        }
 
         if (! $price) {
-             return back()->withErrors(['billing' => 'Invalid price selected.']);
+            return back()->withErrors(['billing' => 'Invalid price selected.']);
         }
 
         // Try to get provider-specific resolved price
         $providerPlan = $plans->plansForProvider($provider)
             ->firstWhere('key', $data['plan']);
-        
-        $providerPrice = $providerPlan?->getPrice($data['price']);
+
+        if (! $providerPlan) {
+            return back()
+                ->withErrors(['billing' => 'This plan is not available for the selected provider.'])
+                ->withInput();
+        }
+
+        $providerPrice = $providerPlan->getPrice($data['price']);
 
         if ($providerPrice) {
             $price = $providerPrice; // Use resolved DTO
@@ -82,7 +102,7 @@ class BillingCheckoutController
                 ->withErrors($e->errors())
                 ->withInput();
         } catch (\App\Domain\Billing\Exceptions\BillingException $e) {
-            error_log($e->getMessage()); 
+            report($e);
             session(['url.intended' => route('checkout.start', $request->only(['provider', 'plan', 'price']))]);
 
             return redirect()->route('login')
@@ -91,16 +111,24 @@ class BillingCheckoutController
 
         $user = $resolved->user;
 
-        $planType = $genericPlan->type;
+        $eligibility = $checkoutService->evaluateCheckoutEligibility($user, $genericPlan, $price);
 
-        if ($planType === 'one_time' && $checkoutService->hasAnyPurchase($user)) {
-            return redirect()->route('billing.index')
-                ->with('info', __('You already have an active plan or purchase. Manage it in billing.'));
+        if (! $eligibility->allowed) {
+            if (in_array($eligibility->errorCode, [
+                'BILLING_CHECKOUT_BLOCKED_ACTIVE_SUBSCRIPTION',
+            ], true)) {
+                return redirect()->route('billing.index')
+                    ->with('info', $eligibility->message ?? __('You already have an active subscription. Use billing to change your plan.'));
+            }
+
+            return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                ->withErrors([
+                    'billing' => $eligibility->message ?? __('Checkout is not available for this plan.'),
+                ])
+                ->withInput();
         }
 
-        // We assume calculateQuantity can handle the Plan object or we need to update it
-        // For now, let's pass the generic plan object.
-        $quantity = $checkoutService->calculateQuantity($genericPlan); 
+        $quantity = $checkoutService->calculateQuantity($genericPlan);
 
         $checkoutSession = $checkoutService->createCheckoutSession(
             $user,
@@ -171,6 +199,12 @@ class BillingCheckoutController
                 $discount
             );
             $checkoutUrl = $checkoutDto->url;
+
+            if (! empty($checkoutDto->id)) {
+                $checkoutSession->update([
+                    'provider_session_id' => $checkoutDto->id,
+                ]);
+            }
         } catch (Throwable $exception) {
             report($exception);
             $checkoutSession->markCanceled();

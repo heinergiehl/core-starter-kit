@@ -8,18 +8,16 @@
     $isAdmin = $user?->is_admin ?? false;
 @endphp
 <header class="mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
-    <a href="/" class="flex items-center gap-3 group">
-        <div class="relative flex h-10 w-10 items-center justify-center rounded-xl bg-surface-highlight/50 border border-ink/10 shadow-inner overflow-hidden transition-all group-hover:scale-110 group-hover:border-primary/50">
-            <x-application-logo class="relative z-10 h-6 w-6 text-primary" />
-            <div class="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-        </div>
-        <span class="font-display text-xl font-bold tracking-tight text-ink">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
+    <a href="/" class="group flex items-center gap-2.5">
+        <x-application-logo class="block h-12 w-12 shrink-0 object-contain object-center transition-transform duration-200 group-hover:scale-110" />
+        <span class="font-display text-xl font-bold leading-none tracking-tight text-ink sm:translate-y-px">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
     </a>
 
     {{-- Desktop Navigation --}}
     <nav class="hidden md:flex items-center gap-1 rounded-full border border-ink/5 bg-surface-highlight/30 p-1 backdrop-blur-lg">
         <a href="/" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->is('/') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
-        <a href="/#features" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50">{{ __('Features') }}</a>
+        <a href="{{ route('features') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('features') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Features') }}</a>
+        <a href="{{ route('solutions.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('solutions.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Solutions') }}</a>
         <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
         @if (config('saas.features.roadmap', true))
             <a href="{{ route('roadmap') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
@@ -27,6 +25,7 @@
         @if (config('saas.features.blog', true))
             <a href="{{ route('blog.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
         @endif
+        <a href="{{ route('docs.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('docs.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Docs') }}</a>
     </nav>
 
     {{-- Right Side Actions --}}
@@ -81,7 +80,7 @@
                         </a>
                     @endif
                     <hr class="my-2 border-ink/10">
-                    <form method="POST" action="{{ route('logout') }}">
+                    <form method="POST" action="{{ route('logout') }}" data-submit-lock>
                         @csrf
                         <button type="submit" class="w-full text-left px-4 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
                             {{ __('Log Out') }}
@@ -141,7 +140,8 @@
 <div id="mobile-menu" class="hidden md:hidden bg-surface/95 backdrop-blur-xl border-b border-ink/10">
     <div class="px-4 py-4 space-y-2">
         <a href="/" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->is('/') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
-        <a href="/#features" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50">{{ __('Features') }}</a>
+        <a href="{{ route('features') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('features') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Features') }}</a>
+        <a href="{{ route('solutions.index') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('solutions.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Solutions') }}</a>
         <a href="{{ route('pricing') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
         @if (config('saas.features.roadmap', true))
             <a href="{{ route('roadmap') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
@@ -149,6 +149,7 @@
         @if (config('saas.features.blog', true))
             <a href="{{ route('blog.index') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
         @endif
+        <a href="{{ route('docs.index') }}" class="block px-4 py-2 text-sm font-medium text-ink/70 hover:text-ink rounded-lg hover:bg-surface/50 {{ request()->routeIs('docs.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Docs') }}</a>
         
         <div class="pt-2 border-t border-ink/10">
             @auth
@@ -175,7 +176,7 @@
                 @elseif(!$isAdmin)
                     <a href="{{ route('pricing') }}" class="block px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 rounded-lg hover:bg-primary/5">{{ __('Choose a Plan') }}</a>
                 @endif
-                <form method="POST" action="{{ route('logout') }}" class="mt-2 pt-2 border-t border-ink/10">
+                <form method="POST" action="{{ route('logout') }}" class="mt-2 pt-2 border-t border-ink/10" data-submit-lock>
                     @csrf
                     <button type="submit" class="w-full text-left px-4 py-2 text-sm font-medium text-red-500 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10">
                         {{ __('Log Out') }}

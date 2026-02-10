@@ -30,7 +30,11 @@ class ManageBranding extends Page implements HasForms
 
     public function mount(): void
     {
-        $this->form->fill($this->getRecord()->toArray());
+        $record = $this->getRecord();
+        $data = $record->toArray();
+        $data['template'] = filled($record->template) ? $record->template : $this->defaultTemplate();
+
+        $this->form->fill($data);
     }
 
     public function form(Schema $schema): Schema
@@ -52,6 +56,20 @@ class ManageBranding extends Page implements HasForms
                             ->formatStateUsing(fn (?string $state): ?string => $state ? Str::after($state, 'storage/') : null)
                             ->dehydrateStateUsing(fn (?string $state): ?string => $state ? "storage/{$state}" : null)
                             ->helperText('Recommended: 512px square, PNG or JPG. Max 4MB.'),
+                        Forms\Components\FileUpload::make('favicon_path')
+                            ->label('Favicon')
+                            ->disk('public')
+                            ->directory('branding')
+                            ->acceptedFileTypes([
+                                'image/png',
+                                'image/svg+xml',
+                                'image/x-icon',
+                                'image/vnd.microsoft.icon',
+                            ])
+                            ->maxSize(1024)
+                            ->formatStateUsing(fn (?string $state): ?string => $state ? Str::after($state, 'storage/') : null)
+                            ->dehydrateStateUsing(fn (?string $state): ?string => $state ? "storage/{$state}" : null)
+                            ->helperText('Recommended: square PNG, SVG, or ICO. Max 1MB.'),
                     ])
                     ->columns(2),
                 Section::make('Theme Template')
@@ -69,7 +87,8 @@ class ManageBranding extends Page implements HasForms
                                 'ember' => 'Ember - Warm fire glow',
                                 'ocean' => 'Ocean - Deep sea depths',
                             ])
-                            ->default('default')
+                            ->default($this->defaultTemplate())
+                            ->required()
                             ->native(false)
                             ->searchable()
                             ->columnSpanFull(),
@@ -116,6 +135,7 @@ class ManageBranding extends Page implements HasForms
     public function save(): void
     {
         $data = $this->form->getState();
+        $data['template'] = filled($data['template'] ?? null) ? (string) $data['template'] : $this->defaultTemplate();
 
         $record = $this->getRecord();
         $record->fill($data);
@@ -130,6 +150,34 @@ class ManageBranding extends Page implements HasForms
 
     private function getRecord(): BrandSetting
     {
-        return BrandSetting::query()->firstOrCreate(['id' => BrandSetting::GLOBAL_ID]);
+        $record = BrandSetting::query()->find(BrandSetting::GLOBAL_ID);
+
+        if (! $record) {
+            $record = new BrandSetting();
+            $record->forceFill([
+                'id' => BrandSetting::GLOBAL_ID,
+                'template' => $this->defaultTemplate(),
+            ]);
+            $record->save();
+        }
+
+        if (! filled($record->template)) {
+            $record->template = $this->defaultTemplate();
+            $record->save();
+        }
+
+        return $record;
+    }
+
+    private function defaultTemplate(): string
+    {
+        $configured = (string) config('template.active', 'default');
+        $allowed = ['default', 'void', 'aurora', 'prism', 'velvet', 'frost', 'ember', 'ocean'];
+
+        if (in_array($configured, $allowed, true)) {
+            return $configured;
+        }
+
+        return 'default';
     }
 }

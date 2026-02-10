@@ -35,7 +35,7 @@
                     <p class="text-ink/60 mt-2">{{ __("Let's get you set up in just a few steps.") }}</p>
                 </div>
 
-                <form method="POST" action="{{ route('onboarding.update') }}">
+                <form method="POST" action="{{ route('onboarding.update') }}" data-submit-lock>
                     @csrf
                     <input type="hidden" name="step" value="1">
 
@@ -62,7 +62,7 @@
                     <p class="text-ink/60 mt-2">{{ __('Just a few preferences and you can start using the app.') }}</p>
                 </div>
 
-                <form method="POST" action="{{ route('onboarding.update') }}">
+                <form method="POST" action="{{ route('onboarding.update') }}" data-submit-lock>
                     @csrf
                     <input type="hidden" name="step" value="2">
 
@@ -84,7 +84,7 @@
 
             {{-- Skip Link --}}
             <div class="mt-6 text-center">
-                <form method="POST" action="{{ route('onboarding.skip') }}">
+                <form method="POST" action="{{ route('onboarding.skip') }}" data-submit-lock>
                     @csrf
                     <button type="submit" class="text-sm text-ink/40 hover:text-ink/60 transition">
                         {{ __('Skip for now') }}

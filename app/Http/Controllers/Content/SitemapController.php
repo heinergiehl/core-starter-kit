@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Content;
 
 use App\Domain\Content\Models\BlogPost;
 use Illuminate\Http\Response;
+use Illuminate\Support\Carbon;
 
 class SitemapController
 {
@@ -16,6 +17,8 @@ class SitemapController
         return response()
             ->view('sitemap', [
                 'posts' => $posts,
+                'solutionSlugs' => SolutionPageController::slugs(),
+                'now' => Carbon::now(),
             ])
             ->header('Content-Type', 'application/xml');
     }

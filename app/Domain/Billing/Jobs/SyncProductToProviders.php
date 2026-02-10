@@ -18,11 +18,14 @@ class SyncProductToProviders implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
-        public Product $product
+        public Product $product,
+        public bool $cascadePriceSync = true
     ) {}
 
     public function handle(BillingProviderManager $manager): void
     {
+        $syncedAnyProvider = false;
+
         // Get configured providers
         $providers = \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
             ->pluck('slug')
@@ -33,11 +36,16 @@ class SyncProductToProviders implements ShouldQueue
             try {
                 $client = $manager->catalog($provider);
                 $this->syncToProvider($client, $provider);
+                $syncedAnyProvider = true;
             } catch (\Throwable $e) {
                 Log::error("Failed to sync product {$this->product->id} to {$provider}: " . $e->getMessage());
                 // We don't rethrow to avoid blocking other providers, 
                 // but usually you might want to retry.
             }
+        }
+
+        if (! $this->cascadePriceSync || ! $syncedAnyProvider) {
+            return;
         }
 
         // Cascade sync to all prices to ensure complete state

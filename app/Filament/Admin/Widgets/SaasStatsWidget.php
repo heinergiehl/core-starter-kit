@@ -35,6 +35,11 @@ class SaasStatsWidget extends BaseWidget
                 ->description('Avg Revenue Per User')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->color('warning'),
+
+            Stat::make('Cancellations (Month)', number_format($stats['cancellations_this_month']))
+                ->description('Effective cancellations')
+                ->descriptionIcon('heroicon-m-x-circle')
+                ->color('danger'),
         ];
     }
 }

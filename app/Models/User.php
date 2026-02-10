@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Traits\HasEntitlements;
 use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
 use App\Domain\Identity\Models\SocialAccount;
 use App\Domain\Identity\Models\TwoFactorAuth;
+use App\Enums\PermissionName;
+use App\Support\Authorization\PermissionGuardrails;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -14,13 +17,52 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Traits\HasRoles;
-use App\Domain\Billing\Traits\HasEntitlements;
 
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, HasRoles, Notifiable, HasEntitlements;
+
+    protected static function booted(): void
+    {
+        static::saving(function (self $user): void {
+            if (! $user->exists || ! $user->isDirty('is_admin')) {
+                return;
+            }
+
+            $wasAdmin = (bool) $user->getOriginal('is_admin');
+            $willBeAdmin = (bool) $user->is_admin;
+
+            if (! $wasAdmin || $willBeAdmin) {
+                return;
+            }
+
+            $hasOtherAdmins = self::query()
+                ->where('is_admin', true)
+                ->whereKeyNot($user->getKey())
+                ->exists();
+
+            if ($hasOtherAdmins) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'is_admin' => PermissionGuardrails::lastAdminDemotionMessage(),
+            ]);
+        });
+
+        static::deleting(function (self $user): void {
+            if (! PermissionGuardrails::isLastAdminUser($user)) {
+                return;
+            }
+
+            throw ValidationException::withMessages([
+                'user' => PermissionGuardrails::lastAdminDeleteMessage(),
+            ]);
+        });
+    }
 
     /**
      * The attributes that are mass assignable.
@@ -31,13 +73,11 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         'name',
         'email',
         'password',
-        'is_admin',
         'locale',
         'onboarding_completed_at',
-        'email_verified_at',
     ];
 
-    protected string $guard_name = 'web';
+    protected string $guard_name = PermissionGuardrails::DEFAULT_GUARD;
 
     /**
      * The attributes that should be hidden for serialization.
@@ -77,14 +117,8 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     public function activeSubscription(): ?Subscription
     {
-        return $this->subscriptions()->getQuery()
-            ->where(function ($q) {
-                $q->whereIn('status', ['active', 'trialing', 'past_due'])
-                  ->orWhere(function ($q2) {
-                      $q2->where('status', 'canceled')
-                         ->where('ends_at', '>', now());
-                  });
-            })
+        return $this->subscriptions()
+            ->isActive()
             ->latest('id')
             ->first();
     }
@@ -114,10 +148,15 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return $this->twoFactorAuth?->isEnabled() ?? false;
     }
 
+    public function canAccessAdminPanel(): bool
+    {
+        return $this->is_admin || $this->can(PermissionName::AccessAdminPanel->value);
+    }
+
     public function canAccessPanel(Panel $panel): bool
     {
-        if ($panel->getId() === 'admin') {
-            return $this->is_admin || $this->can('access_admin_panel');
+        if ($panel->getId() === PermissionGuardrails::ADMIN_PANEL_ID) {
+            return $this->canAccessAdminPanel();
         }
 
         return true;

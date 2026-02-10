@@ -8,6 +8,15 @@ use Filament\Widgets\StatsOverviewWidget\Stat;
 
 class BillingMetricsWidget extends StatsOverviewWidget
 {
+    protected static bool $isLazy = false;
+
+    protected static ?int $sort = 1;
+
+    protected int | string | array $columnSpan = [
+        'md' => 2,
+        'xl' => 2,
+    ];
+
     protected function getStats(): array
     {
         $metrics = app(BillingMetricsService::class)->snapshot();
@@ -22,6 +31,8 @@ class BillingMetricsWidget extends StatsOverviewWidget
                 ->description('Live and trialing'),
             Stat::make('ARPU', $this->formatCurrency($metrics['arpu']))
                 ->description('Per active customer'),
+            Stat::make('Cancellations', (string) $metrics['cancellations_last_30_days'])
+                ->description('Last 30 days'),
             Stat::make('Churn', number_format($metrics['churn_rate'], 1).'%')
                 ->description('Last 30 days'),
         ];

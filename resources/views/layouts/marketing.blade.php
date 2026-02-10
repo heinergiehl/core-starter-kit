@@ -3,7 +3,9 @@
     use App\Domain\Settings\Services\BrandingService;
     
     $branding = app(BrandingService::class);
-    $activeTemplate = $branding->templateForGuest();
+    $forcedTemplate = trim($__env->yieldContent('template'));
+    $activeTemplate = $forcedTemplate !== '' ? $forcedTemplate : $branding->templateForGuest();
+    $bodyClass = trim($__env->yieldContent('body_class'));
 @endphp
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
     <head>
@@ -11,13 +13,7 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <script>
-            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                document.documentElement.classList.add('dark')
-            } else {
-                document.documentElement.classList.remove('dark')
-            }
-        </script>
+        <x-theme-init />
 
         @php
             $defaultTitle = $appBrandName ?? config('app.name', 'SaaS Kit');
@@ -47,6 +43,17 @@
         <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ route('sitemap') }}">
 
         @php
+            $faviconPath = $appFaviconPath ?? null;
+            $defaultFaviconPath = (string) config('saas.branding.favicon_path', 'branding/shipsolid-s-favicon.svg');
+            $faviconUrl = asset(filled($faviconPath) ? $faviconPath : $defaultFaviconPath);
+            $faviconVersion = rawurlencode((string) ($appBrandingVersion ?? config('app.asset_version', '1')));
+        @endphp
+
+        <link rel="icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}" sizes="any">
+        <link rel="shortcut icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
+        <link rel="apple-touch-icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
+
+        @php
             $templateConfig = config("template.templates.{$activeTemplate}", []);
             $templateFonts = $templateConfig['fonts'] ?? [];
             $fontSans = $templateFonts['sans'] ?? config('saas.branding.fonts.sans', 'Plus Jakarta Sans');
@@ -74,7 +81,7 @@
         @livewireStyles
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="bg-surface text-ink">
+    <body class="bg-surface text-ink {{ $bodyClass }}">
         <div class="min-h-screen bg-hero-glow">
             {{-- Unified Marketing Navigation --}}
             @include('partials.marketing-nav')

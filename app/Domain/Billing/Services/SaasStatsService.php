@@ -2,8 +2,7 @@
 
 namespace App\Domain\Billing\Services;
 
-use App\Domain\Billing\Models\Price;
-use App\Domain\Billing\Models\Product;
+use App\Enums\SubscriptionStatus;
 use App\Domain\Billing\Models\Subscription;
 
 /**
@@ -14,82 +13,38 @@ use App\Domain\Billing\Models\Subscription;
 class SaasStatsService
 {
     /**
+     * @var array<string, float|int>|null
+     */
+    private ?array $snapshotCache = null;
+
+    public function __construct(
+        private readonly BillingMetricsService $billingMetricsService
+    ) {}
+
+    /**
      * Get all key SaaS metrics.
      */
     public function getMetrics(): array
     {
+        $snapshot = $this->snapshot();
+
         return [
-            'mrr' => $this->calculateMRR(),
-            'arr' => $this->calculateMRR() * 12,
-            'active_subscriptions' => $this->getActiveSubscriptionCount(),
+            'mrr' => $snapshot['mrr'],
+            'arr' => $snapshot['arr'],
+            'active_subscriptions' => $snapshot['active_subscriptions'],
             'new_subscriptions_this_month' => $this->getNewSubscriptionsThisMonth(),
             'cancellations_this_month' => $this->getCancellationsThisMonth(),
-            'churn_rate' => $this->calculateChurnRate(),
-            'arpu' => $this->calculateARPU(),
+            'churn_rate' => $snapshot['churn_rate'],
+            'arpu' => $snapshot['arpu'],
         ];
     }
 
     /**
-     * Calculate Monthly Recurring Revenue using DB aggregation.
+     * Calculate Monthly Recurring Revenue.
      */
     public function calculateMRR(): float
     {
-        // 1. Get all active subscriptions with their plan keys
-        // We do this lightweight query first to get the breakdown
-        $subscriptions = Subscription::query()
-            ->whereIn('status', ['active', 'trialing'])
-            ->whereNull('canceled_at')
-            ->selectRaw('plan_key, count(*) as count')
-            ->groupBy('plan_key')
-            ->get();
-
-        if ($subscriptions->isEmpty()) {
-            return 0.0;
-        }
-
-        // 2. Get prices for these plans efficiently
-        $planKeys = $subscriptions->pluck('plan_key')->unique();
-
-        $products = Product::query()
-            ->whereIn('key', $planKeys)
-            ->with(['prices' => function ($query) {
-                $query->where('is_active', true);
-            }])
-            ->get()
-            ->keyBy('key');
-
-        $mrr = 0.0;
-
-        // 3. Calculate MRR based on aggregate counts
-        foreach ($subscriptions as $group) {
-            $product = $products->get($group->plan_key);
-
-            if (! $product || $product->prices->isEmpty()) {
-                continue;
-            }
-
-            // Heuristic: Use the first active price.
-            // Ideally, subscription table should store the specific price_id used.
-            $price = $product->prices->first();
-
-            $amount = $price->amount / 100; // Convert cents to dollars
-            $interval = $price->interval ?? 'month';
-            $intervalCount = max($price->interval_count ?? 1, 1);
-
-            // Normalize to monthly value
-            $monthlyValue = match ($interval) {
-                'year' => $amount / 12,
-                'week' => $amount * 4.33,
-                'day' => $amount * 30,
-                default => $amount, // month
-            };
-
-            $monthlyValue = $monthlyValue / $intervalCount;
-
-            $mrr += $monthlyValue * $group->count;
-        }
-
-        return round($mrr, 2);
+        return (float) $this->snapshot()['mrr'];
     }
 
     /**
@@ -98,8 +53,10 @@ class SaasStatsService
     public function getPlanDistribution(): array
     {
         $distribution = Subscription::query()
-            ->whereIn('status', ['active', 'trialing'])
-            ->whereNull('canceled_at')
+            ->whereIn('status', [
+                SubscriptionStatus::Active->value,
+                SubscriptionStatus::Trialing->value,
+            ])
             ->selectRaw('plan_key, count(*) as count')
             ->groupBy('plan_key')
             ->get()
@@ -111,11 +68,6 @@ class SaasStatsService
             })
             ->toArray();
 
-        // Ensure we handle empty state
-        if (empty($distribution)) {
-            return ['No Active Plans' => 0];
-        }
-
         return $distribution;
     }
 
@@ -124,10 +76,7 @@ class SaasStatsService
      */
     public function getActiveSubscriptionCount(): int
     {
-        return Subscription::query()
-            ->whereIn('status', ['active', 'trialing'])
-            ->whereNull('canceled_at')
-            ->count();
+        return (int) $this->snapshot()['active_subscriptions'];
     }
 
     /**
@@ -146,10 +95,25 @@ class SaasStatsService
      */
     public function getCancellationsThisMonth(): int
     {
+        $month = now()->month;
+        $year = now()->year;
+
         return Subscription::query()
-            ->whereNotNull('canceled_at')
-            ->whereMonth('canceled_at', now()->month)
-            ->whereYear('canceled_at', now()->year)
+            ->where(function ($query) use ($month, $year) {
+                $query
+                    ->where(function ($q) use ($month, $year) {
+                        $q->whereNotNull('canceled_at')
+                            ->whereMonth('canceled_at', $month)
+                            ->whereYear('canceled_at', $year);
+                    })
+                    ->orWhere(function ($q) use ($month, $year) {
+                        $q->where('status', SubscriptionStatus::Canceled->value)
+                            ->whereNull('canceled_at')
+                            ->whereNotNull('ends_at')
+                            ->whereMonth('ends_at', $month)
+                            ->whereYear('ends_at', $year);
+                    });
+            })
             ->count();
     }
 
@@ -158,27 +122,7 @@ class SaasStatsService
      */
     public function calculateChurnRate(): float
     {
-        $startDate = now()->subDays(30);
-
-        // Count subscriptions active at start of period (approximate)
-        $startingCount = Subscription::query()
-            ->where('created_at', '<', $startDate)
-            ->where(function ($query) use ($startDate) {
-                $query->whereNull('canceled_at')
-                    ->orWhere('canceled_at', '>=', $startDate);
-            })
-            ->count();
-
-        if ($startingCount === 0) {
-            return 0.0;
-        }
-
-        $churned = Subscription::query()
-            ->whereNotNull('canceled_at')
-            ->where('canceled_at', '>=', $startDate)
-            ->count();
-
-        return round(($churned / $startingCount) * 100, 2);
+        return round((float) $this->snapshot()['churn_rate'], 2);
     }
 
     /**
@@ -186,13 +130,7 @@ class SaasStatsService
      */
     public function calculateARPU(): float
     {
-        $activeCount = $this->getActiveSubscriptionCount();
-
-        if ($activeCount === 0) {
-            return 0.0;
-        }
-
-        return round($this->calculateMRR() / $activeCount, 2);
+        return round((float) $this->snapshot()['arpu'], 2);
     }
 
     /**
@@ -221,5 +159,13 @@ class SaasStatsService
         }
 
         return $data;
+    }
+
+    /**
+     * @return array<string, float|int>
+     */
+    private function snapshot(): array
+    {
+        return $this->snapshotCache ??= $this->billingMetricsService->snapshot();
     }
 }

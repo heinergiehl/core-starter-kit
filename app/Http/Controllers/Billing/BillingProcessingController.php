@@ -14,7 +14,11 @@ class BillingProcessingController
 {
     public function __invoke(Request $request): View
     {
-        $sessionUuid = (string) $request->query('session', '');
+        $sessionUuid = trim((string) $request->query('session', ''));
+
+        if ($sessionUuid === '') {
+            $sessionUuid = trim((string) $request->session()->pull('checkout_session_uuid', ''));
+        }
 
         return view('billing.processing', [
             'session_uuid' => $sessionUuid !== '' ? $sessionUuid : null,

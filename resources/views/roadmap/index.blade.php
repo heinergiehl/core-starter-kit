@@ -60,9 +60,9 @@
                                     <span>{{ __('Submitted :time', ['time' => $request->created_at->diffForHumans()]) }}</span>
                                 </div>
                                 @auth
-                                    <form method="POST" action="{{ route('roadmap.vote', $request) }}">
+                                    <form method="POST" action="{{ route('roadmap.vote', ['feature' => $request, 'status' => $status]) }}" data-submit-lock>
                                         @csrf
-                                        <button type="submit" class="rounded-full border border-primary/30 px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary/50 hover:bg-primary/5">
+                                        <button type="submit" class="rounded-full border border-primary/30 px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary/50 hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-60">
                                             {{ in_array($request->id, $votedIds, true) ? __('Voted') : __('Vote') }}
                                         </button>
                                     </form>
@@ -89,8 +89,9 @@
                 <p class="mt-2 text-sm text-ink/60">{{ __('Share a concise feature request to guide the roadmap.') }}</p>
 
                 @auth
-                    <form method="POST" action="{{ route('roadmap.store') }}" class="mt-4 space-y-4">
+                    <form method="POST" action="{{ route('roadmap.store') }}" class="mt-4 space-y-4" data-submit-lock>
                         @csrf
+                        <input type="hidden" name="idempotency_key" value="{{ old('idempotency_key', (string) Str::uuid()) }}">
                         <div>
                             <x-input-label for="title" :value="__('Title')" />
                             <x-text-input id="title" class="mt-1 block w-full bg-surface/50" type="text" name="title" value="{{ old('title') }}" required />

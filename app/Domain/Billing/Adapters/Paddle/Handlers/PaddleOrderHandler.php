@@ -8,7 +8,10 @@ use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\WebhookEvent;
+use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
+use App\Enums\OrderStatus;
 use App\Models\User;
 use App\Notifications\PaymentFailedNotification;
 use Illuminate\Support\Arr;
@@ -23,6 +26,12 @@ use Illuminate\Support\Carbon;
 class PaddleOrderHandler implements PaddleWebhookHandler
 {
     use ResolvesPaddleData;
+
+    public function __construct(
+        private readonly CheckoutService $checkoutService,
+        private readonly DiscountService $discountService,
+        private readonly BillingPlanService $billingPlanService,
+    ) {}
 
     public function eventTypes(): array
     {
@@ -55,6 +64,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
         }
 
         $status = (string) (data_get($data, 'status') ?? 'paid');
+        $normalizedStatus = $this->normalizeOrderStatus($status);
         $amount = (int) (data_get($data, 'amount')
             ?? data_get($data, 'amount_total')
             ?? data_get($data, 'details.totals.grand_total')
@@ -74,17 +84,19 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'user_id' => $userId,
                 'provider_order_id' => (string) $orderId,
                 'plan_key' => $this->resolvePlanKey($data),
-                'status' => $status,
+                'status' => $normalizedStatus,
                 'amount' => $amount,
                 'currency' => $currency,
-                'paid_at' => now(),
+                'paid_at' => in_array($normalizedStatus, [OrderStatus::Paid->value, OrderStatus::Completed->value], true)
+                    ? now()
+                    : null,
                 'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data', 'subscription_id']),
             ]
         );
 
-        $invoice = $this->syncInvoiceFromOrder($data, $userId, $order, $status, $amount, $currency);
+        $invoice = $this->syncInvoiceFromOrder($data, $userId, $order, $normalizedStatus, $amount, $currency);
 
-        $this->maybeNotifyPaymentFailed($order, $invoice, $status, $eventType, $data);
+        $this->maybeNotifyPaymentFailed($order, $invoice, $normalizedStatus, $eventType, $data);
 
         $this->recordDiscountRedemption(
             $data,
@@ -94,7 +106,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             (string) $orderId
         );
 
-        if (in_array(strtolower($status), ['paid', 'completed', 'settled'], true)) {
+        if (in_array($normalizedStatus, [OrderStatus::Paid->value, OrderStatus::Completed->value], true)) {
             $user = User::find($userId);
             $isSubscription = ! empty(data_get($data, 'subscription_id'));
 
@@ -107,8 +119,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 ));
             }
 
-            app(\App\Domain\Billing\Services\CheckoutService::class)
-                ->verifyUserAfterPayment($userId);
+            $this->checkoutService->verifyUserAfterPayment($userId);
         }
 
         return $order;
@@ -329,7 +340,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
 
         $user = User::find($userId);
 
-        app(DiscountService::class)->recordRedemption(
+        $this->discountService->recordRedemption(
             $discount,
             $user,
             'paddle',
@@ -349,11 +360,27 @@ class PaddleOrderHandler implements PaddleWebhookHandler
         }
 
         try {
-            $plan = app(\App\Domain\Billing\Services\BillingPlanService::class)->plan($planKey);
+            $plan = $this->billingPlanService->plan($planKey);
 
-            return $plan['name'] ?? ucfirst($planKey);
+            return $plan->name ?: ucfirst($planKey);
         } catch (\Throwable) {
             return ucfirst($planKey);
         }
+    }
+
+    private function normalizeOrderStatus(string $status): string
+    {
+        $normalized = str_replace('-', '_', strtolower(trim($status)));
+
+        return match ($normalized) {
+            'paid', 'settled' => OrderStatus::Paid->value,
+            'completed', 'billed' => OrderStatus::Completed->value,
+            'draft' => OrderStatus::Draft->value,
+            'ready' => OrderStatus::Ready->value,
+            'open' => OrderStatus::Open->value,
+            'past_due', 'payment_failed', 'failed' => OrderStatus::Failed->value,
+            'refunded' => OrderStatus::Refunded->value,
+            default => OrderStatus::Pending->value,
+        };
     }
 }

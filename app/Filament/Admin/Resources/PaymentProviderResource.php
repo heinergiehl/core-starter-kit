@@ -3,14 +3,16 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\PaymentProvider;
+use App\Domain\Billing\Services\PaymentProviderSafetyService;
 use App\Filament\Admin\Resources\PaymentProviderResource\Pages;
-use Filament\Resources\Resource;
-use Filament\Schemas\Schema;
-use Filament\Tables\Table;
-use Filament\Tables;
-use Filament\Forms;
 use Filament\Actions\EditAction;
+use Filament\Forms;
+use Filament\Notifications\Notification;
+use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Schema;
+use Filament\Tables;
+use Filament\Tables\Table;
 
 class PaymentProviderResource extends Resource
 {
@@ -114,7 +116,30 @@ class PaymentProviderResource extends Resource
                 Tables\Columns\TextColumn::make('slug')
                     ->badge(),
                 Tables\Columns\ToggleColumn::make('is_active')
-                    ->label('Active'),
+                    ->label('Active')
+                    ->updateStateUsing(function (PaymentProvider $record, mixed $state): bool {
+                        $nextState = (bool) $state;
+
+                        if (! $nextState) {
+                            $reason = app(PaymentProviderSafetyService::class)->disableGuardReason($record);
+
+                            if ($reason !== null) {
+                                Notification::make()
+                                    ->title('Provider cannot be disabled')
+                                    ->body($reason)
+                                    ->danger()
+                                    ->send();
+
+                                return (bool) $record->is_active;
+                            }
+                        }
+
+                        $record->update([
+                            'is_active' => $nextState,
+                        ]);
+
+                        return $nextState;
+                    }),
                 Tables\Columns\TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()

@@ -7,11 +7,10 @@ use App\Filament\Admin\Resources\UserResource\Pages\CreateUser;
 use App\Filament\Admin\Resources\UserResource\Pages\EditUser;
 use App\Filament\Admin\Resources\UserResource\Pages\ListUsers;
 use App\Models\User;
+use App\Support\Authorization\PermissionGuardrails;
 use Filament\Actions\Action;
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -22,6 +21,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Gate;
 
 class UserResource extends Resource
@@ -55,7 +55,8 @@ class UserResource extends Resource
                     ->dehydrated(fn (?string $state): bool => filled($state))
                     ->helperText('Leave blank to keep the current password.'),
                 Toggle::make('is_admin')
-                    ->label('Admin access'),
+                    ->label('Admin access')
+                    ->disabled(fn (?User $record): bool => PermissionGuardrails::isLastAdminUser($record)),
                 Select::make('roles')
                     ->relationship('roles', 'name')
                     ->multiple()
@@ -141,13 +142,18 @@ class UserResource extends Resource
                     })
                     ->visible(fn (User $record) => ! $record->is_admin && auth()->id() !== $record->id),
                 EditAction::make(),
-                DeleteAction::make(),
-            ])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
+                DeleteAction::make()
+                    ->hidden(fn (User $record): bool => PermissionGuardrails::isLastAdminUser($record)),
             ]);
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        if ($record instanceof User && PermissionGuardrails::isLastAdminUser($record)) {
+            return false;
+        }
+
+        return parent::canDelete($record);
     }
 
     public static function getPages(): array

@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\Discount;
+use App\Domain\Billing\Models\PaymentProvider;
 use App\Filament\Admin\Resources\DiscountResource\Pages\CreateDiscount;
 use App\Filament\Admin\Resources\DiscountResource\Pages\EditDiscount;
 use App\Filament\Admin\Resources\DiscountResource\Pages\ListDiscounts;
@@ -22,6 +23,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Support\Facades\Schema as DatabaseSchema;
 
 class DiscountResource extends Resource
 {
@@ -180,7 +182,19 @@ class DiscountResource extends Resource
     private static function providerOptions(): array
     {
         $options = [];
-        $providers = config('saas.billing.providers', ['stripe', 'paddle']);
+        $providers = [];
+
+        if (DatabaseSchema::hasTable('payment_providers')) {
+            $providers = PaymentProvider::query()
+                ->where('is_active', true)
+                ->pluck('slug')
+                ->map(fn (string $slug): string => strtolower($slug))
+                ->all();
+        }
+
+        if (empty($providers)) {
+            $providers = config('saas.billing.providers', ['stripe', 'paddle']);
+        }
 
         foreach ($providers as $provider) {
             $options[$provider] = ucfirst((string) $provider);

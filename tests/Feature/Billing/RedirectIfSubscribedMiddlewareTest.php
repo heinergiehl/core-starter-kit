@@ -2,9 +2,13 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
+use App\Enums\OrderStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Tests\TestCase;
 
 class RedirectIfSubscribedMiddlewareTest extends TestCase
@@ -66,6 +70,9 @@ class RedirectIfSubscribedMiddlewareTest extends TestCase
             'status' => 'active',
         ]);
 
+        $this->withoutMiddleware(VerifyCsrfToken::class);
+        $this->withoutMiddleware(ValidateCsrfToken::class);
+
         $response = $this->actingAs($user)->post(route('billing.checkout'), [
             'plan' => 'pro',
             'price' => 'monthly',
@@ -73,5 +80,25 @@ class RedirectIfSubscribedMiddlewareTest extends TestCase
         ]);
 
         $response->assertRedirect(route('billing.index'));
+    }
+
+    public function test_user_with_completed_order_can_access_checkout_for_conversion(): void
+    {
+        $user = User::factory()->create();
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_test_'.uniqid(),
+            'plan_key' => 'pro',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 1000,
+            'currency' => 'USD',
+            'paid_at' => now(),
+        ]);
+
+        $response = $this->actingAs($user)->get(route('checkout.start', ['plan' => 'pro', 'price' => 'monthly']));
+
+        $response->assertOk();
     }
 }

@@ -8,9 +8,11 @@ use App\Domain\Billing\Events\Subscription\SubscriptionPlanChanged;
 use App\Domain\Billing\Events\Subscription\SubscriptionResumed;
 use App\Domain\Billing\Events\Subscription\SubscriptionStarted;
 use App\Domain\Billing\Events\Subscription\SubscriptionTrialStarted;
+use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Enums\BillingProvider;
+use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
 use App\Notifications\SubscriptionPlanChangedNotification;
 use App\Models\User;
@@ -31,12 +33,36 @@ class SubscriptionService
         $subscription = $user->activeSubscription();
 
         if (! $subscription) {
-            throw new \Exception(__('No active subscription found. Please subscribe first.'));
+            throw new BillingException(
+                __('No active subscription found. Please subscribe first.'),
+                'BILLING_NO_ACTIVE_SUBSCRIPTION'
+            );
         }
 
         // Can't change plan if pending cancellation
         if ($subscription->canceled_at) {
-            throw new \Exception(__('Please resume your subscription before changing plans.'));
+            throw new BillingException(
+                __('Please resume your subscription before changing plans.'),
+                'BILLING_SUBSCRIPTION_PENDING_CANCELLATION'
+            );
+        }
+
+        try {
+            $targetPlan = $this->planService->plan($planKey);
+        } catch (\RuntimeException) {
+            throw BillingException::unknownPlan($planKey);
+        }
+
+        $targetPrice = $targetPlan->getPrice($priceKey);
+        if (! $targetPrice) {
+            throw BillingException::unknownPrice($planKey, $priceKey);
+        }
+
+        if ($targetPlan->isOneTime() || $targetPrice->mode() === PaymentMode::OneTime) {
+            throw new BillingException(
+                __('You can only switch between recurring subscription plans.'),
+                'BILLING_PLAN_CHANGE_INVALID_TARGET'
+            );
         }
 
         // Get new price ID
@@ -47,7 +73,18 @@ class SubscriptionService
         );
 
         if (! $newPriceId) {
-            throw new \Exception(__('This plan is not available for your current provider.'));
+            throw new BillingException(
+                __('This plan is not available for your current provider.'),
+                'BILLING_PROVIDER_PRICE_UNAVAILABLE'
+            );
+        }
+
+        $currentProviderPriceId = $this->resolveCurrentProviderPriceId($subscription);
+        if ($currentProviderPriceId && hash_equals($currentProviderPriceId, $newPriceId)) {
+            throw new BillingException(
+                __('You are already on this plan and billing interval.'),
+                'BILLING_PLAN_ALREADY_ACTIVE'
+            );
         }
 
         $previousPlanKey = $subscription->plan_key;
@@ -55,8 +92,21 @@ class SubscriptionService
         $this->providerManager->adapter($subscription->provider->value)
             ->updateSubscription($subscription, $newPriceId);
 
+        $metadata = $subscription->metadata ?? [];
+        $metadata['plan_key'] = $planKey;
+        $metadata['price_key'] = $priceKey;
+
+        if ($subscription->provider === BillingProvider::Stripe) {
+            $metadata['stripe_price_id'] = $newPriceId;
+        }
+
+        if ($subscription->provider === BillingProvider::Paddle) {
+            $metadata['paddle_price_id'] = $newPriceId;
+        }
+
         $subscription->update([
             'plan_key' => $planKey,
+            'metadata' => $metadata,
         ]);
 
         $previousPlanName = $this->resolvePlanName($previousPlanKey);
@@ -80,7 +130,7 @@ class SubscriptionService
         try {
             $plan = $this->planService->plan($planKey);
 
-            return $plan['name'] ?? ucfirst($planKey);
+            return $plan->name ?: ucfirst($planKey);
         } catch (\Throwable) {
             return ucfirst($planKey);
         }
@@ -92,6 +142,8 @@ class SubscriptionService
             ->where('provider', $data->provider)
             ->where('provider_id', $data->providerId)
             ->first();
+
+        $normalizedStatus = $this->normalizeSubscriptionStatus($data->status);
 
         // 1. Capture Old State
         $previousPlanKey = $existingSubscription?->plan_key;
@@ -106,7 +158,7 @@ class SubscriptionService
             [
                 'user_id' => $data->userId,
                 'plan_key' => $data->planKey,
-                'status' => $data->status,
+                'status' => $normalizedStatus,
                 'quantity' => max($data->quantity, 1),
                 'trial_ends_at' => $data->trialEndsAt,
                 'renews_at' => $data->renewsAt,
@@ -239,5 +291,37 @@ class SubscriptionService
             ?? data_get($meta, 'items.data.0.price.currency')
             ?? data_get($meta, 'currency_code')
             ?? config('saas.billing.pricing.currency', 'USD');
+    }
+
+    private function resolveCurrentProviderPriceId(Subscription $subscription): ?string
+    {
+        $metadata = $subscription->metadata ?? [];
+
+        return match ($subscription->provider) {
+            BillingProvider::Stripe => data_get($metadata, 'stripe_price_id')
+                ?? data_get($metadata, 'items.data.0.price.id')
+                ?? data_get($metadata, 'metadata.stripe_price_id'),
+            BillingProvider::Paddle => data_get($metadata, 'paddle_price_id')
+                ?? data_get($metadata, 'items.0.price.id')
+                ?? data_get($metadata, 'items.0.price_id'),
+            default => data_get($metadata, 'price_id'),
+        };
+    }
+
+    private function normalizeSubscriptionStatus(string $status): string
+    {
+        $normalized = str_replace('-', '_', strtolower(trim($status)));
+
+        return match ($normalized) {
+            'active' => SubscriptionStatus::Active->value,
+            'trial', 'trialing' => SubscriptionStatus::Trialing->value,
+            'past_due' => SubscriptionStatus::PastDue->value,
+            'cancelled', 'canceled' => SubscriptionStatus::Canceled->value,
+            'unpaid' => SubscriptionStatus::Unpaid->value,
+            'incomplete' => SubscriptionStatus::Incomplete->value,
+            'incomplete_expired' => SubscriptionStatus::IncompleteExpired->value,
+            'paused' => SubscriptionStatus::Paused->value,
+            default => SubscriptionStatus::Incomplete->value,
+        };
     }
 }

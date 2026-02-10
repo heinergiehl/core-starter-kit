@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
+use App\Enums\SubscriptionStatus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -18,47 +20,65 @@ class BillingStatusController
             return response()->json(['status' => 'no_user'], 401);
         }
 
-        // If session UUID provided, try to find subscription for that checkout session
+        // When a checkout session UUID is provided, only report records that can belong
+        // to that checkout. This avoids false failures from stale subscriptions/orders.
         if ($sessionUuid !== '') {
-            $checkoutSession = \App\Domain\Billing\Models\CheckoutSession::where('uuid', $sessionUuid)->first();
+            $checkoutSession = CheckoutSession::query()
+                ->where('uuid', $sessionUuid)
+                ->where('user_id', $user->id)
+                ->first();
 
-            if ($checkoutSession && $checkoutSession->user_id === $user->id) {
-                $subscription = Subscription::query()
-                    ->where('user_id', $user->id)
-                    ->where('created_at', '>=', $checkoutSession->created_at->subMinutes(5))
-                    ->latest('id')
-                    ->first();
-
-                if ($subscription) {
-                    return response()->json([
-                        'type' => 'subscription',
-                        'status' => $subscription->status,
-                        'plan_key' => $subscription->plan_key,
-                        'quantity' => $subscription->quantity,
-                    ]);
-                }
-
-                $order = Order::query()
-                    ->where('user_id', $user->id)
-                    ->where('created_at', '>=', $checkoutSession->created_at->subMinutes(5))
-                    ->latest('id')
-                    ->first();
-
-                if ($order) {
-                    return response()->json([
-                        'type' => 'order',
-                        'status' => $order->status,
-                        'plan_key' => $order->plan_key,
-                        'amount' => $order->amount,
-                        'currency' => $order->currency,
-                    ]);
-                }
+            if (! $checkoutSession) {
+                return response()->json([
+                    'type' => 'checkout',
+                    'status' => 'processing',
+                ], 202);
             }
+
+            $windowStart = $checkoutSession->created_at->copy()->subSeconds(30);
+
+            $subscription = Subscription::query()
+                ->where('user_id', $user->id)
+                ->where('plan_key', $checkoutSession->plan_key)
+                ->where('created_at', '>=', $windowStart)
+                ->latest('id')
+                ->first();
+
+            if ($subscription) {
+                return response()->json([
+                    'type' => 'subscription',
+                    'status' => $subscription->status->value,
+                    'plan_key' => $subscription->plan_key,
+                    'quantity' => $subscription->quantity,
+                ]);
+            }
+
+            $order = Order::query()
+                ->where('user_id', $user->id)
+                ->where('plan_key', $checkoutSession->plan_key)
+                ->where('created_at', '>=', $windowStart)
+                ->latest('id')
+                ->first();
+
+            if ($order) {
+                return response()->json([
+                    'type' => 'order',
+                    'status' => $order->status->value,
+                    'plan_key' => $order->plan_key,
+                    'amount' => $order->amount,
+                    'currency' => $order->currency,
+                ]);
+            }
+
+            return response()->json([
+                'type' => 'checkout',
+                'status' => 'processing',
+            ], 202);
         }
 
         $subscription = Subscription::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', ['active', 'trialing'])
+            ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
             ->latest('created_at')
             ->first();
 
@@ -81,7 +101,7 @@ class BillingStatusController
 
             return response()->json([
                 'type' => 'order',
-                'status' => $order->status,
+                'status' => $order->status->value,
                 'plan_key' => $order->plan_key,
                 'amount' => $order->amount,
                 'currency' => $order->currency,
@@ -90,7 +110,7 @@ class BillingStatusController
 
         return response()->json([
             'type' => 'subscription',
-            'status' => $subscription->status,
+            'status' => $subscription->status->value,
             'plan_key' => $subscription->plan_key,
             'quantity' => $subscription->quantity,
         ]);

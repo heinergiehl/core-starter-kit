@@ -34,24 +34,31 @@ class SyncPriceToProviders implements ShouldQueue
         foreach ($providers as $provider) {
             try {
                 $client = $manager->catalog($provider);
-                $this->syncToProvider($client, $provider);
+                $this->syncToProvider($client, $provider, $manager);
             } catch (\Throwable $e) {
                 Log::error("Failed to sync price {$this->price->id} to {$provider}: " . $e->getMessage());
             }
         }
     }
 
-    private function syncToProvider(BillingCatalogProvider $client, string $provider): void
+    private function syncToProvider(BillingCatalogProvider $client, string $provider, BillingProviderManager $manager): void
     {
         // Ensure Product Exists First
         $productMapping = $this->price->product->providerMappings()->where('provider', $provider)->first();
-        if (!$productMapping) {
+        if (! $productMapping) {
             Log::warning("Product {$this->price->product_id} not synced to {$provider}. Triggering product sync first.");
             
-            // Synchronously sync the product first so we have an ID
-            (new SyncProductToProviders($this->price->product))->handle(app(BillingProviderManager::class));
-            
+            // Synchronously sync product without cascading into price sync jobs.
+            (new SyncProductToProviders($this->price->product, false))->handle($manager);
+
             $this->price->product->refresh();
+            $productMapping = $this->price->product->providerMappings()->where('provider', $provider)->first();
+        }
+
+        if (! $productMapping) {
+            Log::error("Product {$this->price->product_id} is still not mapped for {$provider}. Skipping price {$this->price->id} sync.");
+
+            return;
         }
 
         $mapping = $this->price->mappings()->where('provider', $provider)->first();

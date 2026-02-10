@@ -4,6 +4,8 @@ namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
+use App\Enums\OrderStatus;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -18,7 +20,7 @@ class BillingDashboardService
      *
      * @return array{
      *    subscription: ?\App\Domain\Billing\Models\Subscription,
-     *    plan: ?array,
+     *    plan: ?\App\Domain\Billing\Data\Plan,
      *    invoices: Collection,
      *    pendingOrder: ?Order,
      *    recentOneTimeOrder: ?Order,
@@ -38,7 +40,7 @@ class BillingDashboardService
                 $plan = $this->planService->plan($subscription->plan_key);
             } catch (\RuntimeException) {
                 // Fallback for deprecated or missing plans
-                $plan = ['name' => ucfirst($subscription->plan_key), 'key' => $subscription->plan_key];
+                $plan = null;
             }
 
             $invoices = Invoice::query()
@@ -51,7 +53,7 @@ class BillingDashboardService
             // We determine one-time vs subscription by checking if the associated product has type='one_time'
             $pendingOrder = Order::query()
                 ->where('user_id', $user->id)
-                ->whereIn('status', ['paid', 'completed'])
+                ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
                 ->where('created_at', '>=', now()->subMinutes(10))
                 // Exclude one-time product orders or orders without subscription_id in metadata
                 ->whereDoesntHave('product', fn ($q) => $q->where('type', 'one_time'))
@@ -76,7 +78,7 @@ class BillingDashboardService
         // Check for recent one-time purchases to show success banner (within 10 minutes)
         $recentOneTimeOrder = Order::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', ['paid', 'completed'])
+            ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->where('created_at', '>=', now()->subMinutes(10))
             ->latest('id')
             ->get()
@@ -94,7 +96,7 @@ class BillingDashboardService
         // Get all one-time orders for purchase history
         $oneTimeOrders = Order::query()
             ->where('user_id', $user->id)
-            ->whereIn('status', ['paid', 'completed'])
+            ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->with('product')
             ->latest('id')
             ->get()
@@ -108,7 +110,8 @@ class BillingDashboardService
                 return empty($meta['subscription_id']);
             });
 
-        $canCancel = $subscription && in_array($subscription->status, ['active', 'trialing']);
+        $canCancel = $subscription
+            && in_array($subscription->status, [SubscriptionStatus::Active, SubscriptionStatus::Trialing], true);
 
         return compact(
             'subscription',

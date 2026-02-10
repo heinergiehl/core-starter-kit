@@ -4,6 +4,7 @@ namespace App\Domain\Billing\Services;
 
 
 use App\Domain\Billing\Data\Entitlements;
+use App\Domain\Billing\Data\Plan;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Models\User;
@@ -13,10 +14,16 @@ use Illuminate\Support\Facades\Cache;
 
 class EntitlementService
 {
+    public const CACHE_KEY_PREFIX = 'entitlements:user:';
+
+    public function __construct(
+        private readonly BillingPlanService $planService
+    ) {}
+
     public function forUser(User $user): Entitlements
     {
         return Cache::remember(
-            "entitlements:user:{$user->id}",
+            self::CACHE_KEY_PREFIX . $user->id,
             now()->addMinutes(30),
             fn () => $this->calculateEntitlements($user)
         );
@@ -24,7 +31,7 @@ class EntitlementService
 
     public function clearCache(User $user): void
     {
-        Cache::forget("entitlements:user:{$user->id}");
+        Cache::forget(self::CACHE_KEY_PREFIX . $user->id);
     }
 
     protected function calculateEntitlements(User $user): Entitlements
@@ -32,34 +39,29 @@ class EntitlementService
         $subscription = Subscription::query()
             ->where('user_id', $user->id)
             ->whereIn('status', [
-                SubscriptionStatus::Active,
-                SubscriptionStatus::Trialing,
-                SubscriptionStatus::PastDue,
+                SubscriptionStatus::Active->value,
+                SubscriptionStatus::Trialing->value,
+                SubscriptionStatus::PastDue->value,
             ])
             ->latest('id')
             ->first();
-
-        $planService = app(BillingPlanService::class);
 
         if (! $subscription) {
             $order = Order::query()
                 ->where('user_id', $user->id)
                 ->whereIn('status', [
-                    OrderStatus::Paid,
-                    OrderStatus::Completed,
+                    OrderStatus::Paid->value,
+                    OrderStatus::Completed->value,
                 ])
                 ->latest('id')
                 ->first();
 
             if ($order) {
                 $planKey = $order->plan_key;
-                $plan = $this->resolvePlan($planKey, $planService);
-                $entitlements = $plan['entitlements'] ?? [];
-
-                return new Entitlements($entitlements);
+                return new Entitlements($this->entitlementsForPlanKey($planKey));
             }
 
-            return $this->resolveDefaultEntitlements($planService);
+            return $this->resolveDefaultEntitlements();
         }
 
         // Handle grace period for past_due subscriptions
@@ -67,14 +69,11 @@ class EntitlementService
             // Treat as no subscription / free plan if outside grace period
             // For now, let's fallback to default plan logic via recursion or just copy logic.
             // Simplest is to check default plan.
-            return $this->resolveDefaultEntitlements($planService);
+            return $this->resolveDefaultEntitlements();
         }
 
         $planKey = $subscription->plan_key;
-        $plan = $this->resolvePlan($planKey, $planService);
-        $entitlements = $plan['entitlements'] ?? [];
-
-        return new Entitlements($entitlements);
+        return new Entitlements($this->entitlementsForPlanKey($planKey));
     }
 
     protected function withinGracePeriod(Subscription $subscription): bool
@@ -90,30 +89,47 @@ class EntitlementService
         return $changedAt->copy()->addDays($graceDays)->isFuture();
     }
 
-    private function resolvePlan(?string $planKey, BillingPlanService $planService): array
+    private function resolvePlan(?string $planKey): ?Plan
+    {
+        if (! $planKey) {
+            return null;
+        }
+
+        try {
+            return $this->planService->plan($planKey);
+        } catch (\RuntimeException) {
+            return null;
+        }
+    }
+
+    private function resolveDefaultEntitlements(): Entitlements
+    {
+        $defaultPlanKey = config('saas.billing.default_plan');
+
+        if ($defaultPlanKey) {
+            return new Entitlements($this->entitlementsForPlanKey((string) $defaultPlanKey));
+        }
+
+        return new Entitlements([]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function entitlementsForPlanKey(?string $planKey): array
     {
         if (! $planKey) {
             return [];
         }
 
-        try {
-            return $planService->plan($planKey);
-        } catch (\RuntimeException $exception) {
-            return config("saas.billing.plans.{$planKey}", []);
-        }
-    }
+        $plan = $this->resolvePlan($planKey);
 
-    private function resolveDefaultEntitlements(BillingPlanService $planService): Entitlements
-    {
-        $defaultPlanKey = config('saas.billing.default_plan');
-
-        if ($defaultPlanKey) {
-            $plan = $this->resolvePlan($defaultPlanKey, $planService);
-            $entitlements = $plan['entitlements'] ?? [];
-
-            return new Entitlements($entitlements);
+        if ($plan) {
+            return $plan->entitlements;
         }
 
-        return new Entitlements([]);
+        $legacyEntitlements = config("saas.billing.plans.{$planKey}.entitlements", []);
+
+        return is_array($legacyEntitlements) ? $legacyEntitlements : [];
     }
 }
