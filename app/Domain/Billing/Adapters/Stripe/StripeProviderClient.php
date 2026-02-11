@@ -8,7 +8,6 @@ use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Enums\BillingProvider;
 use App\Enums\PriceType;
-use Illuminate\Support\Str;
 use Stripe\StripeClient;
 use Exception;
 
@@ -18,7 +17,13 @@ class StripeProviderClient implements BillingCatalogProvider
 
     public function __construct(array $config)
     {
-        $this->client = new StripeClient($config['secret_key']);
+        $secret = trim((string) ($config['secret_key'] ?? ''));
+
+        if ($secret === '') {
+            throw BillingException::missingConfiguration(BillingProvider::Stripe, 'secret');
+        }
+
+        $this->client = new StripeClient($secret);
     }
 
     public function createProduct(Product $product): string

@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
+use Throwable;
 
 class SocialAuthController extends Controller
 {
@@ -17,7 +18,11 @@ class SocialAuthController extends Controller
 
         $this->storeIntendedRedirect($request);
 
-        return $this->socialiteDriver($provider)->redirect();
+        try {
+            return $this->socialiteDriver($provider)->redirect();
+        } catch (Throwable $exception) {
+            return $this->handleSocialAuthFailure($provider, $exception);
+        }
     }
 
     public function callback(string $provider, \App\Domain\Identity\Actions\HandleSocialCallback $handler): RedirectResponse
@@ -28,7 +33,11 @@ class SocialAuthController extends Controller
             $socialUser = $this->socialiteDriver($provider)->user();
         } catch (InvalidStateException $exception) {
             if ($this->shouldUseStateless()) {
-                $socialUser = Socialite::driver($provider)->stateless()->user();
+                try {
+                    $socialUser = Socialite::driver($provider)->stateless()->user();
+                } catch (Throwable $fallbackException) {
+                    return $this->handleSocialAuthFailure($provider, $fallbackException);
+                }
             } else {
                 report($exception);
 
@@ -36,6 +45,8 @@ class SocialAuthController extends Controller
                     ->route('login')
                     ->withErrors(['social' => __('The authentication session expired. Please try again.')]);
             }
+        } catch (Throwable $exception) {
+            return $this->handleSocialAuthFailure($provider, $exception);
         }
 
         $email = $socialUser->getEmail();
@@ -109,5 +120,22 @@ class SocialAuthController extends Controller
         }
 
         return $provider;
+    }
+
+    private function handleSocialAuthFailure(string $provider, Throwable $exception): RedirectResponse
+    {
+        report($exception);
+
+        $message = __('Social login via :provider is currently unavailable. Please use email login or contact support.', [
+            'provider' => ucfirst($provider),
+        ]);
+
+        if (app()->environment('local')) {
+            $message .= ' '.$exception->getMessage();
+        }
+
+        return redirect()
+            ->route('login')
+            ->withErrors(['social' => $message]);
     }
 }

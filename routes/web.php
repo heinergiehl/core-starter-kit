@@ -11,6 +11,8 @@ use App\Http\Controllers\Billing\PricingController;
 use App\Http\Controllers\Billing\WebhookController;
 use App\Http\Controllers\Blog\BlogController;
 use App\Http\Controllers\Content\DocsController;
+use App\Http\Controllers\Content\BlogSitemapController;
+use App\Http\Controllers\Content\MarketingSitemapController;
 use App\Http\Controllers\Content\OgImageController;
 use App\Http\Controllers\Content\RssController;
 use App\Http\Controllers\Content\SitemapController;
@@ -21,30 +23,121 @@ use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\TwoFactorController;
+use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', fn () => view('welcome'))->name('home');
-Route::get('/features', fn () => view('features'))->name('features');
+/**
+ * Public marketing routes are locale-prefixed for SEO and shareable URLs.
+ * Legacy non-prefixed URLs are permanently redirected.
+ */
+$localizedRouteService = app(LocalizedRouteService::class);
+$defaultLocale = $localizedRouteService->defaultLocale();
+$localePattern = $localizedRouteService->localePattern();
 
-Route::get('/pricing', PricingController::class)->name('pricing');
-Route::get('/solutions', [SolutionPageController::class, 'index'])->name('solutions.index');
-Route::get('/solutions/{slug}', [SolutionPageController::class, 'show'])
-    ->where('slug', '[a-z0-9-]+')
-    ->name('solutions.show');
-Route::get('/blog', [BlogController::class, 'index'])->name('blog.index');
-Route::get('/blog/{slug}', [BlogController::class, 'show'])->name('blog.show');
-Route::get('/docs', [DocsController::class, 'index'])->name('docs.index');
-Route::get('/docs/{page}', [DocsController::class, 'show'])
-    ->where('page', '[A-Za-z0-9-]+')
-    ->name('docs.show');
-Route::get('/roadmap', [RoadmapController::class, 'index'])->name('roadmap');
+$marketingRouteDefinitions = [
+    [
+        'uri' => '/',
+        'name' => 'home',
+        'action' => fn () => view('welcome'),
+    ],
+    [
+        'uri' => '/features',
+        'name' => 'features',
+        'action' => fn () => view('features'),
+    ],
+    [
+        'uri' => '/pricing',
+        'name' => 'pricing',
+        'action' => PricingController::class,
+    ],
+    [
+        'uri' => '/solutions',
+        'name' => 'solutions.index',
+        'action' => [SolutionPageController::class, 'index'],
+    ],
+    [
+        'uri' => '/solutions/{slug}',
+        'name' => 'solutions.show',
+        'action' => [SolutionPageController::class, 'show'],
+        'where' => ['slug' => '[a-z0-9-]+'],
+    ],
+    [
+        'uri' => '/blog',
+        'name' => 'blog.index',
+        'action' => [BlogController::class, 'index'],
+    ],
+    [
+        'uri' => '/blog/{slug}',
+        'name' => 'blog.show',
+        'action' => [BlogController::class, 'show'],
+    ],
+    [
+        'uri' => '/docs',
+        'name' => 'docs.index',
+        'action' => [DocsController::class, 'index'],
+    ],
+    [
+        'uri' => '/docs/{page}',
+        'name' => 'docs.show',
+        'action' => [DocsController::class, 'show'],
+        'where' => ['page' => '[A-Za-z0-9-]+'],
+    ],
+    [
+        'uri' => '/roadmap',
+        'name' => 'roadmap',
+        'action' => [RoadmapController::class, 'index'],
+    ],
+    [
+        'uri' => '/rss.xml',
+        'name' => 'rss',
+        'action' => RssController::class,
+    ],
+];
+
+$redirectToLocalized = static function (Request $request, string $routeName, array $parameters = []) use ($defaultLocale) {
+    $url = route($routeName, array_merge($parameters, ['locale' => $defaultLocale]));
+    $queryParams = $request->query();
+    unset($queryParams['lang']);
+    $query = http_build_query($queryParams);
+
+    return redirect()->to($query ? "{$url}?{$query}" : $url, 301);
+};
+
+foreach ($marketingRouteDefinitions as $definition) {
+    $legacyRoute = Route::get($definition['uri'], function (Request $request) use ($definition, $redirectToLocalized) {
+        $parameters = $request->route()?->parametersWithoutNulls() ?? [];
+
+        return $redirectToLocalized($request, $definition['name'], $parameters);
+    })->name('legacy.'.$definition['name']);
+
+    if (isset($definition['where']) && is_array($definition['where'])) {
+        $legacyRoute->where($definition['where']);
+    }
+}
+
+Route::prefix('{locale}')
+    ->where(['locale' => $localePattern])
+    ->group(function () use ($defaultLocale, $marketingRouteDefinitions) {
+        foreach ($marketingRouteDefinitions as $definition) {
+            $localizedRoute = Route::get($definition['uri'], $definition['action'])
+                ->defaults('locale', $defaultLocale)
+                ->name($definition['name']);
+
+            if (isset($definition['where']) && is_array($definition['where'])) {
+                $localizedRoute->where($definition['where']);
+            }
+        }
+    });
+
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])
     ->name('announcements.dismiss');
 
 Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
-Route::get('/rss.xml', RssController::class)->name('rss');
+Route::get('/sitemaps/marketing.xml', MarketingSitemapController::class)->name('sitemap.marketing');
+Route::get('/sitemaps/blog.xml', BlogSitemapController::class)->name('sitemap.blog');
 Route::get('/og', OgImageController::class)->name('og');
 Route::get('/og/blog/{slug}', [OgImageController::class, 'blog'])->name('og.blog');
 

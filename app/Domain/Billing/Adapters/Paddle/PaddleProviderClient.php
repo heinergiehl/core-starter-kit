@@ -19,7 +19,13 @@ class PaddleProviderClient implements BillingCatalogProvider
     {
         $environment = $config['environment'] ?? 'production';
         $this->baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
-        $this->apiKey = $config['api_key'];
+        $apiKey = trim((string) ($config['api_key'] ?? ''));
+
+        if ($apiKey === '') {
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
+        }
+
+        $this->apiKey = $apiKey;
     }
 
     public function createProduct(Product $product): string

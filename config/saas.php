@@ -99,7 +99,13 @@ return [
         'supported' => [
             'en' => 'English',
             'de' => 'Deutsch',
+            'es' => 'Espanol',
+            'fr' => 'Francais',
         ],
+    ],
+    'seo' => [
+        'sitemap_cache_seconds' => env('SEO_SITEMAP_CACHE_SECONDS', 3600),
+        'rss_cache_seconds' => env('SEO_RSS_CACHE_SECONDS', 900),
     ],
     'features' => [
         'blog' => true,

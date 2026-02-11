@@ -35,12 +35,79 @@
         <meta property="og:description" content="{{ $pageDescription }}">
         <meta property="og:type" content="@yield('og_type', 'website')">
         <meta property="og:url" content="{{ url()->current() }}">
+        <meta property="og:site_name" content="{{ $defaultTitle }}">
+        <meta property="og:locale" content="{{ str_replace('-', '_', app()->getLocale()) }}">
         <meta property="og:image" content="{{ $ogImage }}">
         <meta name="twitter:card" content="summary_large_image">
         <meta name="twitter:image" content="{{ $ogImage }}">
+        @php
+            $alternateLocaleUrls = [];
+            $currentRoute = request()->route();
+            $routeName = $currentRoute?->getName();
+            $routeParameters = $currentRoute?->parameters() ?? [];
+
+            if ($routeName && array_key_exists('locale', $routeParameters)) {
+                foreach (array_keys(config('saas.locales.supported', ['en' => 'English'])) as $localeCode) {
+                    $alternateLocaleUrls[$localeCode] = route(
+                        $routeName,
+                        array_merge($routeParameters, ['locale' => $localeCode]),
+                        true
+                    );
+                }
+            }
+
+            $xDefaultLocale = (string) config('saas.locales.default', config('app.locale', 'en'));
+        @endphp
+        @if ($alternateLocaleUrls !== [])
+            @foreach ($alternateLocaleUrls as $localeCode => $alternateUrl)
+                <link rel="alternate" hreflang="{{ $localeCode }}" href="{{ $alternateUrl }}">
+            @endforeach
+            <link
+                rel="alternate"
+                hreflang="x-default"
+                href="{{ $alternateLocaleUrls[$xDefaultLocale] ?? reset($alternateLocaleUrls) }}"
+            >
+        @endif
+        @php
+            $localizedHomeUrl = route('home', ['locale' => app()->getLocale()]);
+            $organizationId = $localizedHomeUrl.'#organization';
+            $websiteId = $localizedHomeUrl.'#website';
+            $logoPath = filled($appLogoPath ?? null)
+                ? (string) $appLogoPath
+                : (string) config('saas.branding.logo_path', 'branding/shipsolid-s-mark.svg');
+            $logoUrl = asset($logoPath);
+        @endphp
+        <script type="application/ld+json">
+            {!! json_encode([
+                '@context' => 'https://schema.org',
+                '@graph' => [
+                    [
+                        '@type' => 'Organization',
+                        '@id' => $organizationId,
+                        'name' => $defaultTitle,
+                        'url' => $localizedHomeUrl,
+                        'logo' => [
+                            '@type' => 'ImageObject',
+                            'url' => $logoUrl,
+                        ],
+                    ],
+                    [
+                        '@type' => 'WebSite',
+                        '@id' => $websiteId,
+                        'url' => $localizedHomeUrl,
+                        'name' => $defaultTitle,
+                        'inLanguage' => app()->getLocale(),
+                        'publisher' => [
+                            '@id' => $organizationId,
+                        ],
+                    ],
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) !!}
+        </script>
         @stack('meta')
-        <link rel="alternate" type="application/rss+xml" title="RSS" href="{{ route('rss') }}">
-        <link rel="sitemap" type="application/xml" title="Sitemap" href="{{ route('sitemap') }}">
+        @stack('preloads')
+        <link rel="alternate" type="application/rss+xml" title="{{ __('RSS') }}" href="{{ route('rss') }}">
+        <link rel="sitemap" type="application/xml" title="{{ __('Sitemap') }}" href="{{ route('sitemap') }}">
 
         @php
             $faviconPath = $appFaviconPath ?? null;

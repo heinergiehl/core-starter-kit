@@ -12,7 +12,7 @@ class SolutionPageController
             ->map(function (array $page, string $slug): array {
                 return array_merge($page, [
                     'slug' => $slug,
-                    'url' => route('solutions.show', $slug),
+                    'url' => route('solutions.show', ['slug' => $slug]),
                 ]);
             })
             ->values()
@@ -23,7 +23,7 @@ class SolutionPageController
         ]);
     }
 
-    public function show(string $slug): View
+    public function show(string $locale, string $slug): View
     {
         $pages = $this->pages();
 
@@ -31,7 +31,7 @@ class SolutionPageController
 
         $solutionPage = array_merge($pages[$slug], [
             'slug' => $slug,
-            'url' => route('solutions.show', $slug),
+            'url' => route('solutions.show', ['slug' => $slug]),
         ]);
 
         $relatedSolutions = collect($solutionPage['related'] ?? [])
@@ -46,7 +46,7 @@ class SolutionPageController
                     'slug' => $relatedSlug,
                     'title' => $related['card_title'],
                     'summary' => $related['summary'],
-                    'url' => route('solutions.show', $relatedSlug),
+                    'url' => route('solutions.show', ['slug' => $relatedSlug]),
                     'hero_image' => $related['hero_image'],
                     'hero_image_alt' => $related['hero_image_alt'],
                 ];
@@ -71,7 +71,7 @@ class SolutionPageController
      */
     private function pages(): array
     {
-        return [
+        $pages = [
             'laravel-stripe-paddle-billing-starter' => [
                 'card_title' => 'Laravel Stripe and Paddle billing starter',
                 'summary' => 'Provider-aware checkout, catalog operations, coupons, portals, and invoice flows for SaaS billing in one stack.',
@@ -441,5 +441,80 @@ class SolutionPageController
                 ],
             ],
         ];
+
+        return collect($pages)
+            ->map(fn (array $page): array => $this->localizePageContent($page))
+            ->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $page
+     * @return array<string, mixed>
+     */
+    private function localizePageContent(array $page): array
+    {
+        foreach ([
+            'card_title',
+            'summary',
+            'seo_title',
+            'meta_description',
+            'hero_eyebrow',
+            'hero_title',
+            'hero_description',
+            'hero_image_alt',
+        ] as $field) {
+            if (isset($page[$field]) && is_string($page[$field])) {
+                $page[$field] = __($page[$field]);
+            }
+        }
+
+        if (! empty($page['keywords']) && is_array($page['keywords'])) {
+            $page['keywords'] = array_map(
+                static fn (string $keyword): string => __($keyword),
+                $page['keywords']
+            );
+        }
+
+        if (! empty($page['coverage']) && is_array($page['coverage'])) {
+            $page['coverage'] = array_map(
+                static fn (string $item): string => __($item),
+                $page['coverage']
+            );
+        }
+
+        if (! empty($page['pillars']) && is_array($page['pillars'])) {
+            $page['pillars'] = array_map(
+                static fn (array $pillar): array => [
+                    'title' => __((string) ($pillar['title'] ?? '')),
+                    'copy' => __((string) ($pillar['copy'] ?? '')),
+                ],
+                $page['pillars']
+            );
+        }
+
+        if (! empty($page['screens']) && is_array($page['screens'])) {
+            $page['screens'] = array_map(
+                static fn (array $shot): array => [
+                    'title' => __((string) ($shot['title'] ?? '')),
+                    'copy' => __((string) ($shot['copy'] ?? '')),
+                    'image' => (string) ($shot['image'] ?? ''),
+                    'alt' => __((string) ($shot['alt'] ?? '')),
+                    'size' => (string) ($shot['size'] ?? 'compact'),
+                ],
+                $page['screens']
+            );
+        }
+
+        if (! empty($page['faq']) && is_array($page['faq'])) {
+            $page['faq'] = array_map(
+                static fn (array $item): array => [
+                    'q' => __((string) ($item['q'] ?? '')),
+                    'a' => __((string) ($item['a'] ?? '')),
+                ],
+                $page['faq']
+            );
+        }
+
+        return $page;
     }
 }

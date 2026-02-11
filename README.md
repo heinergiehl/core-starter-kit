@@ -52,6 +52,9 @@ php artisan key:generate
 - Set DB credentials in `.env`
 - Choose billing providers to enable in `config/saas.php`
 - Configure mail (local: `MAIL_MAILER=log`)
+- Validate billing/env secrets before launch:
+  - `php artisan billing:check-readiness`
+  - `php artisan billing:check-readiness --strict` (CI/staging gate)
 
 ### 4) Setup database
 ```bash

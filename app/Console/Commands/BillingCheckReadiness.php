@@ -20,6 +20,7 @@ class BillingCheckReadiness extends Command
         $strict = (bool) $this->option('strict');
 
         $this->checkAppUrl($checks, $isProduction);
+        $this->checkAppKey($checks);
         $this->checkQueue($checks);
         $this->checkDebugFlag($checks, $isProduction);
         $this->checkWebhookRoute($checks);
@@ -95,6 +96,22 @@ class BillingCheckReadiness extends Command
         }
 
         $checks[] = $this->passCheck('APP_URL configured', $appUrl);
+    }
+
+    /**
+     * @param  list<array{status:string,check:string,details:string}>  &$checks
+     */
+    private function checkAppKey(array &$checks): void
+    {
+        $key = trim((string) config('app.key', ''));
+
+        if ($key === '' || $key === 'base64:') {
+            $checks[] = $this->failCheck('APP_KEY configured', 'APP_KEY is missing. Run `php artisan key:generate`.');
+
+            return;
+        }
+
+        $checks[] = $this->passCheck('APP_KEY configured', 'present');
     }
 
     /**
@@ -210,17 +227,22 @@ class BillingCheckReadiness extends Command
         }
 
         if ($provider === 'paddle') {
+            $vendorId = trim((string) config('services.paddle.vendor_id', ''));
             $apiKey = trim((string) config('services.paddle.api_key', ''));
             $clientToken = trim((string) config('services.paddle.client_side_token', ''));
             $webhook = trim((string) config('services.paddle.webhook_secret', ''));
             $environment = strtolower(trim((string) config('services.paddle.environment', 'production')));
+            $tolerance = (int) config('services.paddle.webhook_tolerance_seconds', 300);
 
+            $checks[] = $vendorId !== ''
+                ? $this->passCheck('Paddle vendor id configured', 'present')
+                : $this->failCheck('Paddle vendor id configured', 'Missing PADDLE_VENDOR_ID.');
             $checks[] = $apiKey !== ''
                 ? $this->passCheck('Paddle API key configured', 'present')
                 : $this->failCheck('Paddle API key configured', 'Missing PADDLE_API_KEY.');
             $checks[] = $clientToken !== ''
                 ? $this->passCheck('Paddle client token configured', 'present')
-                : $this->failCheck('Paddle client token configured', 'Missing PADDLE_CLIENT_SIDE_TOKEN.');
+                : $this->warnCheck('Paddle client token configured', 'Missing PADDLE_CLIENT_SIDE_TOKEN.');
             $checks[] = $webhook !== ''
                 ? $this->passCheck('Paddle webhook secret configured', 'present')
                 : $this->failCheck('Paddle webhook secret configured', 'Missing PADDLE_WEBHOOK_SECRET.');
@@ -231,6 +253,12 @@ class BillingCheckReadiness extends Command
                 $checks[] = $this->warnCheck('Paddle environment', 'Sandbox mode is enabled in production.');
             } else {
                 $checks[] = $this->passCheck('Paddle environment', $environment);
+            }
+
+            if ($tolerance < 0) {
+                $checks[] = $this->failCheck('Paddle webhook tolerance', 'PADDLE_WEBHOOK_TOLERANCE_SECONDS must be >= 0.');
+            } else {
+                $checks[] = $this->passCheck('Paddle webhook tolerance', "{$tolerance}s");
             }
         }
     }

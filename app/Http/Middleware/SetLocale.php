@@ -2,18 +2,25 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\Localization\LocalizedRouteService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\URL;
 
 class SetLocale
 {
+    public function __construct(
+        private readonly LocalizedRouteService $localizedRouteService
+    ) {}
+
     public function handle(Request $request, Closure $next)
     {
-        $supported = array_keys(config('saas.locales.supported', ['en' => 'English']));
+        $supported = $this->localizedRouteService->supportedLocales();
 
-        // Priority: 1. User preference, 2. Session, 3. Query param, 4. Browser Accept-Language
-        $locale = $request->user()?->locale
+        // Priority: 1. Locale from URL, 2. User preference, 3. Session, 4. Query param, 5. Browser Accept-Language
+        $locale = $request->route('locale')
+            ?? $request->user()?->locale
             ?? $request->session()->get('locale')
             ?? $request->query('lang')
             ?? $this->getBrowserLocale($request, $supported);
@@ -22,16 +29,22 @@ class SetLocale
             $locale = $locale->value;
         }
 
-        if (! $locale || ! \App\Enums\Locale::tryFrom($locale)) {
-            $locale = config('app.locale', 'en');
-        } else {
-            $request->session()->put('locale', $locale);
+        if (! $locale || ! in_array($locale, $supported, true)) {
+            $locale = $this->localizedRouteService->defaultLocale();
         }
 
+        $request->session()->put('locale', $locale);
         app()->setLocale($locale);
         Carbon::setLocale($locale);
+        URL::defaults(['locale' => $locale]);
 
-        return $next($request);
+        $response = $next($request);
+
+        if (isset($response->headers)) {
+            $response->headers->set('Content-Language', str_replace('_', '-', app()->getLocale()));
+        }
+
+        return $response;
     }
 
     /**

@@ -154,7 +154,7 @@
                             @endif
                         </div>
                         <h2 class="text-xl font-semibold text-ink mb-2">
-                            <a href="{{ route('blog.show', $post->slug) }}" class="hover:text-primary transition before:absolute before:inset-0">{{ $post->title }}</a>
+                            <a href="{{ route('blog.show', ['slug' => $post->slug]) }}" class="hover:text-primary transition before:absolute before:inset-0">{{ $post->title }}</a>
                         </h2>
                         <p class="text-sm text-ink/70 line-clamp-3 mb-4">{{ $post->excerpt }}</p>
                         

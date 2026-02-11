@@ -16,8 +16,8 @@ enum Locale: string implements HasLabel
         return match ($this) {
             self::English => 'English',
             self::German => 'Deutsch',
-            self::Spanish => 'Español',
-            self::French => 'Français',
+            self::Spanish => 'Espanol',
+            self::French => 'Francais',
         };
     }
 }

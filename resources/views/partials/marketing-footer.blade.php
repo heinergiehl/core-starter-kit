@@ -26,10 +26,10 @@
             <div>
                 <h4 class="font-semibold text-ink mb-4">{{ __('SEO Pages') }}</h4>
                 <ul class="space-y-2 text-sm">
-                    <li><a href="{{ route('solutions.show', 'laravel-stripe-paddle-billing-starter') }}" class="text-ink/60 hover:text-ink transition">{{ __('Billing Starter') }}</a></li>
-                    <li><a href="{{ route('solutions.show', 'filament-admin-operations-for-saas') }}" class="text-ink/60 hover:text-ink transition">{{ __('Admin Operations') }}</a></li>
-                    <li><a href="{{ route('solutions.show', 'laravel-saas-blog-and-seo-starter') }}" class="text-ink/60 hover:text-ink transition">{{ __('Blog + SEO') }}</a></li>
-                    <li><a href="{{ route('solutions.show', 'laravel-saas-onboarding-and-localization') }}" class="text-ink/60 hover:text-ink transition">{{ __('Onboarding + i18n') }}</a></li>
+                    <li><a href="{{ route('solutions.show', ['slug' => 'laravel-stripe-paddle-billing-starter']) }}" class="text-ink/60 hover:text-ink transition">{{ __('Billing Starter') }}</a></li>
+                    <li><a href="{{ route('solutions.show', ['slug' => 'filament-admin-operations-for-saas']) }}" class="text-ink/60 hover:text-ink transition">{{ __('Admin Operations') }}</a></li>
+                    <li><a href="{{ route('solutions.show', ['slug' => 'laravel-saas-blog-and-seo-starter']) }}" class="text-ink/60 hover:text-ink transition">{{ __('Blog + SEO') }}</a></li>
+                    <li><a href="{{ route('solutions.show', ['slug' => 'laravel-saas-onboarding-and-localization']) }}" class="text-ink/60 hover:text-ink transition">{{ __('Onboarding + i18n') }}</a></li>
                 </ul>
             </div>
 

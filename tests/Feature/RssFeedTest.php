@@ -25,11 +25,22 @@ class RssFeedTest extends TestCase
             'published_at' => now(),
         ]);
 
-        $response = $this->get('/rss.xml');
+        $response = $this->get(route('rss', ['locale' => 'en']));
 
         $response->assertOk();
         $response->assertHeader('Content-Type', 'application/rss+xml; charset=UTF-8');
+        $response->assertHeader('X-Robots-Tag', 'noindex, follow');
         $response->assertSee('<rss', false);
         $response->assertSee($post->title, false);
+    }
+
+    public function test_legacy_rss_url_redirects_to_localized_feed(): void
+    {
+        $defaultLocale = (string) config('saas.locales.default', config('app.locale', 'en'));
+
+        $response = $this->get('/rss.xml');
+
+        $response->assertStatus(301);
+        $response->assertRedirect(route('rss', ['locale' => $defaultLocale]));
     }
 }

@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Socialite\Facades\Socialite;
 use Mockery;
 use Tests\TestCase;
+use RuntimeException;
 
 class SocialAuthTest extends TestCase
 {
@@ -46,5 +47,20 @@ class SocialAuthTest extends TestCase
         $user = User::where('email', 'test@example.com')->first();
         $this->assertNotNull($user->password);
         $this->assertNotEmpty($user->password);
+    }
+
+    public function test_social_auth_callback_gracefully_handles_provider_configuration_errors(): void
+    {
+        $provider = Mockery::mock(\Laravel\Socialite\Contracts\Provider::class);
+        $provider->shouldReceive('user')
+            ->once()
+            ->andThrow(new RuntimeException('Missing required config keys: client_id, client_secret'));
+
+        Socialite::shouldReceive('driver')->with('github')->andReturn($provider);
+
+        $response = $this->get('/auth/github/callback');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors(['social']);
     }
 }

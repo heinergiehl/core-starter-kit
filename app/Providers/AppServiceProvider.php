@@ -6,8 +6,10 @@ use App\Domain\Billing\Services\EntitlementService;
 use App\Domain\Settings\Services\AppSettingsService;
 use App\Domain\Settings\Services\BrandingService;
 use App\Domain\Settings\Services\MailSettingsService;
+use App\Support\Localization\LocalizedRouteService;
 use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\ValidationException;
@@ -37,6 +39,10 @@ class AppServiceProvider extends ServiceProvider
 
         app(AppSettingsService::class)->applyToConfig();
         app(MailSettingsService::class)->applyConfig();
+
+        URL::defaults([
+            'locale' => app(LocalizedRouteService::class)->defaultLocale(),
+        ]);
 
         // Global Branding for all views
         View::composer('*', function ($view): void {

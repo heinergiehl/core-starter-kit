@@ -248,7 +248,7 @@ class SetupWizard extends Command
 
         return match ($provider) {
             'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
-            'paddle' => ! empty($this->envValues['PADDLE_API_KEY']),
+            'paddle' => ! empty($this->envValues['PADDLE_API_KEY']) && ! empty($this->envValues['PADDLE_VENDOR_ID']),
             default => false,
         };
     }
@@ -429,6 +429,11 @@ class SetupWizard extends Command
         $masked = $currentKey ? Str::mask($currentKey, '*', 7, -4) : '(not set)';
 
         if ($this->confirm("Configure Paddle API keys? Current: {$masked}", empty($currentKey))) {
+            $vendorId = $this->ask('Paddle Vendor ID');
+            if (! empty($vendorId)) {
+                $this->envValues['PADDLE_VENDOR_ID'] = $vendorId;
+            }
+
             $apiKey = $this->secret('Paddle API Key');
             if ($apiKey) {
                 $this->envValues['PADDLE_API_KEY'] = $apiKey;
@@ -570,7 +575,7 @@ class SetupWizard extends Command
         $provider = $this->envValues['BILLING_DEFAULT_PROVIDER'] ?? 'stripe';
         $hasKey = match ($provider) {
             'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
-            'paddle' => ! empty($this->envValues['PADDLE_API_KEY']),
+            'paddle' => ! empty($this->envValues['PADDLE_API_KEY']) && ! empty($this->envValues['PADDLE_VENDOR_ID']),
             default => false,
         };
 

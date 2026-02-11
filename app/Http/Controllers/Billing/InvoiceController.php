@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InvoiceController
@@ -165,7 +166,16 @@ class InvoiceController
             return null;
         }
 
-        $apiKey = config('services.paddle.api_key');
+        $apiKey = trim((string) config('services.paddle.api_key', ''));
+
+        if ($apiKey === '') {
+            Log::warning('Skipped Paddle invoice fetch because PADDLE_API_KEY is missing.', [
+                'invoice_id' => $invoice->id,
+            ]);
+
+            return null;
+        }
+
         $baseUrl = config('services.paddle.environment') === 'sandbox'
             ? 'https://sandbox-api.paddle.com'
             : 'https://api.paddle.com';
@@ -195,8 +205,18 @@ class InvoiceController
             return null;
         }
 
+        $secret = trim((string) config('services.stripe.secret', ''));
+
+        if ($secret === '') {
+            Log::warning('Skipped Stripe invoice fetch because STRIPE_SECRET is missing.', [
+                'invoice_id' => $invoice->id,
+            ]);
+
+            return null;
+        }
+
         try {
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+            $stripe = new \Stripe\StripeClient($secret);
             $stripeInvoice = $stripe->invoices->retrieve($invoiceId);
 
             return $stripeInvoice->invoice_pdf ?? $stripeInvoice->hosted_invoice_url;

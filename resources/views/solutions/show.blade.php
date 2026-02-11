@@ -37,6 +37,10 @@
     </script>
 @endpush
 
+@push('preloads')
+    <link rel="preload" as="image" href="{{ asset($solutionPage['hero_image']) }}" fetchpriority="high">
+@endpush
+
 @section('content')
     <section class="relative overflow-hidden py-12 sm:py-16">
         <div class="absolute inset-0 -z-10 pointer-events-none bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.16),_transparent_55%)]"></div>
@@ -50,10 +54,10 @@
                     {{ $solutionPage['hero_description'] }}
                 </p>
                 <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <a href="{{ route('pricing') }}" class="btn-primary text-center">See Pricing</a>
-                    <a href="{{ route('features') }}" class="btn-secondary text-center">Explore All Features</a>
+                    <a href="{{ route('pricing') }}" class="btn-primary text-center">{{ __('See Pricing') }}</a>
+                    <a href="{{ route('features') }}" class="btn-secondary text-center">{{ __('Explore All Features') }}</a>
                     <a href="{{ route('docs.index') }}" class="text-sm font-semibold text-ink/70 transition hover:text-ink">
-                        Read Docs ->
+                        {{ __('Read Docs') }} ->
                     </a>
                 </div>
                 <div class="mt-7 flex flex-wrap gap-2">
@@ -88,9 +92,9 @@
 
     <section class="py-8 sm:py-12">
         <div class="glass-panel rounded-[30px] p-8 sm:p-10">
-            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">Workflow proof with real screens</h2>
+            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Workflow proof with real screens') }}</h2>
             <p class="mt-3 max-w-3xl text-sm leading-7 text-ink/70 sm:text-base">
-                Each screenshot below maps to an existing workflow in this starter. Click any card to inspect the full-resolution screen.
+                {{ __('Each screenshot below maps to an existing workflow in this starter. Click any card to inspect the full-resolution screen.') }}
             </p>
 
             <div class="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -112,7 +116,7 @@
                             <div class="px-1 pb-1 pt-4">
                                 <h3 class="text-lg font-semibold text-ink">{{ $shot['title'] }}</h3>
                                 <p class="mt-1 text-sm leading-6 text-ink/70">{{ $shot['copy'] }}</p>
-                                <span class="mt-3 inline-flex text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Open full screenshot</span>
+                                <span class="mt-3 inline-flex text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">{{ __('Open full screenshot') }}</span>
                             </div>
                         </a>
                     </article>
@@ -124,8 +128,8 @@
     <section class="py-8 sm:py-12">
         <div class="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
             <article class="rounded-2xl border border-ink/10 bg-white/85 p-6 shadow-sm dark:bg-white/5">
-                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Implementation Coverage</p>
-                <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">What this solution includes right now</h2>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{{ __('Implementation Coverage') }}</p>
+                <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('What this solution includes right now') }}</h2>
                 <ul class="mt-5 space-y-3">
                     @foreach ($solutionPage['coverage'] as $item)
                         <li class="flex items-start gap-2 text-sm leading-6 text-ink/80">
@@ -137,13 +141,13 @@
             </article>
 
             <article class="rounded-2xl border border-ink/10 bg-white/85 p-6 shadow-sm dark:bg-white/5">
-                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Internal Links</p>
-                <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">Continue your evaluation</h2>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{{ __('Internal Links') }}</p>
+                <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Continue your evaluation') }}</h2>
                 <div class="mt-5 space-y-3">
-                    <a href="{{ route('features') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">Browse full feature map</a>
-                    <a href="{{ route('pricing') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">Review pricing and plans</a>
-                    <a href="{{ route('docs.index') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">Read docs and implementation notes</a>
-                    <a href="{{ route('solutions.index') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">See all solution pages</a>
+                    <a href="{{ route('features') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">{{ __('Browse full feature map') }}</a>
+                    <a href="{{ route('pricing') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">{{ __('Review pricing and plans') }}</a>
+                    <a href="{{ route('docs.index') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">{{ __('Read docs and implementation notes') }}</a>
+                    <a href="{{ route('solutions.index') }}" class="block rounded-xl border border-ink/10 bg-white/85 px-4 py-3 text-sm font-semibold text-ink/75 transition hover:border-primary/35 hover:text-ink dark:bg-white/[0.04]">{{ __('See all solution pages') }}</a>
                 </div>
             </article>
         </div>
@@ -151,7 +155,7 @@
 
     <section class="py-8 sm:py-12">
         <div class="glass-panel rounded-[30px] p-8 sm:p-10">
-            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">FAQ</h2>
+            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('FAQ') }}</h2>
             <div class="mt-6 grid gap-3">
                 @foreach ($solutionPage['faq'] as $faq)
                     <details class="group rounded-2xl border border-ink/10 bg-white/85 p-5 transition hover:border-primary/35 dark:bg-white/5">
@@ -169,8 +173,8 @@
     @if (! empty($relatedSolutions))
         <section class="py-8 sm:py-12">
             <div class="rounded-[30px] border border-ink/10 bg-gradient-to-br from-white/85 via-white/70 to-primary/10 p-8 shadow-lg shadow-ink/5 dark:from-white/[0.04] dark:via-white/[0.03] dark:to-primary/15 sm:p-10">
-                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Related Long-tail Pages</p>
-                <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">Explore adjacent solution clusters</h2>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{{ __('Related Long-tail Pages') }}</p>
+                <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Explore adjacent solution clusters') }}</h2>
                 <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($relatedSolutions as $related)
                         <article class="overflow-hidden rounded-2xl border border-ink/10 bg-white/85 p-3 shadow-sm dark:bg-white/5">

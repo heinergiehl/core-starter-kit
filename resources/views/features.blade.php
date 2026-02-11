@@ -7,7 +7,7 @@
 @push('meta')
     <link rel="canonical" href="{{ route('features') }}">
     <meta name="robots" content="index,follow,max-image-preview:large">
-    <meta name="keywords" content="laravel saas features, laravel stripe paddle billing starter, filament admin panel saas operations, laravel blog seo starter, onboarding localization saas">
+    <meta name="keywords" content="{{ __('laravel saas features, laravel stripe paddle billing starter, filament admin panel saas operations, laravel blog seo starter, onboarding localization saas') }}">
     <meta name="twitter:title" content="{{ __('SaaS features for real production launches') }}">
     <meta name="twitter:description" content="{{ __('From login and checkout to product operations and content workflows, this starter ships complete execution surfaces.') }}">
 
@@ -62,6 +62,10 @@
             ],
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) !!}
     </script>
+@endpush
+
+@push('preloads')
+    <link rel="preload" as="image" href="{{ asset('marketing/checkout-provider-select-focus.png') }}" fetchpriority="high">
 @endpush
 
 @section('content')
@@ -243,22 +247,22 @@
             [
                 'title' => __('Laravel Stripe and Paddle billing starter'),
                 'copy' => __('Targeting billing-intent keywords around multi-provider checkout, subscriptions, and invoice operations.'),
-                'url' => route('solutions.show', 'laravel-stripe-paddle-billing-starter'),
+                'url' => route('solutions.show', ['slug' => 'laravel-stripe-paddle-billing-starter']),
             ],
             [
                 'title' => __('Filament admin operations for SaaS'),
                 'copy' => __('Targeting operations-intent keywords around user governance, product catalog, and admin execution.'),
-                'url' => route('solutions.show', 'filament-admin-operations-for-saas'),
+                'url' => route('solutions.show', ['slug' => 'filament-admin-operations-for-saas']),
             ],
             [
                 'title' => __('Laravel SaaS blog and SEO starter'),
                 'copy' => __('Targeting organic growth keywords around blog workflows, metadata, sitemap, RSS, and OG routes.'),
-                'url' => route('solutions.show', 'laravel-saas-blog-and-seo-starter'),
+                'url' => route('solutions.show', ['slug' => 'laravel-saas-blog-and-seo-starter']),
             ],
             [
                 'title' => __('Laravel onboarding and localization starter'),
                 'copy' => __('Targeting activation and internationalization keywords around sign-in, onboarding, and locale switching.'),
-                'url' => route('solutions.show', 'laravel-saas-onboarding-and-localization'),
+                'url' => route('solutions.show', ['slug' => 'laravel-saas-onboarding-and-localization']),
             ],
         ];
     @endphp

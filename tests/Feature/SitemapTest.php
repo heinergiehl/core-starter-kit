@@ -25,10 +25,12 @@ class SitemapTest extends TestCase
             'published_at' => now(),
         ]);
 
-        $response = $this->get('/sitemap.xml');
+        $response = $this->get(route('sitemap.blog'));
+        $defaultLocale = (string) config('saas.locales.default', config('app.locale', 'en'));
 
         $response->assertOk();
-        $response->assertHeader('Content-Type', 'application/xml');
-        $response->assertSee(route('blog.show', $post->slug), false);
+        $response->assertHeader('Content-Type', 'application/xml; charset=UTF-8');
+        $response->assertHeader('X-Robots-Tag', 'noindex, follow');
+        $response->assertSee(route('blog.show', ['locale' => $defaultLocale, 'slug' => $post->slug]), false);
     }
 }

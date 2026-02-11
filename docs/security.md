@@ -56,8 +56,9 @@ This document is a practical checklist for securing the SaaS kit in production.
 ---
 
 ## 7) Secrets management
-- Provider secrets in env vars only
-- Never store secrets in DB
+- Keep baseline provider secrets in env vars
+- Optional provider overrides may be stored in DB only if encrypted (for this kit: `payment_providers.configuration` is encrypted at cast level)
+- Never store secrets in plaintext columns
 - Rotate secrets regularly (document rotation steps)
 - Avoid committing `.env` files
 

@@ -2,12 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class LocaleController extends Controller
 {
+    public function __construct(
+        private readonly LocalizedRouteService $localizedRouteService
+    ) {}
+
     public function __invoke(Request $request): RedirectResponse
     {
         $locale = (string) $request->input('locale');
@@ -23,13 +28,10 @@ class LocaleController extends Controller
             $request->user()->update(['locale' => $localeEnum]);
         }
 
-        $redirect = (string) $request->input('redirect');
-        $appUrl = rtrim((string) config('app.url', ''), '/');
+        $redirect = (string) $request->input('redirect', '');
 
-        if ($redirect && $appUrl && str_starts_with($redirect, $appUrl)) {
-            return redirect()->to($redirect);
-        }
-
-        return redirect()->back();
+        return redirect()->to(
+            $this->localizedRouteService->resolveLocaleSwitchRedirect($request, $localeEnum->value, $redirect)
+        );
     }
 }

@@ -97,7 +97,7 @@ class BillingProviderManager
             $config['connect_timeout'] ??= (int) config('saas.billing.provider_api.connect_timeouts.paddle', 5);
             $config['retries'] ??= (int) config('saas.billing.provider_api.retries.paddle', 2);
             $config['retry_delay_ms'] ??= (int) config('saas.billing.provider_api.retry_delay_ms', 500);
-            $config['webhook_tolerance_seconds'] ??= (int) env('PADDLE_WEBHOOK_TOLERANCE_SECONDS', 300);
+            $config['webhook_tolerance_seconds'] ??= (int) config('services.paddle.webhook_tolerance_seconds', 300);
 
             return $config;
         }

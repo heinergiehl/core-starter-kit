@@ -7,7 +7,7 @@
 
 <form method="POST" action="{{ route('locale.update') }}" class="{{ $class }}" data-submit-lock>
     @csrf
-    <input type="hidden" name="redirect" value="{{ url()->current() }}">
+    <input type="hidden" name="redirect" value="{{ url()->full() }}">
     <label class="sr-only" for="locale-switcher">{{ __('Language') }}</label>
     <select
         id="locale-switcher"

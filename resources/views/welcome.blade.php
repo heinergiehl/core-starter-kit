@@ -7,7 +7,7 @@
 @push('meta')
     <link rel="canonical" href="{{ route('home') }}">
     <meta name="robots" content="index,follow,max-image-preview:large">
-    <meta name="keywords" content="laravel saas starter kit, laravel stripe paddle billing starter, filament admin panel saas starter, laravel blog seo starter, onboarding localization saas">
+    <meta name="keywords" content="{{ __('laravel saas starter kit, laravel stripe paddle billing starter, filament admin panel saas starter, laravel blog seo starter, onboarding localization saas') }}">
     <meta name="twitter:title" content="{{ __('Laravel SaaS starter kit with auth, checkout, and admin workflows') }}">
     <meta name="twitter:description" content="{{ __('Built-in login, checkout, billing, admin, and marketing surfaces so teams can ship production SaaS faster.') }}">
 
@@ -78,11 +78,11 @@
                 asset('marketing/admin-products-focus.png'),
             ],
             'featureList' => [
-                'Authentication and social login',
-                'Checkout with Stripe and Paddle',
-                'Admin product and pricing workflows',
-                'Customer and user management',
-                'Blog, docs, and roadmap pages',
+                __('Authentication and social login'),
+                __('Checkout with Stripe and Paddle'),
+                __('Admin product and pricing workflows'),
+                __('Customer and user management'),
+                __('Blog, docs, and roadmap pages'),
             ],
             'offers' => [
                 '@type' => 'Offer',
@@ -109,6 +109,10 @@
             ),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) !!}
     </script>
+@endpush
+
+@push('preloads')
+    <link rel="preload" as="image" href="{{ asset('marketing/localhost_8000_admin.png') }}" fetchpriority="high">
 @endpush
 
 @section('content')
@@ -252,22 +256,22 @@
             [
                 'title' => __('Laravel Stripe and Paddle billing starter'),
                 'copy' => __('Dual-provider checkout, subscriptions, invoicing, and billing lifecycle operations.'),
-                'url' => route('solutions.show', 'laravel-stripe-paddle-billing-starter'),
+                'url' => route('solutions.show', ['slug' => 'laravel-stripe-paddle-billing-starter']),
             ],
             [
                 'title' => __('Filament admin operations for SaaS'),
                 'copy' => __('User governance, catalog management, and day-to-day operations in one admin panel.'),
-                'url' => route('solutions.show', 'filament-admin-operations-for-saas'),
+                'url' => route('solutions.show', ['slug' => 'filament-admin-operations-for-saas']),
             ],
             [
                 'title' => __('Laravel SaaS blog and SEO starter'),
                 'copy' => __('Editorial workflow with metadata controls, sitemap, RSS, and Open Graph support.'),
-                'url' => route('solutions.show', 'laravel-saas-blog-and-seo-starter'),
+                'url' => route('solutions.show', ['slug' => 'laravel-saas-blog-and-seo-starter']),
             ],
             [
                 'title' => __('Onboarding and localization for SaaS'),
                 'copy' => __('Activation flow, social login, onboarding routes, and locale-aware UX surfaces.'),
-                'url' => route('solutions.show', 'laravel-saas-onboarding-and-localization'),
+                'url' => route('solutions.show', ['slug' => 'laravel-saas-onboarding-and-localization']),
             ],
         ];
 

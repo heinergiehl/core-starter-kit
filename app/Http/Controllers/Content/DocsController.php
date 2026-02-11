@@ -20,7 +20,7 @@ class DocsController
         ]);
     }
 
-    public function show(string $page): View
+    public function show(string $locale, string $page): View
     {
         $page = strtolower(trim($page));
 

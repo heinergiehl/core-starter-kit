@@ -63,7 +63,7 @@ class BlogController
         ]);
     }
 
-    public function show(string $slug): View
+    public function show(string $locale, string $slug): View
     {
         $post = BlogPost::query()
             ->where('slug', $slug)

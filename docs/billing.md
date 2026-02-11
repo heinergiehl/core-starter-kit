@@ -132,9 +132,21 @@ Typical keys:
 Typical keys:
 - `PADDLE_VENDOR_ID`
 - `PADDLE_API_KEY`
+- `PADDLE_CLIENT_SIDE_TOKEN` (recommended)
 - `PADDLE_WEBHOOK_SECRET`
 
 Exact keys depend on the adapter package you use. Keep them documented here.
+
+### 5.3 Secret requirements by flow
+- Stripe checkout/catalog actions require: `STRIPE_SECRET`
+- Stripe webhook verification requires: `STRIPE_WEBHOOK_SECRET`
+- Stripe hosted checkout page UX uses: `STRIPE_KEY` (recommended)
+- Paddle checkout/catalog actions require: `PADDLE_API_KEY`
+- Paddle inline checkout page requires: `PADDLE_VENDOR_ID`
+- Paddle webhook verification requires: `PADDLE_WEBHOOK_SECRET`
+- Paddle client token (`PADDLE_CLIENT_SIDE_TOKEN`) is recommended and validated by readiness checks as a warning if missing
+
+If any required key is missing, provider actions should fail with a clear configuration error, not an SDK/type error.
 
 ---
 
@@ -295,9 +307,10 @@ php artisan billing:check-readiness --strict
 
 What it validates:
 - `APP_URL` and webhook URL shape
+- `APP_KEY` presence
 - queue mode for webhook processing
 - failed-job persistence configuration
-- active provider secrets (`Stripe` / `Paddle`)
+- active provider secrets (`Stripe` / `Paddle`, including `PADDLE_VENDOR_ID`)
 - route availability for `/webhooks/{provider}`
 
 Recommended release gate:
@@ -345,3 +358,27 @@ php artisan billing:archive-all --provider=stripe --include-prices
 - **Development cleanup** - Clear out test products
 - **Provider migration** - Archive old provider before switching
 - **Fresh start** - Clean slate for your product catalog
+
+---
+
+## 16) Error handling and DX
+
+### 16.1 Runtime behavior for missing secrets
+- Billing runtime adapters throw `BillingException::missingConfiguration(...)` for missing required keys.
+- Checkout and portal controllers catch provider failures and show user-safe messages.
+- Invoice download falls back cleanly when provider secrets are missing (redirects back to billing with an error).
+- Social auth callback/redirect now catches provider misconfiguration errors and returns to login with a clear message.
+
+### 16.2 Diagnostics flow for developers
+1. Run `php artisan billing:check-readiness` locally/staging.
+2. Fix every `FAIL` result first (especially missing provider secrets).
+3. For production pipelines, use `php artisan billing:check-readiness --strict`.
+4. Verify one real webhook per provider reaches `processed` state.
+
+### 16.3 Common misconfiguration symptoms
+- `... is not configured` from billing services:
+  A required provider key is missing; check `.env`, config cache, and active provider settings.
+- Checkout page loads but provider widget fails:
+  Most often missing/invalid `PADDLE_VENDOR_ID` or provider environment mismatch.
+- Social login redirects back to `/login` with a social error:
+  Check OAuth client id/secret/redirect URI in `config/services.php` values.
