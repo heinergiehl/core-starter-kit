@@ -104,3 +104,4 @@ If disabled too early, browser console will show `Alpine Expression Error` with 
 - Uploaded logos/favicons may be stored on the `public` disk (`storage/app/public/branding/...`).
 - Ensure your deploy includes `php artisan storage:link` and correct file permissions.
 - The app also provides a `/branding/{path}` fallback route to serve brand files when `/storage` is restricted by hosting config.
+- If a referenced branding file is missing/unreadable, the fallback route now serves a default brand mark instead of returning a 500.

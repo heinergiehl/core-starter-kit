@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Content;
 
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class BrandingAssetController
 {
@@ -17,17 +19,28 @@ class BrandingAssetController
             abort(404);
         }
 
-        $publicPath = public_path("branding/{$path}");
-        if (is_file($publicPath)) {
-            return response()->file($publicPath);
+        try {
+            $publicPath = public_path("branding/{$path}");
+            if (is_file($publicPath)) {
+                return response()->file($publicPath);
+            }
+
+            $storagePath = "branding/{$path}";
+            if (Storage::disk('public')->exists($storagePath)) {
+                return Storage::disk('public')->response($storagePath);
+            }
+        } catch (Throwable $exception) {
+            Log::warning('Failed to serve branding asset.', [
+                'path' => $path,
+                'error' => $exception->getMessage(),
+            ]);
         }
 
-        $storagePath = "branding/{$path}";
-        if (Storage::disk('public')->exists($storagePath)) {
-            return Storage::disk('public')->response($storagePath);
+        $fallback = public_path('branding/shipsolid-s-mark.svg');
+        if (is_file($fallback)) {
+            return response()->file($fallback);
         }
 
         abort(Response::HTTP_NOT_FOUND);
     }
 }
-
