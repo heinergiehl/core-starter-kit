@@ -34,6 +34,8 @@ npm run build
 - `/blog` and `/blog/{slug}` render.
 - `/roadmap` renders, voting requires auth.
 - `/rss.xml`, `/sitemap.xml`, `/og` endpoints return successfully.
+- `/branding/shipsolid-s-mark.svg` returns 200.
+- `/branding/does-not-exist.png` should not return 500 (fallback asset expected).
 
 ### Auth + profile
 - Register new user.

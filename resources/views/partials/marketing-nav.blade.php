@@ -114,13 +114,13 @@
             @elseif($hasSubscription)
                 <a href="{{ url('/app') }}" class="px-4 py-2 text-xs font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Open App') }}</a>
             @elseif($hasPurchase)
-                <a href="{{ route('billing.index') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90">{{ __('Billing') }}</a>
+                <a href="{{ route('billing.index') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Billing') }}</a>
             @else
-                <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90">{{ __('Choose a Plan') }}</a>
+                <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Choose a Plan') }}</a>
             @endif
         @else
             <a href="{{ route('login') }}" class="hidden text-sm font-medium transition sm:inline-flex text-ink/70 hover:text-ink">{{ __('Sign In') }}</a>
-            <a href="{{ route('register') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90">{{ __('Get Started') }}</a>
+            <a href="{{ route('register') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Get Started') }}</a>
         @endauth
 
         {{-- Mobile Menu Button --}}

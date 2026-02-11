@@ -170,6 +170,11 @@ High level checklist:
 5) Run queue workers
 6) Configure scheduler cron
 7) Configure billing webhooks (Stripe/Paddle)
+8) Validate billing/runtime config: `php artisan billing:check-readiness` (or `--strict`)
+9) Ensure writable runtime paths exist (`storage/*`, `bootstrap/cache`) and run `php artisan storage:link`
+10) Set environment-level deploy variables explicitly:
+   - `CSP_ALLOW_UNSAFE_EVAL` for your CSP posture
+   - `WEB_GROUP` to match your PHP-FPM/Nginx group (usually `www-data`)
 
 See:
 - `docs/security.md` for hardening

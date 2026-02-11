@@ -105,3 +105,17 @@ If disabled too early, browser console will show `Alpine Expression Error` with 
 - Ensure your deploy includes `php artisan storage:link` and correct file permissions.
 - The app also provides a `/branding/{path}` fallback route to serve brand files when `/storage` is restricted by hosting config.
 - If a referenced branding file is missing/unreadable, the fallback route now serves a default brand mark instead of returning a 500.
+
+---
+
+## 13) Production deploy guardrails
+- Never allow deploys to leave the app in maintenance mode:
+  - Use a shell trap/finalizer that always runs `php artisan up` on failure.
+- Treat runtime filesystem state as part of the release:
+  - Ensure `storage/framework/*`, `storage/logs`, `storage/app/public/branding`, and `bootstrap/cache` exist.
+  - Ensure `storage/logs/laravel.log` exists and is writable.
+- Align permissions with your web server group (for example `www-data`) and use setgid directories so new files remain group-writable.
+- Run `php artisan billing:check-readiness` during deploy to fail fast on missing critical secrets.
+- Set CSP behavior explicitly per environment:
+  - `CSP_ALLOW_UNSAFE_EVAL=true|false` in deployment env vars.
+  - After changing CSP/env values, run `php artisan optimize:clear` and rebuild config cache.

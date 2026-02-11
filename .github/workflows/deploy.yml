@@ -28,6 +28,7 @@ jobs:
       DEPLOY_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.ref || 'main' }}
       PADDLE_ENV_DEFAULT: ${{ github.event_name == 'workflow_run' && 'sandbox' || 'production' }}
       VPS_PATH: ${{ vars.VPS_PATH || (github.event_name == 'workflow_run' && '/var/www/myapps/shipsolid-staging' || '/var/www/myapps/shipsolid') }}
+      WEB_GROUP: ${{ vars.WEB_GROUP || 'www-data' }}
 
     steps:
       - name: Checkout
@@ -162,7 +163,9 @@ jobs:
             
             PADDLE_VENDOR_ID=${{ secrets.PADDLE_VENDOR_ID }}
             PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY }}
+            PADDLE_CLIENT_SIDE_TOKEN=${{ secrets.PADDLE_CLIENT_SIDE_TOKEN }}
             PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET }}
+            PADDLE_WEBHOOK_TOLERANCE_SECONDS=${{ vars.PADDLE_WEBHOOK_TOLERANCE_SECONDS || '300' }}
             PADDLE_ENV=${{ secrets.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
             
             BRAND_FONT_SANS="Instrument Sans"
@@ -178,27 +181,54 @@ jobs:
       - name: Run Remote Scripts
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
-            set -e
+            set -Eeuo pipefail
             cd ${{ env.VPS_PATH }}
+
+            app_is_down=0
+            cleanup() {
+              if [ "$app_is_down" -eq 1 ]; then
+                php artisan up || true
+              fi
+            }
+            trap cleanup EXIT
             
             # Ensure Postgres is running - ignore if already up/bound
             docker compose up -d --wait pgsql || true
             
             # Ensure storage structure exists since we exclude it from sync
-            mkdir -p storage/framework/{cache,sessions,testing,views}
+            umask 002
+            mkdir -p storage/framework/cache/data
+            mkdir -p storage/framework/sessions
+            mkdir -p storage/framework/testing
+            mkdir -p storage/framework/views
+            mkdir -p storage/app/public/branding
             mkdir -p storage/logs
             mkdir -p bootstrap/cache
+            touch storage/logs/laravel.log
             
-            # Fix permissions
-            chmod -R 775 storage bootstrap/cache
+            # Keep storage writable for both deploy user and PHP-FPM group.
+            WEB_GROUP="${{ env.WEB_GROUP }}"
+            if getent group "$WEB_GROUP" >/dev/null 2>&1; then
+              chgrp -R "$WEB_GROUP" storage bootstrap/cache || true
+            fi
+
+            find storage bootstrap/cache -type d -exec chmod 2775 {} \;
+            find storage bootstrap/cache -type f -exec chmod 664 {} \;
 
             php artisan storage:link --force
-            php artisan down || true
+            php artisan optimize:clear
+            php artisan billing:check-readiness
+
+            php artisan down --retry=60 || true
+            app_is_down=1
+
             php artisan migrate --force
             php artisan filament:upgrade
             php artisan optimize
             php artisan config:cache
             php artisan route:cache
             php artisan view:cache
-            php artisan up
+            php artisan queue:restart || true
+            php artisan up || true
+            app_is_down=0
           EOF
