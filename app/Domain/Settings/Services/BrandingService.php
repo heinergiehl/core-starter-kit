@@ -5,6 +5,7 @@ namespace App\Domain\Settings\Services;
 use App\Domain\Settings\Models\BrandSetting;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class BrandingService
 {
@@ -23,14 +24,18 @@ class BrandingService
 
     public function logoPath(): ?string
     {
-        return $this->globalSetting()?->logo_path ?: config('saas.branding.logo_path');
+        return $this->normalizeAssetPath(
+            $this->globalSetting()?->logo_path ?: config('saas.branding.logo_path')
+        );
     }
 
     public function faviconPath(): ?string
     {
         $setting = $this->globalSetting();
 
-        return $setting?->favicon_path ?: $setting?->logo_path ?: config('saas.branding.favicon_path');
+        return $this->normalizeAssetPath(
+            $setting?->favicon_path ?: $setting?->logo_path ?: config('saas.branding.favicon_path')
+        );
     }
 
     public function assetVersion(): string
@@ -94,5 +99,22 @@ class BrandingService
             now()->addMinutes(self::CACHE_TTL_MINUTES),
             fn () => Schema::hasTable('brand_settings')
         );
+    }
+
+    private function normalizeAssetPath(?string $path): ?string
+    {
+        $path = trim((string) $path);
+
+        if ($path === '') {
+            return null;
+        }
+
+        $path = ltrim($path, '/');
+
+        if (str_starts_with($path, 'storage/')) {
+            return Str::after($path, 'storage/');
+        }
+
+        return $path;
     }
 }

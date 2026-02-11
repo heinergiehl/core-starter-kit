@@ -1,7 +1,6 @@
 @php
     $logoPath = filled($appLogoPath ?? null) ? (string) $appLogoPath : null;
-    $logoFile = $logoPath ? public_path($logoPath) : null;
-    $shouldRenderImage = $logoPath && $logoFile && is_file($logoFile);
+    $shouldRenderImage = filled($logoPath);
 @endphp
 
 @if ($shouldRenderImage)

@@ -91,8 +91,13 @@ class SecurityHeaders
         // Allow https: for form actions to prevent blocking seemingly valid secure submissions
         $formAction = "'self' https:";
 
-        if (app()->isLocal()) {
+        $allowUnsafeEval = app()->isLocal() || (bool) config('saas.security.allow_unsafe_eval', false);
+
+        if ($allowUnsafeEval) {
             $unsafeEval = " 'unsafe-eval'";
+        }
+
+        if (app()->isLocal()) {
             $hosts = array_unique([
                 $request->getHost(),
                 'localhost',

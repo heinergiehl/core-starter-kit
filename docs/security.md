@@ -86,3 +86,21 @@ This document is a practical checklist for securing the SaaS kit in production.
 - DB backups configured
 - Webhook endpoints accessible and verified
 - Admin access restricted (IP allowlist optional)
+
+---
+
+## 11) CSP + Alpine/Livewire note
+- This kit uses Alpine/Livewire expressions (`x-data`, `x-show`, `@click`, etc.).
+- Alpine expression evaluation typically needs `script-src 'unsafe-eval'` unless your frontend is fully CSP-safe without Alpine expression parsing.
+- Toggle via env:
+  - `CSP_ALLOW_UNSAFE_EVAL=true` (default in `.env.example`)
+  - Set to `false` only after validating all interactive pages under your CSP policy.
+
+If disabled too early, browser console will show `Alpine Expression Error` with CSP `unsafe-eval` violations.
+
+---
+
+## 12) Storage-backed brand assets
+- Uploaded logos/favicons may be stored on the `public` disk (`storage/app/public/branding/...`).
+- Ensure your deploy includes `php artisan storage:link` and correct file permissions.
+- The app also provides a `/branding/{path}` fallback route to serve brand files when `/storage` is restricted by hosting config.

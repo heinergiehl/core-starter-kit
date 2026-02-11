@@ -12,6 +12,7 @@ use App\Http\Controllers\Billing\WebhookController;
 use App\Http\Controllers\Blog\BlogController;
 use App\Http\Controllers\Content\DocsController;
 use App\Http\Controllers\Content\BlogSitemapController;
+use App\Http\Controllers\Content\BrandingAssetController;
 use App\Http\Controllers\Content\MarketingSitemapController;
 use App\Http\Controllers\Content\OgImageController;
 use App\Http\Controllers\Content\RssController;
@@ -134,6 +135,11 @@ Route::prefix('{locale}')
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])
     ->name('announcements.dismiss');
+
+// Branding asset fallback route for environments where /storage symlink is unavailable/restricted.
+Route::get('/branding/{path}', BrandingAssetController::class)
+    ->where('path', '.*')
+    ->name('branding.asset');
 
 Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 Route::get('/sitemaps/marketing.xml', MarketingSitemapController::class)->name('sitemap.marketing');

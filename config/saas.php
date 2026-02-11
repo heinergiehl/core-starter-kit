@@ -114,6 +114,9 @@ return [
         'onboarding' => true,
     ],
     'security' => [
+        // Alpine/Livewire expression evaluation uses dynamic function evaluation.
+        // Keep this true unless your frontend is fully CSP-safe without Alpine eval.
+        'allow_unsafe_eval' => env('CSP_ALLOW_UNSAFE_EVAL', true),
         'csp_domains' => [
             'script' => ['https://*.paddle.com', 'https://cdn.paddle.com', 'https://js.stripe.com'],
             'style' => ['https://fonts.googleapis.com'],

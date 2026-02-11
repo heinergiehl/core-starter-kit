@@ -96,6 +96,7 @@ jobs:
             APP_KEY=${{ secrets.APP_KEY }}
             APP_DEBUG=false
             APP_URL=${{ secrets.APP_URL }}
+            CSP_ALLOW_UNSAFE_EVAL=${{ vars.CSP_ALLOW_UNSAFE_EVAL || 'true' }}
             
             APP_LOCALE=en
             APP_FALLBACK_LOCALE=en
