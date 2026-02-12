@@ -263,7 +263,7 @@ class BillingCheckReadiness extends Command
                 : $this->failCheck('Paddle API key configured', 'Missing PADDLE_API_KEY.');
             $checks[] = $clientToken !== ''
                 ? $this->passCheck('Paddle client token configured', 'present')
-                : $this->warnCheck('Paddle client token configured', 'Missing PADDLE_CLIENT_SIDE_TOKEN.');
+                : $this->passCheck('Paddle client token configured', 'not set (optional)');
             $checks[] = $webhook !== ''
                 ? $this->passCheck('Paddle webhook secret configured', 'present')
                 : $this->failCheck('Paddle webhook secret configured', 'Missing PADDLE_WEBHOOK_SECRET.');

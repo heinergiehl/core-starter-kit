@@ -92,19 +92,19 @@ jobs:
 
       - name: Validate required secrets
         env:
-          APP_KEY: ${{ secrets.APP_KEY }}
-          APP_URL: ${{ secrets.APP_URL }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_DATABASE: ${{ secrets.DB_DATABASE }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
-          STRIPE_SECRET: ${{ secrets.STRIPE_SECRET }}
-          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          PADDLE_VENDOR_ID: ${{ secrets.PADDLE_VENDOR_ID }}
-          PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
-          PADDLE_CLIENT_SIDE_TOKEN: ${{ secrets.PADDLE_CLIENT_SIDE_TOKEN }}
-          PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET }}
+          APP_KEY: ${{ secrets.APP_KEY || vars.APP_KEY }}
+          APP_URL: ${{ secrets.APP_URL || vars.APP_URL }}
+          DB_HOST: ${{ secrets.DB_HOST || vars.DB_HOST }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE || vars.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME || vars.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD || vars.DB_PASSWORD }}
+          STRIPE_KEY: ${{ secrets.STRIPE_KEY || vars.STRIPE_KEY }}
+          STRIPE_SECRET: ${{ secrets.STRIPE_SECRET || vars.STRIPE_SECRET }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET || vars.STRIPE_WEBHOOK_SECRET }}
+          PADDLE_VENDOR_ID: ${{ secrets.PADDLE_VENDOR_ID || vars.PADDLE_VENDOR_ID }}
+          PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY || vars.PADDLE_API_KEY }}
+          PADDLE_CLIENT_SIDE_TOKEN: ${{ secrets.PADDLE_CLIENT_SIDE_TOKEN || vars.PADDLE_CLIENT_SIDE_TOKEN }}
+          PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET || vars.PADDLE_WEBHOOK_SECRET }}
         run: |
           set -Eeuo pipefail
           missing=0
@@ -120,7 +120,6 @@ jobs:
             STRIPE_WEBHOOK_SECRET
             PADDLE_VENDOR_ID
             PADDLE_API_KEY
-            PADDLE_CLIENT_SIDE_TOKEN
             PADDLE_WEBHOOK_SECRET
           )
           for var in "${required_vars[@]}"; do
@@ -134,14 +133,18 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${PADDLE_CLIENT_SIDE_TOKEN:-}" ]; then
+            echo "::warning::PADDLE_CLIENT_SIDE_TOKEN is not set. Paddle inline checkout UI token is optional."
+          fi
+
       - name: Generate .env
         env:
           ENV_FILE: |
             APP_NAME="Matador"
             APP_ENV=${{ env.DEPLOY_ENV }}
-            APP_KEY=${{ secrets.APP_KEY }}
+            APP_KEY=${{ secrets.APP_KEY || vars.APP_KEY }}
             APP_DEBUG=false
-            APP_URL=${{ secrets.APP_URL }}
+            APP_URL=${{ secrets.APP_URL || vars.APP_URL }}
             CSP_ALLOW_UNSAFE_EVAL=${{ vars.CSP_ALLOW_UNSAFE_EVAL || 'false' }}
             
             APP_LOCALE=en
@@ -156,11 +159,11 @@ jobs:
             LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
             
             DB_CONNECTION=pgsql
-            DB_HOST=${{ secrets.DB_HOST }}
+            DB_HOST=${{ secrets.DB_HOST || vars.DB_HOST }}
             DB_PORT=5432
-            DB_DATABASE=${{ secrets.DB_DATABASE }}
-            DB_USERNAME=${{ secrets.DB_USERNAME }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE }}
+            DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD }}
             
             SESSION_DRIVER=database
             SESSION_LIFETIME=120
@@ -200,18 +203,18 @@ jobs:
             BILLING_CATALOG=database
             BILLING_CATALOG_CONFIG=billing-catalog
             BILLING_CATALOG_REQUIRE_METADATA=true
-            BILLING_CANCEL_URL=${{ secrets.APP_URL }}/pricing
+            BILLING_CANCEL_URL=${{ secrets.APP_URL || vars.APP_URL }}/pricing
             
-            STRIPE_KEY=${{ secrets.STRIPE_KEY }}
-            STRIPE_SECRET=${{ secrets.STRIPE_SECRET }}
-            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+            STRIPE_KEY=${{ secrets.STRIPE_KEY || vars.STRIPE_KEY }}
+            STRIPE_SECRET=${{ secrets.STRIPE_SECRET || vars.STRIPE_SECRET }}
+            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET || vars.STRIPE_WEBHOOK_SECRET }}
             
-            PADDLE_VENDOR_ID=${{ secrets.PADDLE_VENDOR_ID }}
-            PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY }}
-            PADDLE_CLIENT_SIDE_TOKEN=${{ secrets.PADDLE_CLIENT_SIDE_TOKEN }}
-            PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET }}
+            PADDLE_VENDOR_ID=${{ secrets.PADDLE_VENDOR_ID || vars.PADDLE_VENDOR_ID }}
+            PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY || vars.PADDLE_API_KEY }}
+            PADDLE_CLIENT_SIDE_TOKEN=${{ secrets.PADDLE_CLIENT_SIDE_TOKEN || vars.PADDLE_CLIENT_SIDE_TOKEN || '' }}
+            PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET || vars.PADDLE_WEBHOOK_SECRET }}
             PADDLE_WEBHOOK_TOLERANCE_SECONDS=${{ vars.PADDLE_WEBHOOK_TOLERANCE_SECONDS || '300' }}
-            PADDLE_ENV=${{ secrets.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
+            PADDLE_ENV=${{ secrets.PADDLE_ENV || vars.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
             
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
