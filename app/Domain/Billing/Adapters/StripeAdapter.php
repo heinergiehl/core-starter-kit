@@ -267,8 +267,6 @@ class StripeAdapter implements BillingRuntimeProvider
             'cancel_url' => $request->cancelUrl,
             'client_reference_id' => (string) $request->user->id,
             'metadata' => $metadata,
-            // Stripe checkout should not prompt for promo codes when a discount is already attached.
-            'allow_promotion_codes' => $request->discount ? false : true,
             // Customize the submit button based on payment type
             'submit_type' => $mode === PaymentMode::Subscription ? 'auto' : 'pay',
             // Add custom text for better user experience
@@ -288,6 +286,8 @@ class StripeAdapter implements BillingRuntimeProvider
                 'promotion_code' => [['promotion_code' => $request->discount->provider_id]],
                 default => [['coupon' => $request->discount->provider_id]],
             };
+        } else {
+            $params['allow_promotion_codes'] = true;
         }
 
         // Set customer or customer email
