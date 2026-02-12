@@ -99,22 +99,22 @@ trait ResolvesStripeData
      */
     protected function resolvePlanKey(array $object): ?string
     {
-        $planKey = data_get($object, 'metadata.plan_key')
-            ?? data_get($object, 'metadata.planKey');
-
-        if ($planKey) {
-            return (string) $planKey;
-        }
-
         $priceId = data_get($object, 'items.data.0.price.id')
             ?? data_get($object, 'line_items.data.0.price.id')
             ?? data_get($object, 'plan.id');
 
-        if (! $priceId) {
-            return null;
+        if ($priceId) {
+            $resolvedPlanKey = $this->planKeyForPriceId($priceId);
+
+            if ($resolvedPlanKey) {
+                return $resolvedPlanKey;
+            }
         }
 
-        return $this->planKeyForPriceId($priceId);
+        $planKey = data_get($object, 'metadata.plan_key')
+            ?? data_get($object, 'metadata.planKey');
+
+        return $planKey ? (string) $planKey : null;
     }
 
     /**

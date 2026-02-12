@@ -57,22 +57,24 @@ trait ResolvesPaddleData
      */
     protected function resolvePlanKey(array $data): ?string
     {
+        $priceId = data_get($data, 'items.0.price_id')
+            ?? data_get($data, 'items.0.price.id')
+            ?? data_get($data, 'price_id');
+
+        if ($priceId) {
+            $resolvedPlanKey = app(BillingPlanService::class)
+                ->resolvePlanKeyByProviderId(\App\Enums\BillingProvider::Paddle->value, $priceId);
+
+            if ($resolvedPlanKey) {
+                return $resolvedPlanKey;
+            }
+        }
+
         $planKey = data_get($data, 'custom_data.plan_key')
             ?? data_get($data, 'metadata.plan_key')
             ?? data_get($data, 'plan_key');
 
-        if ($planKey) {
-            return (string) $planKey;
-        }
-
-        $priceId = data_get($data, 'items.0.price_id') ?? data_get($data, 'price_id');
-
-        if (! $priceId) {
-            return null;
-        }
-
-        return app(BillingPlanService::class)
-            ->resolvePlanKeyByProviderId(\App\Enums\BillingProvider::Paddle->value, $priceId);
+        return $planKey ? (string) $planKey : null;
     }
 
     /**
