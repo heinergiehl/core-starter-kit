@@ -4,7 +4,6 @@ namespace Tests\Feature\Billing;
 
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleSubscriptionHandler;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeSubscriptionHandler;
-use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\WebhookEvent;

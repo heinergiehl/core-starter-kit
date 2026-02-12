@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Billing;
 
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
-use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Enums\BillingProvider;
 use App\Enums\OrderStatus;

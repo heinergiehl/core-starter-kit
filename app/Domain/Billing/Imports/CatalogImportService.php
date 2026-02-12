@@ -72,7 +72,7 @@ class CatalogImportService
                 if ($apply) {
                     $productAttributes = $productPayload;
                     unset($productAttributes['provider_id']);
-                    
+
                     if ($productAction === 'create') {
                         $product = Product::create($productAttributes);
                     } elseif ($productAction === 'update' && $product) {

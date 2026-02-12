@@ -85,4 +85,3 @@ class BillingStatusControllerTest extends TestCase
             ]);
     }
 }
-

@@ -12,7 +12,7 @@ class BillingMetricsWidget extends StatsOverviewWidget
 
     protected static ?int $sort = 1;
 
-    protected int | string | array $columnSpan = [
+    protected int|string|array $columnSpan = [
         'md' => 2,
         'xl' => 2,
     ];

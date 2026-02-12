@@ -22,8 +22,9 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2.29"
-          extensions: mbstring, bcmath, intl, pdo_pgsql, pgsql, dom, fileinfo
+          extensions: mbstring, bcmath, intl, pdo_pgsql, pgsql, pdo_sqlite, sqlite3, dom, fileinfo
           coverage: none
+          ini-values: memory_limit=512M
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -41,17 +42,29 @@ jobs:
           mkdir -p database
           touch database/database.sqlite
 
+      - name: Validate Composer manifest
+        run: composer validate --strict
+
       - name: Install PHP dependencies
         env:
           DB_CONNECTION: sqlite
           DB_DATABASE: ${{ github.workspace }}/database/database.sqlite
         run: composer install --no-interaction --no-progress --prefer-dist
 
+      - name: Audit PHP dependencies
+        run: composer audit --no-interaction
+
       - name: Generate app key
         run: php artisan key:generate
 
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+      - name: Code style
+        run: vendor/bin/pint --test
 
       - name: Build frontend
         run: npm run build

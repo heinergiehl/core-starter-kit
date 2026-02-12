@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Domain\Billing\Exports\CatalogPublishService;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\App;
 
@@ -97,24 +98,6 @@ class BillingProductSeeder extends Seeder
             ],
         ];
 
-        $products = [];
-
-        foreach ($planDefinitions as $key => $definition) {
-            $products[$key] = Product::updateOrCreate(
-                ['key' => $key],
-                [
-                    'name' => $definition['name'],
-                    'summary' => $definition['summary'],
-                    'description' => $definition['description'],
-                    'type' => $definition['type'],
-                    'is_featured' => $definition['is_featured'],
-                    'features' => $definition['features'],
-                    'entitlements' => $definition['entitlements'],
-                    'is_active' => true,
-                ]
-            );
-        }
-
         $priceDefinitions = [
             ['plan' => 'hobbyist', 'key' => 'lifetime', 'label' => 'One-time', 'interval' => 'once', 'amount' => 4999],
             ['plan' => 'indie', 'key' => 'lifetime', 'label' => 'One-time', 'interval' => 'once', 'amount' => 9999],
@@ -122,59 +105,79 @@ class BillingProductSeeder extends Seeder
         ];
 
         $providers = ['stripe', 'paddle'];
+        $products = [];
 
-        foreach ($priceDefinitions as $definition) {
-            $product = $products[$definition['plan']] ?? null;
-
-            if (! $product) {
-                continue;
+        // Seed canonical catalog records without dispatching observer-based provider sync jobs.
+        Model::withoutEvents(function () use ($planDefinitions, $priceDefinitions, $providers, &$products): void {
+            foreach ($planDefinitions as $key => $definition) {
+                $products[$key] = Product::updateOrCreate(
+                    ['key' => $key],
+                    [
+                        'name' => $definition['name'],
+                        'summary' => $definition['summary'],
+                        'description' => $definition['description'],
+                        'type' => $definition['type'],
+                        'is_featured' => $definition['is_featured'],
+                        'features' => $definition['features'],
+                        'entitlements' => $definition['entitlements'],
+                        'is_active' => true,
+                    ]
+                );
             }
 
-            // Create Price (agnostic)
-            $price = Price::updateOrCreate(
-                [
-                    'product_id' => $product->id,
-                    'key' => $definition['key'],
-                ],
-                [
-                    'label' => $definition['label'],
-                    'interval' => $definition['interval'],
-                    'interval_count' => 1,
-                    'currency' => 'USD',
-                    'amount' => $definition['amount'],
-                    'type' => $definition['interval'] === 'once' ? 'one_time' : 'recurring',
-                    'has_trial' => (bool) ($definition['has_trial'] ?? false),
-                    'trial_interval' => $definition['trial_interval'] ?? null,
-                    'trial_interval_count' => $definition['trial_interval_count'] ?? null,
-                    'is_active' => true,
-                ]
-            );
+            foreach ($priceDefinitions as $definition) {
+                $product = $products[$definition['plan']] ?? null;
 
-            // Handle Provider Mappings
-            foreach ($providers as $provider) {
-                $hasApiKey = $this->hasApiConfig($provider);
-                $placeholderId = sprintf('%s_%s_%s', $provider, $definition['plan'], $definition['key']);
-
-                // If we have an API key, we should NOT use placeholders.
-                // We delete any existing placeholder so that the Sync service can create/link the real ID.
-                if ($hasApiKey) {
-                    $price->mappings()
-                        ->where('provider', $provider)
-                        ->where('provider_id', $placeholderId)
-                        ->delete();
-
+                if (! $product) {
                     continue;
                 }
 
-                // If we DON'T have an API key, we need a placeholder for the UI to work (even if checkout fails)
-                if (! $price->mappings()->where('provider', $provider)->exists()) {
-                    $price->mappings()->create([
-                        'provider' => $provider,
-                        'provider_id' => $placeholderId,
-                    ]);
+                // Create Price (agnostic)
+                $price = Price::updateOrCreate(
+                    [
+                        'product_id' => $product->id,
+                        'key' => $definition['key'],
+                    ],
+                    [
+                        'label' => $definition['label'],
+                        'interval' => $definition['interval'],
+                        'interval_count' => 1,
+                        'currency' => 'USD',
+                        'amount' => $definition['amount'],
+                        'type' => $definition['interval'] === 'once' ? 'one_time' : 'recurring',
+                        'has_trial' => (bool) ($definition['has_trial'] ?? false),
+                        'trial_interval' => $definition['trial_interval'] ?? null,
+                        'trial_interval_count' => $definition['trial_interval_count'] ?? null,
+                        'is_active' => true,
+                    ]
+                );
+
+                // Handle Provider Mappings
+                foreach ($providers as $provider) {
+                    $hasApiKey = $this->hasApiConfig($provider);
+                    $placeholderId = sprintf('%s_%s_%s', $provider, $definition['plan'], $definition['key']);
+
+                    // If we have an API key, we should NOT use placeholders.
+                    // We delete any existing placeholder so that the Sync service can create/link the real ID.
+                    if ($hasApiKey) {
+                        $price->mappings()
+                            ->where('provider', $provider)
+                            ->where('provider_id', $placeholderId)
+                            ->delete();
+
+                        continue;
+                    }
+
+                    // If we DON'T have an API key, we need a placeholder for the UI to work (even if checkout fails)
+                    if (! $price->mappings()->where('provider', $provider)->exists()) {
+                        $price->mappings()->create([
+                            'provider' => $provider,
+                            'provider_id' => $placeholderId,
+                        ]);
+                    }
                 }
             }
-        }
+        });
 
         // Attempt to sync to providers if keys are present
         $this->syncToProviders();

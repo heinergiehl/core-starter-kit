@@ -10,12 +10,11 @@ use App\Domain\Billing\Events\Subscription\SubscriptionStarted;
 use App\Domain\Billing\Events\Subscription\SubscriptionTrialStarted;
 use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\Subscription;
-use App\Domain\Billing\Services\BillingPlanService;
 use App\Enums\BillingProvider;
 use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
-use App\Notifications\SubscriptionPlanChangedNotification;
 use App\Models\User;
+use App\Notifications\SubscriptionPlanChangedNotification;
 use Illuminate\Support\Facades\Log;
 
 class SubscriptionService
@@ -136,7 +135,7 @@ class SubscriptionService
         }
     }
 
-    public function syncFromProvider(SubscriptionData $data): Subscription 
+    public function syncFromProvider(SubscriptionData $data): Subscription
     {
         $existingSubscription = Subscription::query()
             ->where('provider', $data->provider)

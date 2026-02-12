@@ -171,7 +171,7 @@ class BillingCheckoutController
                 $provider,
                 $data['plan'],
                 $data['price'],
-                $genericPlan, 
+                $genericPlan,
                 $price,
                 $priceCurrency,
                 $quantity,

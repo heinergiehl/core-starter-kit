@@ -55,7 +55,7 @@ class BillingPlanService
         return $this->plans()->map(function (Plan $plan) use ($provider) {
             $prices = array_map(function (Price $price) use ($provider) {
                 $providerId = $this->resolveProviderId($price, $provider);
-                
+
                 return new Price(
                     key: $price->key,
                     label: $price->label,
@@ -149,7 +149,6 @@ class BillingPlanService
         return $planKey ? (string) $planKey : null;
     }
 
-
     /**
      * @return Collection<int, Plan>
      */
@@ -174,6 +173,7 @@ class BillingPlanService
         if (! empty($shownPlans)) {
             // Sort according to the config order
             $shownPlansMap = array_flip($shownPlans);
+
             return $plans->sortBy(fn (Plan $plan) => $shownPlansMap[$plan->key] ?? 999)
                 ->values();
         }
@@ -211,7 +211,7 @@ class BillingPlanService
             }
 
             $providerIds = $priceModel->mappings->pluck('provider_id', 'provider')->toArray();
-            
+
             $amounts = [];
             $currencies = [];
             foreach ($providerIds as $prov => $id) {
@@ -265,7 +265,7 @@ class BillingPlanService
         if ($collectionKey === 'currencies') {
             return $price->providerCurrencies[$provider] ?? $price->currency;
         }
-        
+
         return $price->$valueKey;
     }
 

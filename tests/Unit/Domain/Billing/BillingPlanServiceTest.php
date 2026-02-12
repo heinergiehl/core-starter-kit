@@ -55,7 +55,7 @@ class BillingPlanServiceTest extends TestCase
             'name' => 'Starter',
             'is_active' => true,
         ]);
-        
+
         $price = \App\Domain\Billing\Models\Price::factory()->create([
             'product_id' => $product->id,
             'key' => 'monthly',

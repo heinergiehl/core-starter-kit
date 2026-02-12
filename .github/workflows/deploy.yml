@@ -20,7 +20,7 @@ jobs:
   deploy:
     name: Deploy to ${{ github.event_name == 'workflow_run' && 'Staging' || 'Production' }}
     if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') || github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
 
     env:
@@ -29,6 +29,7 @@ jobs:
       PADDLE_ENV_DEFAULT: ${{ github.event_name == 'workflow_run' && 'sandbox' || 'production' }}
       VPS_PATH: ${{ vars.VPS_PATH || (github.event_name == 'workflow_run' && '/var/www/myapps/shipsolid-staging' || '/var/www/myapps/shipsolid') }}
       WEB_GROUP: ${{ vars.WEB_GROUP || 'www-data' }}
+      RUN_BILLING_BOOTSTRAP: ${{ vars.RUN_BILLING_BOOTSTRAP || 'false' }}
 
     steps:
       - name: Checkout
@@ -44,7 +45,7 @@ jobs:
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: "8.2"
+          php-version: "8.2.29"
           extensions: mbstring, bcmath, intl, pdo_pgsql, pgsql, dom, fileinfo
 
       - name: Setup Node
@@ -89,6 +90,50 @@ jobs:
             --exclude='phpunit.xml' \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
 
+      - name: Validate required secrets
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          APP_URL: ${{ secrets.APP_URL }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          STRIPE_KEY: ${{ secrets.STRIPE_KEY }}
+          STRIPE_SECRET: ${{ secrets.STRIPE_SECRET }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          PADDLE_VENDOR_ID: ${{ secrets.PADDLE_VENDOR_ID }}
+          PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY }}
+          PADDLE_CLIENT_SIDE_TOKEN: ${{ secrets.PADDLE_CLIENT_SIDE_TOKEN }}
+          PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET }}
+        run: |
+          set -Eeuo pipefail
+          missing=0
+          required_vars=(
+            APP_KEY
+            APP_URL
+            DB_HOST
+            DB_DATABASE
+            DB_USERNAME
+            DB_PASSWORD
+            STRIPE_KEY
+            STRIPE_SECRET
+            STRIPE_WEBHOOK_SECRET
+            PADDLE_VENDOR_ID
+            PADDLE_API_KEY
+            PADDLE_CLIENT_SIDE_TOKEN
+            PADDLE_WEBHOOK_SECRET
+          )
+          for var in "${required_vars[@]}"; do
+            if [ -z "${!var:-}" ]; then
+              echo "::error::Missing required secret: ${var}"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
       - name: Generate .env
         env:
           ENV_FILE: |
@@ -97,7 +142,7 @@ jobs:
             APP_KEY=${{ secrets.APP_KEY }}
             APP_DEBUG=false
             APP_URL=${{ secrets.APP_URL }}
-            CSP_ALLOW_UNSAFE_EVAL=${{ vars.CSP_ALLOW_UNSAFE_EVAL || 'true' }}
+            CSP_ALLOW_UNSAFE_EVAL=${{ vars.CSP_ALLOW_UNSAFE_EVAL || 'false' }}
             
             APP_LOCALE=en
             APP_FALLBACK_LOCALE=en
@@ -111,11 +156,11 @@ jobs:
             LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
             
             DB_CONNECTION=pgsql
-            DB_HOST=${{ secrets.DB_HOST || '172.17.0.1' }}
+            DB_HOST=${{ secrets.DB_HOST }}
             DB_PORT=5432
-            DB_DATABASE=${{ secrets.DB_DATABASE || 'laravel' }}
-            DB_USERNAME=${{ secrets.DB_USERNAME || 'root' }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD || 'secret' }}
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             
             SESSION_DRIVER=database
             SESSION_LIFETIME=120
@@ -223,6 +268,13 @@ jobs:
             app_is_down=1
 
             php artisan migrate --force
+            if [ "${{ env.RUN_BILLING_BOOTSTRAP }}" = "true" ]; then
+              php artisan db:seed --class=PaymentProviderSeeder --force
+              php artisan db:seed --class=BillingProductSeeder --force
+              php artisan billing:publish-catalog stripe --apply --update
+              php artisan billing:publish-catalog paddle --apply --update
+            fi
+            php artisan billing:check-readiness --strict
             php artisan filament:upgrade
             php artisan optimize
             php artisan config:cache

@@ -2,15 +2,15 @@
 
 namespace Database\Seeders;
 
+use App\Domain\Content\Data\BlogPostData;
 use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;
-use App\Domain\Content\Data\BlogPostData;
 use App\Enums\PostStatus;
 use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class BlogPostSeeder extends Seeder
@@ -21,6 +21,7 @@ class BlogPostSeeder extends Seeder
 
         if (! $admin) {
             $this->command->info('No users found. Please run DatabaseSeeder first.');
+
             return;
         }
 
@@ -105,7 +106,7 @@ class BlogPostSeeder extends Seeder
 
         // Create directory for blog images if it doesn't exist
         Storage::disk('public')->makeDirectory('blog-images');
-        
+
         // Get existing files
         $existingFiles = Storage::disk('public')->files('blog-images');
 
@@ -114,7 +115,7 @@ class BlogPostSeeder extends Seeder
 
             // If no specific image mapped, and no file exists at that path (e.g. typos), pick random
             if ($imagePath && ! Storage::disk('public')->exists($imagePath)) {
-                 $imagePath = null; 
+                $imagePath = null;
             }
 
             if (! $imagePath) {
@@ -141,7 +142,7 @@ class BlogPostSeeder extends Seeder
                     'author_id' => $admin->id,
                     'category_id' => $categoryModels->random()->id,
                     'reading_time' => rand(3, 10),
-                    'body_html' => Str::markdown($body), 
+                    'body_html' => Str::markdown($body),
                 ]
             );
 
@@ -156,7 +157,7 @@ class BlogPostSeeder extends Seeder
             $imageUrl = Storage::url($imagePath);
             $imageMarkdown = "\n![Image]({$imageUrl})\n";
         }
-        
+
         return <<<MD
 # {$title}
 {$imageMarkdown}

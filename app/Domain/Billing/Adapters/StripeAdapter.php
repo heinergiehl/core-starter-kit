@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Adapters;
 
 use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
-
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeOrderHandler;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeSubscriptionHandler;
 use App\Domain\Billing\Contracts\BillingRuntimeProvider;
@@ -22,7 +21,6 @@ use App\Domain\Billing\Services\BillingPlanService;
 use App\Enums\BillingProvider;
 use App\Enums\DiscountType;
 use App\Enums\PaymentMode;
-use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Stripe\StripeClient;
@@ -49,7 +47,6 @@ class StripeAdapter implements BillingRuntimeProvider
     use ResolvesStripeData;
 
     private const SIGNATURE_HEADER = 'Stripe-Signature';
-
 
     /**
      * Registered webhook handlers.
@@ -319,7 +316,7 @@ class StripeAdapter implements BillingRuntimeProvider
 
     /**
      * Register webhook handlers.
-     * 
+     *
      * NOTE: Product/Price handlers are intentionally NOT registered.
      * App-first mode = products/prices are managed in app, not synced from Stripe webhooks.
      */

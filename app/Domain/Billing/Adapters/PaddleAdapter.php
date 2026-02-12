@@ -9,7 +9,6 @@ use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleOrderHandler;
 use App\Domain\Billing\Adapters\Paddle\Handlers\PaddleSubscriptionHandler;
 use App\Domain\Billing\Contracts\BillingRuntimeProvider;
 use App\Domain\Billing\Contracts\PaddleWebhookHandler;
-use App\Domain\Billing\Data\CheckoutRequest;
 use App\Domain\Billing\Data\TransactionDTO;
 use App\Domain\Billing\Data\WebhookPayload;
 use App\Domain\Billing\Exceptions\BillingException;
@@ -20,7 +19,6 @@ use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Enums\BillingProvider;
 use App\Enums\DiscountType;
-use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
@@ -44,10 +42,12 @@ class PaddleAdapter implements BillingRuntimeProvider
     use ResolvesPaddleData;
 
     private const SIGNATURE_HEADER = 'Paddle-Signature';
-    private const SANDBOX_API_URL = 'https://sandbox-api.paddle.com';
-    private const PRODUCTION_API_URL = 'https://api.paddle.com';
-    private const WEBHOOK_TOLERANCE_SECONDS = 300;
 
+    private const SANDBOX_API_URL = 'https://sandbox-api.paddle.com';
+
+    private const PRODUCTION_API_URL = 'https://api.paddle.com';
+
+    private const WEBHOOK_TOLERANCE_SECONDS = 300;
 
     /**
      * Registered webhook handlers.
@@ -162,7 +162,7 @@ class PaddleAdapter implements BillingRuntimeProvider
 
     /**
      * Register webhook handlers.
-     * 
+     *
      * NOTE: Product/Price handlers are intentionally NOT registered.
      * App-first mode = products/prices are managed in app, not synced from Paddle webhooks.
      */
@@ -339,19 +339,19 @@ class PaddleAdapter implements BillingRuntimeProvider
 
         $data = $response->json('data') ?? [];
         $id = data_get($data, 'id') ?? data_get($data, 'transaction_id');
-        $url = data_get($data, 'checkout.url') 
-            ?? data_get($data, 'url') 
+        $url = data_get($data, 'checkout.url')
+            ?? data_get($data, 'url')
             ?? data_get($data, 'checkout_url');
-        
+
         // Status is sometimes 'status', sometimes 'state' depending on endpoint version/type
         $status = data_get($data, 'status') ?? data_get($data, 'state');
 
         if (! $id) {
-             throw BillingException::checkoutFailed(BillingProvider::Paddle, 'transaction id was not returned');
+            throw BillingException::checkoutFailed(BillingProvider::Paddle, 'transaction id was not returned');
         }
 
         /* If URL is missing, we might need to handle it, but for now we trust Paddle or fallbacks */
-        
+
         return new TransactionDTO(
             id: (string) $id,
             url: (string) $url,

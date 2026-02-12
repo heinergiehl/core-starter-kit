@@ -130,7 +130,7 @@ class RoadmapController
     }
 
     /**
-     * @param array{title: string, description?: string|null, category: string} $data
+     * @param  array{title: string, description?: string|null, category: string}  $data
      */
     private function createFeatureRequestWithRetry(int $userId, array $data): void
     {

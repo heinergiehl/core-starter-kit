@@ -16,4 +16,3 @@ class PaddleProviderClientTest extends TestCase
         new PaddleProviderClient([]);
     }
 }
-

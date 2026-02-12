@@ -6,9 +6,9 @@ use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Enums\OrderStatus;
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class RedirectIfSubscribedMiddlewareTest extends TestCase

@@ -12,7 +12,6 @@ class PricesRelationManager extends RelationManager
 {
     protected static string $relationship = 'prices';
 
-
     protected static ?string $title = 'Prices';
 
     protected static string|\BackedEnum|null $icon = 'heroicon-o-tag';

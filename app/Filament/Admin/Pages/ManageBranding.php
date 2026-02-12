@@ -153,7 +153,7 @@ class ManageBranding extends Page implements HasForms
         $record = BrandSetting::query()->find(BrandSetting::GLOBAL_ID);
 
         if (! $record) {
-            $record = new BrandSetting();
+            $record = new BrandSetting;
             $record->forceFill([
                 'id' => BrandSetting::GLOBAL_ID,
                 'template' => $this->defaultTemplate(),

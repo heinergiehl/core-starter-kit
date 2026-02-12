@@ -2,14 +2,13 @@
 
 namespace App\Domain\Billing\Services;
 
-
 use App\Domain\Billing\Data\Entitlements;
 use App\Domain\Billing\Data\Plan;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
-use App\Models\User;
-use App\Enums\SubscriptionStatus;
 use App\Enums\OrderStatus;
+use App\Enums\SubscriptionStatus;
+use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 
 class EntitlementService
@@ -23,7 +22,7 @@ class EntitlementService
     public function forUser(User $user): Entitlements
     {
         return Cache::remember(
-            self::CACHE_KEY_PREFIX . $user->id,
+            self::CACHE_KEY_PREFIX.$user->id,
             now()->addMinutes(30),
             fn () => $this->calculateEntitlements($user)
         );
@@ -31,7 +30,7 @@ class EntitlementService
 
     public function clearCache(User $user): void
     {
-        Cache::forget(self::CACHE_KEY_PREFIX . $user->id);
+        Cache::forget(self::CACHE_KEY_PREFIX.$user->id);
     }
 
     protected function calculateEntitlements(User $user): Entitlements
@@ -58,6 +57,7 @@ class EntitlementService
 
             if ($order) {
                 $planKey = $order->plan_key;
+
                 return new Entitlements($this->entitlementsForPlanKey($planKey));
             }
 
@@ -73,6 +73,7 @@ class EntitlementService
         }
 
         $planKey = $subscription->plan_key;
+
         return new Entitlements($this->entitlementsForPlanKey($planKey));
     }
 

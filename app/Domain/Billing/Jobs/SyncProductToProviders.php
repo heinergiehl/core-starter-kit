@@ -29,7 +29,7 @@ class SyncProductToProviders implements ShouldQueue
         // Get configured providers
         $providers = \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
             ->pluck('slug')
-            ->map(fn($s) => strtolower($s))
+            ->map(fn ($s) => strtolower($s))
             ->toArray();
 
         foreach ($providers as $provider) {
@@ -38,8 +38,8 @@ class SyncProductToProviders implements ShouldQueue
                 $this->syncToProvider($client, $provider);
                 $syncedAnyProvider = true;
             } catch (\Throwable $e) {
-                Log::error("Failed to sync product {$this->product->id} to {$provider}: " . $e->getMessage());
-                // We don't rethrow to avoid blocking other providers, 
+                Log::error("Failed to sync product {$this->product->id} to {$provider}: ".$e->getMessage());
+                // We don't rethrow to avoid blocking other providers,
                 // but usually you might want to retry.
             }
         }
@@ -70,7 +70,7 @@ class SyncProductToProviders implements ShouldQueue
         } else {
             // No mapping - create product on provider
             $providerId = $client->createProduct($this->product);
-            
+
             // Use product_id + provider as unique key (matches database constraint)
             ProductProviderMapping::updateOrCreate(
                 [
@@ -81,7 +81,7 @@ class SyncProductToProviders implements ShouldQueue
                     'provider_id' => $providerId,
                 ]
             );
-            
+
             Log::info("Created product {$this->product->id} on {$provider} (ID: {$providerId})");
         }
     }

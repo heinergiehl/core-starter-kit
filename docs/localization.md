@@ -19,6 +19,8 @@ Configure supported locales in `config/saas.php`:
     'supported' => [
         'en' => 'English',
         'de' => 'Deutsch',
+        'es' => 'Español',
+        'fr' => 'Français',
     ],
 ],
 ```
@@ -32,21 +34,27 @@ APP_LOCALE=en
 
 ## 3) Locale selection flow
 Locale resolution happens in `app/Http/Middleware/SetLocale.php`:
-1) user profile locale (if logged in)
-2) session locale (set by the switcher)
-3) `?lang=xx` query parameter
+1) locale from URL route parameter (`/{locale}/...`)
+2) user profile locale (if logged in)
+3) session locale (set by the switcher)
+4) `?lang=xx` query parameter
+5) browser `Accept-Language` header
 
 The `<x-locale-switcher />` component posts to `POST /locale` which stores the selection in session (and on the user record if signed in).
 
 ---
 
 ## 4) Translation files
-All customer-facing strings are stored in JSON files:
+All app-level translation files are loaded from:
 ```
-resources/lang/de.json
+resources/lang
 ```
 
-Add a new language by creating a `{locale}.json` file and adding it to `config/saas.php`. If you want to edit English copy without touching templates, add an `en.json` file with your overrides.
+Use both:
+- JSON files for UI copy strings, e.g. `resources/lang/es.json`
+- PHP group files for framework messages (`auth`, `validation`, `passwords`, `pagination`, etc.), e.g. `resources/lang/es/validation.php`
+
+Add a new locale by creating `{locale}.json`, adding the locale to `config/saas.php`, and (recommended) adding PHP group files for validation/auth flows.
 
 ---
 

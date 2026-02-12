@@ -73,12 +73,7 @@ class OrderResource extends Resource
                     ->badge()
                     ->sortable(),
                 TextColumn::make('status')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'paid' => 'success',
-                        'refunded' => 'danger',
-                        default => 'warning',
-                    }),
+                    ->badge(),
                 TextColumn::make('amount')
                     ->formatStateUsing(function ($state, Order $record): string {
                         $currency = strtoupper((string) $record->currency);

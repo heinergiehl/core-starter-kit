@@ -56,4 +56,3 @@ class InvoiceControllerTest extends TestCase
         $response->assertSessionHas('error');
     }
 }
-

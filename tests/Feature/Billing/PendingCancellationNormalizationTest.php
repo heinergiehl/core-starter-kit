@@ -103,4 +103,3 @@ class PendingCancellationNormalizationTest extends TestCase
         );
     }
 }
-

@@ -13,8 +13,8 @@ class EditBlogPost extends EditRecord
     {
         // Set published_at to now if publishing without a date
         if (
-            isset($data['status']) && 
-            $data['status'] === \App\Enums\PostStatus::Published->value && 
+            isset($data['status']) &&
+            $data['status'] === \App\Enums\PostStatus::Published->value &&
             empty($data['published_at'])
         ) {
             $data['published_at'] = now();

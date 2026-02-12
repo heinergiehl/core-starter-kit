@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 class PaddleProviderClient implements BillingCatalogProvider
 {
     private string $baseUrl;
+
     private string $apiKey;
 
     public function __construct(array $config)
@@ -87,20 +88,20 @@ class PaddleProviderClient implements BillingCatalogProvider
         ];
 
         if ($price->type === PriceType::Recurring) {
-             $data['billing_cycle'] = [
-                 'interval' => $price->interval,
-                 'frequency' => $price->interval_count,
-             ];
-             
-             // Paddle handles trial periods on prices
-             if ($price->has_trial && $price->trial_interval_count) {
-                 $data['trial_period'] = [
-                     'interval' => $price->trial_interval ?? 'day',
-                     'frequency' => $price->trial_interval_count,
-                 ];
-             }
+            $data['billing_cycle'] = [
+                'interval' => $price->interval,
+                'frequency' => $price->interval_count,
+            ];
+
+            // Paddle handles trial periods on prices
+            if ($price->has_trial && $price->trial_interval_count) {
+                $data['trial_period'] = [
+                    'interval' => $price->trial_interval ?? 'day',
+                    'frequency' => $price->trial_interval_count,
+                ];
+            }
         }
-        
+
         $response = Http::withToken($this->apiKey)->post("{$this->baseUrl}/prices", $data);
 
         if (! $response->successful()) {
@@ -112,9 +113,9 @@ class PaddleProviderClient implements BillingCatalogProvider
 
     public function updatePrice(Price $price, string $providerId): void
     {
-         // Paddle prices are also largely immutable. We can update description and active status.
-         // Note: Paddle doesn't have a direct 'active' status on Price IIRC, it uses 'status' = 'active' | 'archived'
-         
+        // Paddle prices are also largely immutable. We can update description and active status.
+        // Note: Paddle doesn't have a direct 'active' status on Price IIRC, it uses 'status' = 'active' | 'archived'
+
         $response = Http::withToken($this->apiKey)->patch("{$this->baseUrl}/prices/{$providerId}", [
             'description' => $price->label ?? $price->key,
             'status' => $price->is_active ? 'active' : 'archived',

@@ -83,8 +83,6 @@ class ArchiveAllProducts extends Command
             $success = $this->archivePaddle() && $success;
         }
 
-
-
         $this->newLine();
         $this->info('📊 Summary:');
         $this->info("   Archived: {$this->archivedCount}");
@@ -103,7 +101,7 @@ class ArchiveAllProducts extends Command
         // Delete in dependency order (children first) to satisfy Foreign Keys
         // We use delete() instead of truncate() to be compatible with Postgres
         // which imposes strict restrictions on TRUNCATE with foreign keys.
-        
+
         \App\Domain\Billing\Models\PriceProviderMapping::query()->delete();
         \App\Domain\Billing\Models\ProductProviderMapping::query()->delete();
         \App\Domain\Billing\Models\Price::query()->delete();
@@ -399,7 +397,4 @@ class ArchiveAllProducts extends Command
             $this->error("    ❌ Failed: {$id} - {$e->getMessage()}");
         }
     }
-
-
-
 }

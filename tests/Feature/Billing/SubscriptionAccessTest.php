@@ -20,7 +20,7 @@ class SubscriptionAccessTest extends TestCase
 
         // Dependencies if needed by observers/events, though direct create mostly works
         // Preserving minimal setup to avoid noise
-        
+
         Subscription::create([
             'user_id' => $user->id,
             'status' => \App\Enums\SubscriptionStatus::Canceled,

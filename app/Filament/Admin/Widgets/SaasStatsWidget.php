@@ -26,6 +26,16 @@ class SaasStatsWidget extends BaseWidget
                 ->descriptionIcon('heroicon-m-users')
                 ->color('primary'),
 
+            Stat::make('One-time Orders (Month)', number_format($stats['one_time_orders_this_month']))
+                ->description('Paid/completed one-time purchases')
+                ->descriptionIcon('heroicon-m-shopping-bag')
+                ->color('info'),
+
+            Stat::make('One-time Revenue (Month)', '$'.number_format($stats['one_time_revenue_this_month'], 2))
+                ->description('One-time gross revenue')
+                ->descriptionIcon('heroicon-m-banknotes')
+                ->color('success'),
+
             Stat::make('Churn Rate', $stats['churn_rate'].'%')
                 ->description('30-day churn')
                 ->descriptionIcon('heroicon-m-arrow-trending-down')

@@ -33,4 +33,3 @@ class SubscriptionResumedNotification extends Notification implements ShouldQueu
         ));
     }
 }
-

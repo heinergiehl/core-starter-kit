@@ -451,8 +451,6 @@ class SetupWizard extends Command
         }
     }
 
-
-
     private function setupDatabase(): void
     {
         $this->components->info('🗄️  Database');

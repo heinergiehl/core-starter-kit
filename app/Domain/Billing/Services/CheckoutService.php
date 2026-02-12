@@ -6,19 +6,19 @@ namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Adapters\PaddleAdapter;
 use App\Domain\Billing\Data\CheckoutEligibility;
+use App\Domain\Billing\Data\CheckoutUserDTO;
+use App\Domain\Billing\Data\Plan;
+use App\Domain\Billing\Data\Price;
+use App\Domain\Billing\Data\TransactionDTO;
+use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
-use App\Domain\Billing\Data\Plan;
-use App\Domain\Billing\Data\Price;
-use App\Domain\Billing\Data\CheckoutUserDTO;
-use App\Domain\Billing\Data\TransactionDTO;
 use App\Enums\BillingProvider;
+use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
-use App\Enums\OrderStatus;
-use App\Domain\Billing\Exceptions\BillingException;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -48,7 +48,6 @@ class CheckoutService
      * - If user exists with purchase → error (prevent duplicate purchase)
      * - If user doesn't exist → create new
      *
-     * @return \App\Domain\Billing\Data\CheckoutUserDTO
      *
      * @throws \Illuminate\Validation\ValidationException
      * @throws \App\Domain\Billing\Exceptions\BillingException

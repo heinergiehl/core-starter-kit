@@ -3,11 +3,10 @@
 namespace App\Domain\Billing\Jobs;
 
 use App\Domain\Billing\Contracts\BillingCatalogProvider;
-use App\Domain\Billing\Jobs\SyncProductToProviders;
+use App\Domain\Billing\Models\PaymentProvider;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Services\BillingProviderManager;
-use App\Domain\Billing\Models\PaymentProvider;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,7 +27,7 @@ class SyncPriceToProviders implements ShouldQueue
         // Get configured providers
         $providers = PaymentProvider::where('is_active', true)
             ->pluck('slug')
-            ->map(fn($s) => strtolower($s))
+            ->map(fn ($s) => strtolower($s))
             ->toArray();
 
         foreach ($providers as $provider) {
@@ -36,7 +35,7 @@ class SyncPriceToProviders implements ShouldQueue
                 $client = $manager->catalog($provider);
                 $this->syncToProvider($client, $provider, $manager);
             } catch (\Throwable $e) {
-                Log::error("Failed to sync price {$this->price->id} to {$provider}: " . $e->getMessage());
+                Log::error("Failed to sync price {$this->price->id} to {$provider}: ".$e->getMessage());
             }
         }
     }
@@ -47,7 +46,7 @@ class SyncPriceToProviders implements ShouldQueue
         $productMapping = $this->price->product->providerMappings()->where('provider', $provider)->first();
         if (! $productMapping) {
             Log::warning("Product {$this->price->product_id} not synced to {$provider}. Triggering product sync first.");
-            
+
             // Synchronously sync product without cascading into price sync jobs.
             (new SyncProductToProviders($this->price->product, false))->handle($manager);
 
@@ -70,13 +69,13 @@ class SyncPriceToProviders implements ShouldQueue
         } else {
             // Create
             $providerId = $client->createPrice($this->price);
-            
+
             PriceProviderMapping::create([
                 'price_id' => $this->price->id,
                 'provider' => $provider,
                 'provider_id' => $providerId,
             ]);
-            
+
             Log::info("Created price {$this->price->id} on {$provider} (ID: {$providerId})");
         }
     }

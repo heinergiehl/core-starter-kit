@@ -2,8 +2,11 @@
 
 namespace App\Domain\Billing\Services;
 
-use App\Enums\SubscriptionStatus;
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
+use App\Enums\OrderStatus;
+use App\Enums\SubscriptionStatus;
+use Illuminate\Support\Collection;
 
 /**
  * SaaS Stats Service.
@@ -16,6 +19,11 @@ class SaasStatsService
      * @var array<string, float|int>|null
      */
     private ?array $snapshotCache = null;
+
+    /**
+     * @var Collection<int, Order>|null
+     */
+    private ?Collection $oneTimeOrdersThisMonthCache = null;
 
     public function __construct(
         private readonly BillingMetricsService $billingMetricsService
@@ -36,6 +44,8 @@ class SaasStatsService
             'cancellations_this_month' => $this->getCancellationsThisMonth(),
             'churn_rate' => $snapshot['churn_rate'],
             'arpu' => $snapshot['arpu'],
+            'one_time_orders_this_month' => $this->getOneTimeOrdersThisMonth(),
+            'one_time_revenue_this_month' => $this->getOneTimeRevenueThisMonth(),
         ];
     }
 
@@ -134,6 +144,27 @@ class SaasStatsService
     }
 
     /**
+     * Get completed one-time order count for current month.
+     */
+    public function getOneTimeOrdersThisMonth(): int
+    {
+        return $this->oneTimeOrdersThisMonth()->count();
+    }
+
+    /**
+     * Get completed one-time revenue for current month.
+     *
+     * Returned in major currency units (e.g. USD dollars).
+     */
+    public function getOneTimeRevenueThisMonth(): float
+    {
+        $amountMinor = $this->oneTimeOrdersThisMonth()
+            ->sum(fn (Order $order): int => (int) $order->amount);
+
+        return $amountMinor / 100;
+    }
+
+    /**
      * Get monthly growth trend (active subscriptions).
      */
     public function getMonthlyGrowth(int $months = 12): array
@@ -167,5 +198,51 @@ class SaasStatsService
     private function snapshot(): array
     {
         return $this->snapshotCache ??= $this->billingMetricsService->snapshot();
+    }
+
+    /**
+     * @return Collection<int, Order>
+     */
+    private function oneTimeOrdersThisMonth(): Collection
+    {
+        if ($this->oneTimeOrdersThisMonthCache !== null) {
+            return $this->oneTimeOrdersThisMonthCache;
+        }
+
+        $startOfMonth = now()->startOfMonth();
+        $endOfMonth = now()->endOfMonth();
+
+        $this->oneTimeOrdersThisMonthCache = Order::query()
+            ->with('product:id,key,type')
+            ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
+            ->where(function ($query) use ($startOfMonth, $endOfMonth): void {
+                $query->whereBetween('paid_at', [$startOfMonth, $endOfMonth])
+                    ->orWhere(function ($subQuery) use ($startOfMonth, $endOfMonth): void {
+                        $subQuery
+                            ->whereNull('paid_at')
+                            ->whereBetween('created_at', [$startOfMonth, $endOfMonth]);
+                    });
+            })
+            ->latest('id')
+            ->get()
+            ->filter(fn (Order $order): bool => $this->isOneTimeOrder($order))
+            ->values();
+
+        return $this->oneTimeOrdersThisMonthCache;
+    }
+
+    private function isOneTimeOrder(Order $order): bool
+    {
+        if ($order->product && $order->product->type === 'one_time') {
+            return true;
+        }
+
+        $metadata = $order->metadata ?? [];
+        $subscriptionId = data_get($metadata, 'subscription_id')
+            ?? data_get($metadata, 'provider_subscription_id')
+            ?? data_get($metadata, 'metadata.subscription_id')
+            ?? data_get($metadata, 'custom_data.subscription_id');
+
+        return empty($subscriptionId);
     }
 }

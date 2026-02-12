@@ -36,7 +36,7 @@ class SolutionPageController
 
         $relatedSolutions = collect($solutionPage['related'] ?? [])
             ->map(function (string $relatedSlug) use ($pages): ?array {
-                if (!isset($pages[$relatedSlug])) {
+                if (! isset($pages[$relatedSlug])) {
                     return null;
                 }
 
@@ -63,7 +63,7 @@ class SolutionPageController
 
     public static function slugs(): array
     {
-        return array_keys((new self())->pages());
+        return array_keys((new self)->pages());
     }
 
     /**

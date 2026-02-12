@@ -58,16 +58,19 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
 
         if (in_array($eventType, ['invoice.paid', 'invoice.payment_succeeded'])) {
             $this->handleInvoicePaid($object);
+
             return;
         }
 
         if ($eventType === 'invoice.payment_failed') {
             $this->handleInvoicePaymentFailed($object);
+
             return;
         }
 
         if (str_starts_with($eventType, 'invoice.')) {
             $this->syncInvoice($object);
+
             return;
         }
 

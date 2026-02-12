@@ -6,8 +6,8 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Socialite\Facades\Socialite;
 use Mockery;
-use Tests\TestCase;
 use RuntimeException;
+use Tests\TestCase;
 
 class SocialAuthTest extends TestCase
 {

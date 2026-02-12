@@ -64,7 +64,6 @@ readonly class CheckoutRequest
      * Determine payment mode based on plan type.
      *
      * @param  \App\Domain\Billing\Data\Plan  $plan  The plan configuration
-     * @return \App\Enums\PaymentMode
      */
     public function resolveMode(\App\Domain\Billing\Data\Plan $plan): PaymentMode
     {
@@ -72,7 +71,7 @@ readonly class CheckoutRequest
         if (isset($prices[$this->priceKey])) {
             $price = $prices[$this->priceKey];
             $type = $price->type;
-            
+
             // Handle Enum object or string
             if ($type instanceof \BackedEnum) {
                 $type = $type->value;

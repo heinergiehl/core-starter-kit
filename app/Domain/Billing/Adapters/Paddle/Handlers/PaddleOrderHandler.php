@@ -82,7 +82,6 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             ],
             [
                 'user_id' => $userId,
-                'provider_order_id' => (string) $orderId,
                 'plan_key' => $this->resolvePlanKey($data),
                 'status' => $normalizedStatus,
                 'amount' => $amount,
@@ -111,7 +110,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             $isSubscription = ! empty(data_get($data, 'subscription_id'));
 
             if ($user && ! $isSubscription) {
-                 $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
+                $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
                     planName: $this->resolvePlanName($order->plan_key),
                     amount: $order->amount,
                     currency: $order->currency,

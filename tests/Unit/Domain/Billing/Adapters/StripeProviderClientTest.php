@@ -16,4 +16,3 @@ class StripeProviderClientTest extends TestCase
         new StripeProviderClient([]);
     }
 }
-

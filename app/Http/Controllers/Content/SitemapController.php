@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Content;
 
 use App\Domain\Content\Models\BlogPost;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class SitemapController
 {

@@ -2,8 +2,10 @@
 
 namespace Tests\Feature\Authorization;
 
-use App\Domain\Settings\Models\BrandSetting;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Models\Order;
+use App\Domain\Settings\Models\BrandSetting;
+use App\Enums\OrderStatus;
 use App\Enums\PermissionName;
 use App\Filament\Admin\Pages\ManageBranding;
 use App\Models\User;
@@ -86,6 +88,26 @@ class FilamentAccessTest extends TestCase
         Subscription::factory()->create();
 
         $this->actingAs($admin)->get('/admin/subscriptions')->assertOk();
+    }
+
+    public function test_admin_can_access_orders_page_when_status_is_enum_backed(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $customer = User::factory()->create();
+
+        Order::query()->create([
+            'user_id' => $customer->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_test_order_1',
+            'plan_key' => 'starter',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [],
+        ]);
+
+        $this->actingAs($admin)->get('/admin/orders')->assertOk();
     }
 
     public function test_admin_can_access_settings_pages(): void

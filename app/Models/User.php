@@ -23,7 +23,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, HasRoles, Notifiable, HasEntitlements;
+    use HasEntitlements, HasFactory, HasRoles, Notifiable;
 
     protected static function booted(): void
     {

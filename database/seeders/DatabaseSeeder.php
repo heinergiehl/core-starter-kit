@@ -2,9 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Domain\Billing\Models\Discount;
-use App\Domain\Billing\Models\Price;
-use App\Domain\Billing\Models\Product;
 use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;

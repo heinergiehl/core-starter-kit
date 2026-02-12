@@ -17,8 +17,10 @@ class BillingCheckReadiness extends Command
     {
         $checks = [];
         $isProduction = app()->isProduction();
+        $environment = strtolower((string) app()->environment());
         $strict = (bool) $this->option('strict');
 
+        $this->checkAppEnvironment($checks, $environment);
         $this->checkAppUrl($checks, $isProduction);
         $this->checkAppKey($checks);
         $this->checkQueue($checks);
@@ -68,6 +70,23 @@ class BillingCheckReadiness extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * @param  list<array{status:string,check:string,details:string}>  &$checks
+     */
+    private function checkAppEnvironment(array &$checks, string $environment): void
+    {
+        if (in_array($environment, ['local', 'testing'], true)) {
+            $checks[] = $this->warnCheck(
+                'APP_ENV target',
+                "Current APP_ENV is [{$environment}]. Run final readiness checks with production-like env values."
+            );
+
+            return;
+        }
+
+        $checks[] = $this->passCheck('APP_ENV target', $environment);
     }
 
     /**
@@ -189,7 +208,9 @@ class BillingCheckReadiness extends Command
         }
 
         if (! str_starts_with(strtolower($url), 'https://')) {
-            $checks[] = $this->warnCheck("Webhook URL ({$provider})", $url);
+            $checks[] = $isProduction
+                ? $this->failCheck("Webhook URL ({$provider})", "Webhook URL must use HTTPS in production: {$url}")
+                : $this->warnCheck("Webhook URL ({$provider})", $url);
 
             return;
         }

@@ -8,8 +8,8 @@ use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
 use App\Enums\BillingProvider;
 use App\Enums\PriceType;
-use Stripe\StripeClient;
 use Exception;
+use Stripe\StripeClient;
 
 class StripeProviderClient implements BillingCatalogProvider
 {
@@ -80,19 +80,20 @@ class StripeProviderClient implements BillingCatalogProvider
                 'interval' => $price->interval, // month, year, week, day
                 'interval_count' => $price->interval_count,
             ];
-            
+
             if ($price->has_trial && $price->trial_interval_count) {
-                 // Stripe trial_period_days is on the PRICE (subscription schedule) or PRODUCT (legacy), 
-                 // actually Stripe keeps trials on the Subscription object usually, 
-                 // but Price API doesn't have 'trial_period_days' for standard recurrences easily without 'recurring[trial_period_days]' strictly.
-                 // WARNING: Stripe Price API does NOT support creating a price with a built-in trial period directly in the core params easily for Checkout 
-                 // unless using specific flows. However, for simple compatibility let's skip trial logic on the Price object 
-                 // and assume the Checkout handler applies it from the Price model's definition.
+                // Stripe trial_period_days is on the PRICE (subscription schedule) or PRODUCT (legacy),
+                // actually Stripe keeps trials on the Subscription object usually,
+                // but Price API doesn't have 'trial_period_days' for standard recurrences easily without 'recurring[trial_period_days]' strictly.
+                // WARNING: Stripe Price API does NOT support creating a price with a built-in trial period directly in the core params easily for Checkout
+                // unless using specific flows. However, for simple compatibility let's skip trial logic on the Price object
+                // and assume the Checkout handler applies it from the Price model's definition.
             }
         }
 
         try {
             $stripePrice = $this->client->prices->create($data);
+
             return $stripePrice->id;
         } catch (Exception $e) {
             throw BillingException::failedAction(BillingProvider::Stripe, 'create price', $e->getMessage());

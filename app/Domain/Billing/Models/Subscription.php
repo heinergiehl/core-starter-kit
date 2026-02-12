@@ -2,14 +2,13 @@
 
 namespace App\Domain\Billing\Models;
 
+use App\Domain\Billing\Services\EntitlementService;
+use App\Enums\BillingProvider;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use App\Enums\SubscriptionStatus;
-use App\Enums\BillingProvider;
-
-use App\Domain\Billing\Services\EntitlementService;
 
 class Subscription extends Model
 {
@@ -35,7 +34,7 @@ class Subscription extends Model
     {
         try {
             if ($userId) {
-                \Illuminate\Support\Facades\Cache::forget(EntitlementService::CACHE_KEY_PREFIX . $userId);
+                \Illuminate\Support\Facades\Cache::forget(EntitlementService::CACHE_KEY_PREFIX.$userId);
             }
         } catch (\Throwable $e) {
             report($e);

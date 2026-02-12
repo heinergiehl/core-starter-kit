@@ -18,6 +18,9 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
     /** @var array<string, object> */
     private array $pricesByLookupKey = [];
 
+    /** @var array<string, object> */
+    private array $pricesById = [];
+
     public function provider(): string
     {
         return 'stripe';
@@ -34,6 +37,7 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         $this->client = new StripeClient($secret);
         $this->productsByKey = [];
         $this->pricesByLookupKey = [];
+        $this->pricesById = [];
 
         foreach ($this->client->products->all(['limit' => 100])->autoPagingIterator() as $product) {
             $metadata = $this->toMetadataArray($product->metadata);
@@ -47,6 +51,8 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         foreach ($this->client->prices->all(['limit' => 100])->autoPagingIterator() as $price) {
+            $this->pricesById[(string) $price->id] = $price;
+
             if (! empty($price->lookup_key)) {
                 $this->pricesByLookupKey[(string) $price->lookup_key] = $price;
             }
@@ -100,6 +106,10 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         $mappedPriceId = $this->providerPriceId($price);
+        if ($mappedPriceId && ! $this->isValidMappedPriceId($mappedPriceId)) {
+            $mappedPriceId = null;
+        }
+
         if ($mappedPriceId) {
             return ['action' => 'skip', 'id' => $mappedPriceId];
         }
@@ -214,5 +224,14 @@ class StripeCatalogPublishAdapter implements CatalogPublishAdapter
         }
 
         return (string) $mapping->provider_id;
+    }
+
+    private function isValidMappedPriceId(string $providerId): bool
+    {
+        if (! str_starts_with($providerId, 'price_')) {
+            return false;
+        }
+
+        return isset($this->pricesById[$providerId]);
     }
 }

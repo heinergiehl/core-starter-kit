@@ -28,4 +28,3 @@ readonly class CheckoutEligibility
         );
     }
 }
-

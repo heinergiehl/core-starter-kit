@@ -3,8 +3,12 @@
 namespace Tests\Unit\Domain\Billing;
 
 use App\Domain\Billing\Models\Price;
+use App\Domain\Billing\Models\Product;
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\SaasStatsService;
+use App\Enums\OrderStatus;
+use App\Enums\PriceType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -216,5 +220,78 @@ class SaasStatsServiceTest extends TestCase
         $distribution = $this->service->getPlanDistribution();
 
         $this->assertSame([], $distribution);
+    }
+
+    public function test_metrics_include_one_time_monthly_orders_and_revenue(): void
+    {
+        $user = User::factory()->create();
+
+        $oneTimeProduct = Product::factory()->create([
+            'key' => 'lifetime',
+            'type' => PriceType::OneTime,
+        ]);
+
+        $recurringProduct = Product::factory()->create([
+            'key' => 'pro',
+            'type' => PriceType::Recurring,
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_one_time_1',
+            'plan_key' => $oneTimeProduct->key,
+            'status' => OrderStatus::Paid->value,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [],
+        ]);
+
+        // One-time checkout can still target a recurring product key; keep it counted by missing subscription ID.
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_one_time_2',
+            'plan_key' => $recurringProduct->key,
+            'status' => OrderStatus::Completed->value,
+            'amount' => 1500,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [],
+        ]);
+
+        // Subscription transaction should be excluded.
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_subscription',
+            'plan_key' => $recurringProduct->key,
+            'status' => OrderStatus::Paid->value,
+            'amount' => 2900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'subscription_id' => 'sub_123',
+            ],
+        ]);
+
+        // Last month should be excluded.
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_old_one_time',
+            'plan_key' => $oneTimeProduct->key,
+            'status' => OrderStatus::Paid->value,
+            'amount' => 9900,
+            'currency' => 'USD',
+            'paid_at' => now()->subMonth(),
+            'metadata' => [],
+        ]);
+
+        $metrics = $this->service->getMetrics();
+
+        $this->assertSame(2, $metrics['one_time_orders_this_month']);
+        $this->assertEquals(64.0, $metrics['one_time_revenue_this_month']);
     }
 }

@@ -61,16 +61,16 @@ class BillingDashboardService
                 ->get()
                 // Ensure it's actually a subscription order by checking metadata or product type relationship
                 ->filter(function ($order) {
-                     $meta = $order->metadata ?? [];
-                     // If we have explicit subscription_id, it is a sub.
-                     if (!empty($meta['subscription_id'])) {
-                         return true;
-                     }
-                     
-                     // If the order is paid/completed but has no subscription_id, 
-                     // it's a one-time purchase (or a one-time price on a sub product).
-                     // We should NOT treat it as a pending subscription.
-                     return false;
+                    $meta = $order->metadata ?? [];
+                    // If we have explicit subscription_id, it is a sub.
+                    if (! empty($meta['subscription_id'])) {
+                        return true;
+                    }
+
+                    // If the order is paid/completed but has no subscription_id,
+                    // it's a one-time purchase (or a one-time price on a sub product).
+                    // We should NOT treat it as a pending subscription.
+                    return false;
                 })
                 ->first();
         }
@@ -89,6 +89,7 @@ class BillingDashboardService
                 }
                 // OR no subscription_id in metadata
                 $meta = $order->metadata ?? [];
+
                 return empty($meta['subscription_id']);
             })
             ->first();
@@ -107,6 +108,7 @@ class BillingDashboardService
                 }
                 // OR no subscription_id in metadata
                 $meta = $order->metadata ?? [];
+
                 return empty($meta['subscription_id']);
             });
 

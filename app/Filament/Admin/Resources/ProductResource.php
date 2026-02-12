@@ -10,17 +10,17 @@ use App\Jobs\SyncProductsJob;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Repeater;
-use Filament\Schemas\Components\Group;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
@@ -95,13 +95,13 @@ class ProductResource extends Resource
                                         ->required()
                                         ->default('month')
                                         ->reactive()
-                                        ->afterStateUpdated(fn ($state, callable $set) => match($state) {
+                                        ->afterStateUpdated(fn ($state, callable $set) => match ($state) {
                                             'month' => $set('label', 'Monthly'),
                                             'year' => $set('label', 'Yearly'),
                                             'once' => $set('label', 'Lifetime'),
                                             default => null,
                                         }),
-                                    
+
                                     TextInput::make('amount')
                                         ->label('Price (Cents)')
                                         ->numeric()
@@ -133,7 +133,7 @@ class ProductResource extends Resource
                                                 ->label('Interval Count')
                                                 ->helperText('e.g. "3" for Quarterly'),
                                         ]),
-                                        
+
                                         Grid::make(2)->schema([
                                             Toggle::make('has_trial')
                                                 ->label('Offer Free Trial')
@@ -144,11 +144,11 @@ class ProductResource extends Resource
                                                 ->default(7)
                                                 ->visible(fn ($get) => $get('has_trial')),
                                         ]),
-                                        
+
                                         Hidden::make('is_active')->default(true),
                                     ]),
                             ])
-                            ->itemLabel(fn (array $state): ?string => ($state['label'] ?? 'Price') . ' - ' . ($state['amount'] ? '$' . ($state['amount'] / 100) : ''))
+                            ->itemLabel(fn (array $state): ?string => ($state['label'] ?? 'Price').' - '.($state['amount'] ? '$'.($state['amount'] / 100) : ''))
                             ->collapsed(false)
                             ->cloneable()
                             ->grid(1) // 1 price per row for better visibility
@@ -165,6 +165,7 @@ class ProductResource extends Resource
                                 if (is_array($state)) {
                                     return implode("\n", $state);
                                 }
+
                                 return (string) $state;
                             })
                             ->dehydrateStateUsing(function ($state): array {
@@ -172,6 +173,7 @@ class ProductResource extends Resource
                                     return [];
                                 }
                                 $lines = preg_split('/\r?\n/', (string) $state);
+
                                 return array_values(array_filter(array_map('trim', $lines)));
                             }),
                         Textarea::make('entitlements')
@@ -183,6 +185,7 @@ class ProductResource extends Resource
                                 if (! $state) {
                                     return null;
                                 }
+
                                 return json_encode($state, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
                             })
                             ->dehydrateStateUsing(function ($state): ?array {
@@ -190,6 +193,7 @@ class ProductResource extends Resource
                                     return null;
                                 }
                                 $decoded = json_decode((string) $state, true);
+
                                 return is_array($decoded) ? $decoded : null;
                             })
                             ->rules(['nullable', 'json']),
@@ -216,7 +220,7 @@ class ProductResource extends Resource
                     ->badge()
                     ->getStateUsing(function (Product $record) {
                         static $activeProviders = null;
-                        
+
                         if ($activeProviders === null) {
                             $activeProviders = \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
                                 ->pluck('slug')
@@ -282,7 +286,7 @@ class ProductResource extends Resource
                         Cache::put('sync_products_job', true, 600);
 
                         $includeDeleted = (bool) ($data['include_deleted'] ?? false);
-                        
+
                         SyncProductsJob::dispatch($includeDeleted, auth()->id());
 
                         Notification::make()

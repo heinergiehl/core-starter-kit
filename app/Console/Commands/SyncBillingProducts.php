@@ -4,11 +4,11 @@ namespace App\Console\Commands;
 
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripePriceHandler;
 use App\Domain\Billing\Adapters\Stripe\Handlers\StripeProductHandler;
+use App\Domain\Billing\Models\PaymentProvider;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product;
 use App\Domain\Billing\Models\ProductProviderMapping;
-use App\Domain\Billing\Models\PaymentProvider;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -73,8 +73,6 @@ class SyncBillingProducts extends Command
         } elseif ($provider === 'paddle') {
             $this->warn('Paddle is disabled in settings. Skipping.');
         }
-
-
 
         $this->newLine();
         $this->info($this->dryRun ? '✅ Dry run complete' : '✅ Sync complete');
@@ -179,7 +177,7 @@ class SyncBillingProducts extends Command
 
         $provider = PaymentProvider::where('slug', 'paddle')->first();
         $config = $provider?->configuration ?? [];
-        
+
         $apiKey = $config['api_key'] ?? config('services.paddle.api_key');
         $environment = $config['environment'] ?? config('services.paddle.environment', 'production');
         $baseUrl = $environment === 'sandbox' ? 'https://sandbox-api.paddle.com' : 'https://api.paddle.com';
@@ -749,9 +747,6 @@ class SyncBillingProducts extends Command
 
         return "every-{$intervalCount}-{$interval}";
     }
-
-
-
 
     /**
      * Generate a URL-friendly key.

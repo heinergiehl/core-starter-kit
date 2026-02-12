@@ -127,8 +127,6 @@ class BillingPortalController
             ->with('info', __('Billing portal is being prepared. Please check back shortly or contact support.'));
     }
 
-
-
     private function isAllowedPortalUrl(string $url, string $provider): bool
     {
         $host = parse_url($url, PHP_URL_HOST);

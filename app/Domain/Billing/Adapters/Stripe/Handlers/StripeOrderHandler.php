@@ -4,6 +4,7 @@ namespace App\Domain\Billing\Adapters\Stripe\Handlers;
 
 use App\Domain\Billing\Adapters\Stripe\Concerns\ResolvesStripeData;
 use App\Domain\Billing\Contracts\StripeWebhookHandler;
+use App\Domain\Billing\Jobs\SyncSubscriptionFromStripeJob;
 use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
@@ -11,7 +12,6 @@ use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
-use App\Domain\Billing\Jobs\SyncSubscriptionFromStripeJob;
 use App\Models\User;
 use Illuminate\Support\Arr;
 
@@ -52,6 +52,7 @@ class StripeOrderHandler implements StripeWebhookHandler
 
         if ($eventType === 'charge.refunded') {
             $this->handleChargeRefunded($object);
+
             return;
         }
 
@@ -270,6 +271,7 @@ class StripeOrderHandler implements StripeWebhookHandler
             return ucfirst($planKey);
         }
     }
+
     /**
      * Handle refunded charge.
      */
