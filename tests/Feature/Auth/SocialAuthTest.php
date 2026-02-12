@@ -63,4 +63,22 @@ class SocialAuthTest extends TestCase
         $response->assertRedirect(route('login'));
         $response->assertSessionHasErrors(['social']);
     }
+
+    public function test_google_redirect_prompts_for_account_selection(): void
+    {
+        $provider = Mockery::mock(\Laravel\Socialite\Contracts\Provider::class);
+        $provider->shouldReceive('with')
+            ->once()
+            ->with(['prompt' => 'select_account'])
+            ->andReturnSelf();
+        $provider->shouldReceive('redirect')
+            ->once()
+            ->andReturn(redirect('/oauth/google'));
+
+        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get('/auth/google/redirect');
+
+        $response->assertRedirect('/oauth/google');
+    }
 }

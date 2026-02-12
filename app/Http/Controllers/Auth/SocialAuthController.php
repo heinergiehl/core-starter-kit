@@ -68,6 +68,11 @@ class SocialAuthController extends Controller
     {
         $driver = Socialite::driver($provider);
 
+        if ($provider === 'google') {
+            // Prevent silent reuse of the currently active Google identity.
+            $driver = $driver->with(['prompt' => 'select_account']);
+        }
+
         return $this->shouldUseStateless() ? $driver->stateless() : $driver;
     }
 
