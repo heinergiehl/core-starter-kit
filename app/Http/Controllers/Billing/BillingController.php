@@ -139,7 +139,7 @@ class BillingController
             $newPlanName = $this->resolvePlanName($data['plan']);
 
             return redirect()->route('billing.index')
-                ->with('success', __('Your subscription plan change to :plan is pending provider confirmation.', [
+                ->with('info', __('Your subscription plan change to :plan is pending provider confirmation.', [
                     'plan' => $newPlanName,
                 ]));
         } catch (BillingException $e) {
