@@ -30,8 +30,20 @@ class WebhookController
             $adapter = app(BillingProviderManager::class)->runtime($provider);
             $eventData = $adapter->parseWebhook($request);
 
+            \Illuminate\Support\Facades\Log::info('billing.webhook.received', [
+                'provider' => $provider,
+                'event_id' => $eventData->id,
+                'event_type' => $eventData->type,
+            ]);
+
             // App-first mode: ignore product/price events (return 200 so provider stops retrying)
             if (in_array($eventData->type, self::IGNORED_EVENTS, true)) {
+                \Illuminate\Support\Facades\Log::info('billing.webhook.ignored', [
+                    'provider' => $provider,
+                    'event_id' => $eventData->id,
+                    'event_type' => $eventData->type,
+                ]);
+
                 return response()->noContent();
             }
 
@@ -85,6 +97,14 @@ class WebhookController
 
             if ($shouldDispatch) {
                 ProcessWebhookEvent::dispatch($webhookEvent->id);
+
+                \Illuminate\Support\Facades\Log::info('billing.webhook.dispatched', [
+                    'provider' => $provider,
+                    'event_id' => $eventData->id,
+                    'event_type' => $eventData->type,
+                    'webhook_event_id' => $webhookEvent->id,
+                    'status' => $webhookEvent->status,
+                ]);
             }
 
             return response()->noContent();

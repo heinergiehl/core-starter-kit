@@ -9,8 +9,11 @@ use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Enums\DiscountType;
 use App\Enums\PaymentMode;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -24,6 +27,8 @@ class BillingCheckoutController
         DiscountService $discounts,
         CheckoutService $checkoutService
     ): RedirectResponse {
+        $checkoutRequestId = (string) Str::uuid();
+
         $data = $request->validate([
             'plan' => ['required', 'string'],
             'price' => ['required', 'string'],
@@ -35,6 +40,15 @@ class BillingCheckoutController
 
         $provider = strtolower($data['provider'] ?? $plans->defaultProvider());
         $availableProviders = $plans->providers();
+
+        Log::info('billing.checkout.requested', [
+            'request_id' => $checkoutRequestId,
+            'request_user_id' => $request->user()?->id,
+            'provider' => $provider,
+            'plan_key' => $data['plan'],
+            'price_key' => $data['price'],
+            'has_coupon' => ! empty($data['coupon']),
+        ]);
 
         if (! in_array($provider, $availableProviders, true)) {
             return back()
@@ -115,9 +129,24 @@ class BillingCheckoutController
 
         $user = $resolved->user;
 
+        Log::info('billing.checkout.user_resolved', [
+            'request_id' => $checkoutRequestId,
+            'user_id' => $user->id,
+            'user_created' => $resolved->created,
+        ]);
+
         $eligibility = $checkoutService->evaluateCheckoutEligibility($user, $genericPlan, $price);
 
         if (! $eligibility->allowed) {
+            Log::warning('billing.checkout.denied', [
+                'request_id' => $checkoutRequestId,
+                'user_id' => $user->id,
+                'provider' => $provider,
+                'plan_key' => $data['plan'],
+                'price_key' => $data['price'],
+                'error_code' => $eligibility->errorCode,
+            ]);
+
             if (in_array($eligibility->errorCode, [
                 'BILLING_CHECKOUT_BLOCKED_ACTIVE_SUBSCRIPTION',
             ], true)) {
@@ -159,9 +188,18 @@ class BillingCheckoutController
                     priceKey: $data['price'],
                     currency: $priceCurrency,
                     creditAmount: $autoUpgradeCreditAmount,
+                    requestId: $checkoutRequestId,
                 );
             } catch (Throwable $exception) {
                 report($exception);
+                Log::error('billing.checkout.upgrade_credit_failed', [
+                    'request_id' => $checkoutRequestId,
+                    'user_id' => $user->id,
+                    'provider' => $provider,
+                    'plan_key' => $data['plan'],
+                    'price_key' => $data['price'],
+                    'error' => $exception->getMessage(),
+                ]);
 
                 return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
                     ->withErrors([
@@ -180,6 +218,15 @@ class BillingCheckoutController
             $data['price'],
             $quantity
         );
+
+        Log::info('billing.checkout.session_created', [
+            'request_id' => $checkoutRequestId,
+            'user_id' => $user->id,
+            'session_uuid' => $checkoutSession->uuid,
+            'provider' => $provider,
+            'plan_key' => $data['plan'],
+            'price_key' => $data['price'],
+        ]);
 
         $urls = $checkoutService->buildCheckoutUrls($provider, $checkoutSession);
         $successUrl = $urls['success'];
@@ -228,6 +275,14 @@ class BillingCheckoutController
 
             $request->session()->put('paddle_checkout', $paddleSession);
 
+            Log::info('billing.checkout.provider_redirect', [
+                'request_id' => $checkoutRequestId,
+                'user_id' => $user->id,
+                'session_uuid' => $checkoutSession->uuid,
+                'provider' => $provider,
+                'provider_session_id' => $transactionId,
+            ]);
+
             return redirect()->route('paddle.checkout', ['_ptxn' => $transactionId]);
         }
 
@@ -248,9 +303,26 @@ class BillingCheckoutController
                     'provider_session_id' => $checkoutDto->id,
                 ]);
             }
+
+            Log::info('billing.checkout.provider_redirect', [
+                'request_id' => $checkoutRequestId,
+                'user_id' => $user->id,
+                'session_uuid' => $checkoutSession->uuid,
+                'provider' => $provider,
+                'provider_session_id' => $checkoutDto->id,
+            ]);
         } catch (Throwable $exception) {
             report($exception);
             $checkoutSession->markCanceled();
+            Log::error('billing.checkout.provider_failed', [
+                'request_id' => $checkoutRequestId,
+                'user_id' => $user->id,
+                'session_uuid' => $checkoutSession->uuid,
+                'provider' => $provider,
+                'plan_key' => $data['plan'],
+                'price_key' => $data['price'],
+                'error' => $exception->getMessage(),
+            ]);
 
             return $checkoutService->handleCheckoutError($exception);
         }
@@ -265,38 +337,137 @@ class BillingCheckoutController
         string $planKey,
         string $priceKey,
         string $currency,
-        int $creditAmount
+        int $creditAmount,
+        string $requestId,
     ): Discount {
-        $discount = Discount::query()->create([
-            'code' => $this->upgradeCreditCode($userId),
-            'name' => 'One-time upgrade credit',
-            'description' => 'Automatic credit from previous one-time purchase',
-            'provider' => $provider,
-            'provider_type' => $provider === 'stripe' ? 'coupon' : null,
-            'type' => DiscountType::Fixed,
-            'amount' => $creditAmount,
-            'currency' => strtoupper((string) $currency),
-            'max_redemptions' => 1,
-            'is_active' => true,
-            'starts_at' => now(),
-            'ends_at' => now()->addHours(6),
-            'plan_keys' => [$planKey],
-            'price_keys' => [$priceKey],
-            'metadata' => [
-                'auto_upgrade_credit' => true,
-                'user_id' => $userId,
-            ],
+        $lockKey = implode(':', [
+            'billing',
+            'upgrade-credit',
+            strtolower($provider),
+            $userId,
+            strtolower($planKey),
+            strtolower($priceKey),
         ]);
 
         try {
-            $providerId = $providers->adapter($provider)->createDiscount($discount);
-            $discount->update(['provider_id' => $providerId]);
-        } catch (Throwable $exception) {
-            $discount->delete();
-            throw $exception;
-        }
+            return Cache::lock($lockKey, 10)->block(3, function () use ($providers, $provider, $userId, $planKey, $priceKey, $currency, $creditAmount, $requestId): Discount {
+                $existing = $this->findReusableOneTimeUpgradeCreditDiscount(
+                    provider: $provider,
+                    userId: $userId,
+                    planKey: $planKey,
+                    priceKey: $priceKey,
+                    creditAmount: $creditAmount,
+                );
 
-        return $discount->fresh();
+                if ($existing) {
+                    Log::info('billing.checkout.upgrade_credit_reused', [
+                        'request_id' => $requestId,
+                        'user_id' => $userId,
+                        'provider' => $provider,
+                        'plan_key' => $planKey,
+                        'price_key' => $priceKey,
+                        'discount_id' => $existing->id,
+                    ]);
+
+                    return $existing;
+                }
+
+                $discount = Discount::query()->create([
+                    'code' => $this->upgradeCreditCode($userId),
+                    'name' => 'One-time upgrade credit',
+                    'description' => 'Automatic credit from previous one-time purchase',
+                    'provider' => $provider,
+                    'provider_type' => $provider === 'stripe' ? 'coupon' : null,
+                    'type' => DiscountType::Fixed,
+                    'amount' => $creditAmount,
+                    'currency' => strtoupper((string) $currency),
+                    'max_redemptions' => 1,
+                    'is_active' => true,
+                    'starts_at' => now(),
+                    'ends_at' => now()->addHours(6),
+                    'plan_keys' => [$planKey],
+                    'price_keys' => [$priceKey],
+                    'metadata' => [
+                        'auto_upgrade_credit' => true,
+                        'user_id' => $userId,
+                        'checkout_request_id' => $requestId,
+                    ],
+                ]);
+
+                try {
+                    $providerId = $providers->adapter($provider)->createDiscount($discount);
+                    $discount->update(['provider_id' => $providerId]);
+                } catch (Throwable $exception) {
+                    $discount->delete();
+                    throw $exception;
+                }
+
+                Log::info('billing.checkout.upgrade_credit_created', [
+                    'request_id' => $requestId,
+                    'user_id' => $userId,
+                    'provider' => $provider,
+                    'plan_key' => $planKey,
+                    'price_key' => $priceKey,
+                    'discount_id' => $discount->id,
+                ]);
+
+                return $discount->fresh();
+            });
+        } catch (LockTimeoutException $exception) {
+            throw new RuntimeException('Unable to acquire upgrade-credit lock for checkout request.', 0, $exception);
+        }
+    }
+
+    private function findReusableOneTimeUpgradeCreditDiscount(
+        string $provider,
+        int $userId,
+        string $planKey,
+        string $priceKey,
+        int $creditAmount,
+    ): ?Discount {
+        $now = now();
+
+        $candidates = Discount::query()
+            ->where('provider', strtolower($provider))
+            ->where('is_active', true)
+            ->whereNotNull('provider_id')
+            ->where('type', DiscountType::Fixed->value)
+            ->where('amount', $creditAmount)
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('starts_at')
+                    ->orWhere('starts_at', '<=', $now);
+            })
+            ->where(function ($query) use ($now): void {
+                $query->whereNull('ends_at')
+                    ->orWhere('ends_at', '>', $now);
+            })
+            ->latest('id')
+            ->take(25)
+            ->get();
+
+        return $candidates->first(function (Discount $discount) use ($userId, $planKey, $priceKey): bool {
+            $metadata = $discount->metadata ?? [];
+            if (! data_get($metadata, 'auto_upgrade_credit')) {
+                return false;
+            }
+
+            if ((int) data_get($metadata, 'user_id') !== $userId) {
+                return false;
+            }
+
+            $planKeys = $discount->plan_keys ?? [];
+            if ($planKeys !== [] && ! in_array($planKey, $planKeys, true)) {
+                return false;
+            }
+
+            $priceKeys = $discount->price_keys ?? [];
+            if ($priceKeys !== [] && ! in_array($priceKey, $priceKeys, true)) {
+                return false;
+            }
+
+            return $discount->max_redemptions === null
+                || $discount->redeemed_count < $discount->max_redemptions;
+        });
     }
 
     private function upgradeCreditCode(int $userId): string

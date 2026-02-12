@@ -283,6 +283,27 @@ When you need to add or change products/prices (plans/prices) on production, fol
 
 ---
 
+## 12.3 Staging Subscription Test Catalog
+
+If your current catalog is one-time heavy and you want to validate subscription flows end-to-end on staging, use:
+
+```bash
+php artisan billing:seed-subscription-plans --force
+```
+
+This command:
+- upserts three recurring products (using the first three `saas.billing.pricing.shown_plans` keys when available)
+- creates/updates `monthly` and `yearly` recurring prices
+- deactivates one-time prices (`once` / `one_time`) for those seeded products
+
+To immediately sync provider IDs in staging:
+
+```bash
+php artisan billing:seed-subscription-plans --publish --force
+```
+
+---
+
 ## 13) Troubleshooting
 - If checkout redirect succeeds but subscription stays inactive:
   - verify webhook endpoint is reachable from the provider
@@ -321,6 +342,7 @@ Recommended release gate:
 5. `php artisan billing:check-readiness --strict`
 6. Confirm queue worker(s) are running and consuming jobs
 7. Send one Stripe + one Paddle test webhook and confirm both are marked `processed`
+8. Run the full release checklist in `docs/billing-go-live-checklist.md`
 
 ---
 

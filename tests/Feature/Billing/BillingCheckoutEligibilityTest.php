@@ -377,4 +377,122 @@ class BillingCheckoutEligibilityTest extends TestCase
             ->assertSeeText('Your upgrade credit is applied automatically during payment.')
             ->assertDontSeeText('Promo Code');
     }
+
+    public function test_one_time_upgrade_reuses_existing_auto_credit_discount_on_retry(): void
+    {
+        $hobbyistProduct = Product::factory()->create([
+            'key' => 'hobbyist',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+        $hobbyistPrice = Price::factory()->create([
+            'product_id' => $hobbyistProduct->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 4900,
+            'currency' => 'USD',
+        ]);
+
+        $agencyProduct = Product::factory()->create([
+            'key' => 'agency',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+        $agencyPrice = Price::factory()->create([
+            'product_id' => $agencyProduct->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 14999,
+            'currency' => 'USD',
+        ]);
+
+        PriceProviderMapping::query()->create([
+            'price_id' => $hobbyistPrice->id,
+            'provider' => 'stripe',
+            'provider_id' => 'price_hobbyist_once_retry',
+        ]);
+        PriceProviderMapping::query()->create([
+            'price_id' => $agencyPrice->id,
+            'provider' => 'stripe',
+            'provider_id' => 'price_agency_once_retry',
+        ]);
+
+        $user = User::factory()->create([
+            'email_verified_at' => now(),
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_hobbyist_once_retry',
+            'plan_key' => 'hobbyist',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'price_key' => 'once',
+            ],
+        ]);
+
+        $existingDiscount = Discount::query()->create([
+            'code' => 'UPG-REUSE-EXISTING',
+            'name' => 'One-time upgrade credit',
+            'description' => 'Automatic credit from previous one-time purchase',
+            'provider' => 'stripe',
+            'provider_id' => 'coupon_existing_upgrade_credit',
+            'provider_type' => 'coupon',
+            'type' => \App\Enums\DiscountType::Fixed,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'max_redemptions' => 1,
+            'redeemed_count' => 0,
+            'is_active' => true,
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addHours(3),
+            'plan_keys' => ['agency'],
+            'price_keys' => ['once'],
+            'metadata' => [
+                'auto_upgrade_credit' => true,
+                'user_id' => $user->id,
+            ],
+        ]);
+
+        $runtime = $this->mock(BillingRuntimeProvider::class);
+        $runtime->shouldNotReceive('createDiscount');
+        $runtime->shouldReceive('createCheckout')
+            ->once()
+            ->withArgs(function ($checkoutUser, $planKey, $priceKey, $quantity, $successUrl, $cancelUrl, $discount) use ($existingDiscount): bool {
+                return $checkoutUser->id === $existingDiscount->metadata['user_id']
+                    && $planKey === 'agency'
+                    && $priceKey === 'once'
+                    && $discount instanceof Discount
+                    && $discount->id === $existingDiscount->id
+                    && $discount->provider_id === 'coupon_existing_upgrade_credit';
+            })
+            ->andReturn(new TransactionDTO(
+                id: 'cs_test_upgrade_credit_reuse',
+                url: 'https://checkout.example.test/session/cs_test_upgrade_credit_reuse',
+                status: 'open',
+            ));
+
+        $manager = $this->mock(BillingProviderManager::class);
+        $manager->shouldReceive('adapter')
+            ->once()
+            ->with('stripe')
+            ->andReturn($runtime);
+
+        $response = $this->actingAs($user)->post(route('billing.checkout'), [
+            'provider' => 'stripe',
+            'plan' => 'agency',
+            'price' => 'once',
+            'email' => $user->email,
+            'name' => $user->name,
+        ]);
+
+        $response->assertRedirect('https://checkout.example.test/session/cs_test_upgrade_credit_reuse');
+        $this->assertSame(1, Discount::query()->where('provider', 'stripe')->where('provider_id', 'coupon_existing_upgrade_credit')->count());
+    }
 }

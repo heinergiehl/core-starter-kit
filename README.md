@@ -141,6 +141,7 @@ This kit supports:
 Billing is webhook-driven. Webhooks must be configured for your environment. See `docs/billing.md`.
 Set plan price IDs in `.env` (see `.env.example`) to enable checkout on the pricing page.
 Use `BILLING_CATALOG=database` to manage plans via `products` + `prices` in the Admin Panel.
+For staging subscription rehearsals, seed recurring plans with `php artisan billing:seed-subscription-plans --force`.
 
 ---
 
@@ -175,6 +176,7 @@ High level checklist:
 10) Set environment-level deploy variables explicitly:
    - `CSP_ALLOW_UNSAFE_EVAL` for your CSP posture
    - `WEB_GROUP` to match your PHP-FPM/Nginx group (usually `www-data`)
+11) Run `docs/billing-go-live-checklist.md` end-to-end on staging before production billing changes
 
 See:
 - `docs/security.md` for hardening
@@ -186,6 +188,7 @@ See:
 ## Docs
 - `docs/architecture.md` - boundaries, entitlements, webhook pipeline
 - `docs/billing.md` - providers, env/config, webhooks
+- `docs/billing-go-live-checklist.md` - release gate for subscription + one-time billing flows
 - `docs/features.md` - parity checklist and missing features
 - `docs/theming.md` - design tokens, theming, branding
 - `docs/localization.md` - locale setup and translation workflow
