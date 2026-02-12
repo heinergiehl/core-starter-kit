@@ -90,6 +90,80 @@ class PricingPlanChangeTest extends TestCase
             ->assertSee(route('billing.change-plan', [], false), false);
     }
 
+    public function test_active_subscriber_with_pending_plan_change_sees_pending_state_on_pricing_page(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['pro', 'growth']]);
+
+        $proProduct = Product::factory()->create([
+            'key' => 'pro',
+            'name' => 'Pro',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+        $growthProduct = Product::factory()->create([
+            'key' => 'growth',
+            'name' => 'Growth',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+
+        $proPrice = Price::factory()->create([
+            'product_id' => $proProduct->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 2900,
+            'currency' => 'USD',
+        ]);
+        $growthPrice = Price::factory()->create([
+            'product_id' => $growthProduct->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 5900,
+            'currency' => 'USD',
+        ]);
+
+        PriceProviderMapping::query()->create([
+            'price_id' => $proPrice->id,
+            'provider' => BillingProvider::Stripe->value,
+            'provider_id' => 'price_pro_monthly',
+        ]);
+        PriceProviderMapping::query()->create([
+            'price_id' => $growthPrice->id,
+            'provider' => BillingProvider::Stripe->value,
+            'provider_id' => 'price_growth_monthly',
+        ]);
+
+        $user = User::factory()->create([
+            'email_verified_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'sub_pricing_pending_change',
+            'plan_key' => 'pro',
+            'status' => SubscriptionStatus::Active,
+            'metadata' => [
+                'stripe_price_id' => 'price_pro_monthly',
+                'price_key' => 'monthly',
+                'pending_plan_key' => 'growth',
+                'pending_price_key' => 'monthly',
+                'pending_provider_price_id' => 'price_growth_monthly',
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('A plan change is already pending provider confirmation.')
+            ->assertSeeText('Plan change pending')
+            ->assertDontSee(route('billing.change-plan', [], false), false);
+    }
+
     public function test_one_time_customer_sees_upgrade_and_subscription_conversion_ctas(): void
     {
         config(['saas.billing.pricing.shown_plans' => ['hobbyist', 'indie', 'pro']]);

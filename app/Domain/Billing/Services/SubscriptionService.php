@@ -14,7 +14,6 @@ use App\Enums\BillingProvider;
 use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
-use App\Notifications\SubscriptionPlanChangedNotification;
 use Illuminate\Support\Facades\Log;
 
 class SubscriptionService
@@ -86,53 +85,31 @@ class SubscriptionService
             );
         }
 
+        $metadata = $subscription->metadata ?? [];
+        $pendingProviderPriceId = (string) ($metadata['pending_provider_price_id'] ?? '');
+        if ($pendingProviderPriceId !== '' && hash_equals($pendingProviderPriceId, $newPriceId)) {
+            throw new BillingException(
+                __('This subscription change is already pending provider confirmation.'),
+                'BILLING_PLAN_CHANGE_ALREADY_PENDING'
+            );
+        }
+
         $previousPlanKey = $subscription->plan_key;
 
         $this->providerManager->adapter($subscription->provider->value)
             ->updateSubscription($subscription, $newPriceId);
 
-        $metadata = $subscription->metadata ?? [];
-        $metadata['plan_key'] = $planKey;
-        $metadata['price_key'] = $priceKey;
-
-        if ($subscription->provider === BillingProvider::Stripe) {
-            $metadata['stripe_price_id'] = $newPriceId;
-        }
-
-        if ($subscription->provider === BillingProvider::Paddle) {
-            $metadata['paddle_price_id'] = $newPriceId;
-        }
+        // Do not mutate canonical plan_key immediately.
+        // Finalize plan changes only after provider webhook confirmation.
+        $metadata['pending_plan_key'] = $planKey;
+        $metadata['pending_price_key'] = $priceKey;
+        $metadata['pending_provider_price_id'] = $newPriceId;
+        $metadata['pending_previous_plan_key'] = $previousPlanKey;
+        $metadata['pending_plan_change_requested_at'] = now()->toIso8601String();
 
         $subscription->update([
-            'plan_key' => $planKey,
             'metadata' => $metadata,
         ]);
-
-        $previousPlanName = $this->resolvePlanName($previousPlanKey);
-        $newPlanName = $this->resolvePlanName($planKey);
-
-        if ($previousPlanKey !== $planKey) {
-            $user->notify(new SubscriptionPlanChangedNotification(
-                previousPlanName: $previousPlanName,
-                newPlanName: $newPlanName,
-                effectiveDate: now()->format('F j, Y'),
-            ));
-        }
-    }
-
-    private function resolvePlanName(?string $planKey): string
-    {
-        if (! $planKey) {
-            return 'subscription';
-        }
-
-        try {
-            $plan = $this->planService->plan($planKey);
-
-            return $plan->name ?: ucfirst($planKey);
-        } catch (\Throwable) {
-            return ucfirst($planKey);
-        }
     }
 
     public function syncFromProvider(SubscriptionData $data): Subscription

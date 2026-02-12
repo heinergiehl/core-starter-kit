@@ -139,13 +139,13 @@ class BillingController
             $newPlanName = $this->resolvePlanName($data['plan']);
 
             return redirect()->route('billing.index')
-                ->with('success', __('Your subscription has been updated to :plan.', [
+                ->with('success', __('Your subscription plan change to :plan is pending provider confirmation.', [
                     'plan' => $newPlanName,
                 ]));
         } catch (BillingException $e) {
             report($e);
 
-            if ($e->getErrorCode() === 'BILLING_PLAN_ALREADY_ACTIVE') {
+            if (in_array($e->getErrorCode(), ['BILLING_PLAN_ALREADY_ACTIVE', 'BILLING_PLAN_CHANGE_ALREADY_PENDING'], true)) {
                 return back()->with('info', $e->getMessage());
             }
 
@@ -190,6 +190,7 @@ class BillingController
                 'BILLING_SUBSCRIPTION_PENDING_CANCELLATION' => __('Please resume your pending cancellation before changing plans.'),
                 'BILLING_PROVIDER_PRICE_UNAVAILABLE' => __('The selected plan is not available for your billing provider.'),
                 'BILLING_PLAN_CHANGE_INVALID_TARGET' => __('You can only switch between recurring subscription plans.'),
+                'BILLING_PLAN_CHANGE_ALREADY_PENDING' => __('This plan change is already pending provider confirmation.'),
                 'BILLING_UNKNOWN_PLAN', 'BILLING_UNKNOWN_PRICE' => __('The selected plan or billing interval is invalid.'),
                 default => __('Failed to change plan. Please try again or contact support.'),
             };

@@ -10,6 +10,11 @@
         $canChangeSubscription = (bool) ($canChangeSubscription ?? false);
         $catalog = strtolower((string) ($catalog ?? config('saas.billing.catalog', 'config')));
         $priceStates = is_array($priceStates ?? null) ? $priceStates : [];
+        $currentSubscriptionContext = is_array($currentSubscriptionContext ?? null) ? $currentSubscriptionContext : [];
+        $currentSubscriptionAmountMinor = isset($currentSubscriptionContext['amount_minor']) ? (int) $currentSubscriptionContext['amount_minor'] : null;
+        $currentSubscriptionCurrency = (string) ($currentSubscriptionContext['currency'] ?? '');
+        $currentSubscriptionPlanName = (string) ($currentSubscriptionContext['plan_name'] ?? __('Current plan'));
+        $pendingPriceKeyLabel = (string) ($pendingPriceKey ?? '');
 
         $allIntervals = collect($plans)
             ->pluck('prices')
@@ -29,7 +34,69 @@
         ];
     @endphp
 
-    <div x-data="{ interval: '{{ $defaultInterval }}' }">
+    <div
+        x-data="{
+            interval: '{{ $defaultInterval }}',
+            showPlanChangeConfirm: false,
+            confirmSubmitting: false,
+            confirmFormId: null,
+            confirmPlanName: '',
+            confirmPriceLabel: '',
+            confirmIntervalLabel: '',
+            confirmAmountText: '',
+            confirmCurrentPlanName: @js($currentSubscriptionPlanName),
+            confirmCurrentAmountText: '',
+            confirmDirection: 'switch',
+            confirmImpactText: '',
+            confirmButtonLabel: @js(__('Confirm Plan Change')),
+            openPlanChangeConfirm(payload) {
+                this.confirmFormId = payload.formId;
+                this.confirmPlanName = payload.planName;
+                this.confirmPriceLabel = payload.priceLabel;
+                this.confirmIntervalLabel = payload.intervalLabel;
+                this.confirmAmountText = payload.amountText;
+                this.confirmCurrentAmountText = payload.currentAmountText ?? '';
+                this.confirmDirection = payload.direction ?? 'switch';
+                this.confirmSubmitting = false;
+
+                if (this.confirmDirection === 'upgrade') {
+                    this.confirmButtonLabel = @js(__('Confirm Upgrade'));
+                    this.confirmImpactText = @js(__('Your provider will apply prorations automatically. Upgrades can trigger an immediate or next-invoice charge.'));
+                } else if (this.confirmDirection === 'downgrade') {
+                    this.confirmButtonLabel = @js(__('Confirm Downgrade'));
+                    this.confirmImpactText = @js(__('Your provider will apply prorations automatically. Downgrades usually create invoice credit, not an automatic card refund.'));
+                } else {
+                    this.confirmButtonLabel = @js(__('Confirm Plan Change'));
+                    this.confirmImpactText = @js(__('Your provider will apply prorations automatically based on your existing billing period.'));
+                }
+
+                this.showPlanChangeConfirm = true;
+            },
+            closePlanChangeConfirm() {
+                this.showPlanChangeConfirm = false;
+                this.confirmSubmitting = false;
+                this.confirmFormId = null;
+            },
+            submitConfirmedPlanChange() {
+                if (!this.confirmFormId || this.confirmSubmitting) {
+                    return;
+                }
+
+                const form = document.getElementById(this.confirmFormId);
+                if (!form) {
+                    return;
+                }
+
+                this.confirmSubmitting = true;
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                    return;
+                }
+
+                form.submit();
+            }
+        }"
+    >
     <section class="py-12">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div class="max-w-2xl">
@@ -80,6 +147,15 @@
                 {{ $errors->first('coupon') }}
             </div>
         @endif
+
+        @if ($canChangeSubscription && !empty($hasPendingPlanChange))
+            <div class="px-4 py-3 mt-6 text-sm border rounded-2xl border-amber-400/30 bg-amber-500/10 text-amber-300 backdrop-blur">
+                {{ __('A plan change is already pending provider confirmation.') }}
+                @if (!empty($pendingPlanName))
+                    {{ __('Pending target: :plan (:price).', ['plan' => $pendingPlanName, 'price' => $pendingPriceKeyLabel !== '' ? $pendingPriceKeyLabel : __('unknown interval')]) }}
+                @endif
+            </div>
+        @endif
     </section>
 
     <section class="grid gap-12 mt-16 lg:grid-cols-3">
@@ -125,12 +201,16 @@
                                 $label = $price->label ?: ucfirst($price->key);
                                 $interval = $price->interval ?? null;
                                 $amountDisplay = __('Custom');
+                                $targetAmountMinor = null;
                                 if (is_numeric($amount)) {
                                     $amountValue = (float) $amount;
                                     $amountDisplay = '$' . number_format(
                                         !empty($price->amountIsMinor) ? ($amountValue / 100) : $amountValue,
                                         !empty($price->amountIsMinor) ? 2 : 0
                                     );
+                                    $targetAmountMinor = !empty($price->amountIsMinor)
+                                        ? (int) round($amountValue)
+                                        : (int) round($amountValue * 100);
                                 }
                             @endphp
                             
@@ -155,23 +235,59 @@
                                         $priceIdForActiveProvider = $priceState['price_id_for_active_provider'] ?? null;
                                         $isCurrentSubscriptionPrice = (bool) ($priceState['is_current_subscription_price'] ?? false);
                                         $checkoutEligibility = $priceState['checkout_eligibility'] ?? null;
+                                        $planChangePending = (bool) ($priceState['plan_change_pending'] ?? false);
+                                        $formId = 'change-plan-'.$plan->key.'-'.$price->key;
+                                        $planDirection = 'switch';
+                                        if (!is_null($currentSubscriptionAmountMinor)
+                                            && !is_null($targetAmountMinor)
+                                            && $currentSubscriptionAmountMinor > 0
+                                            && $targetAmountMinor > 0
+                                            && $currentSubscriptionCurrency === $currency
+                                        ) {
+                                            if ($targetAmountMinor > $currentSubscriptionAmountMinor) {
+                                                $planDirection = 'upgrade';
+                                            } elseif ($targetAmountMinor < $currentSubscriptionAmountMinor) {
+                                                $planDirection = 'downgrade';
+                                            }
+                                        }
+
+                                        $intervalLabel = $interval
+                                            ? ($intervalLabels[$interval]
+                                                ?? \Illuminate\Support\Str::of($interval)->replace('_', ' ')->title()->value())
+                                            : __('Interval');
                                     @endphp
 
                                     @if ($canChangeSubscription && !$isOneTime)
-                                        @if (empty($priceIdForActiveProvider))
-                                            <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">
-                                                {{ __('Not available for your billing provider') }}
-                                            </p>
-                                        @elseif ($isCurrentSubscriptionPrice)
+                                        @if ($isCurrentSubscriptionPrice)
                                             <p class="inline-block px-3 py-1.5 text-xs font-medium rounded-lg text-emerald-500 bg-emerald-500/10">
                                                 {{ __('Current plan') }}
                                             </p>
+                                        @elseif ($planChangePending)
+                                            <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">
+                                                {{ __('Plan change pending') }}
+                                            </p>
+                                        @elseif (empty($priceIdForActiveProvider))
+                                            <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">
+                                                {{ __('Not available for your billing provider') }}
+                                            </p>
                                         @else
-                                            <form method="POST" action="{{ route('billing.change-plan') }}" data-submit-lock>
+                                            <form id="{{ $formId }}" method="POST" action="{{ route('billing.change-plan') }}" data-submit-lock>
                                                 @csrf
                                                 <input type="hidden" name="plan" value="{{ $plan->key }}">
                                                 <input type="hidden" name="price" value="{{ $price->key }}">
-                                                <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
+                                                <button
+                                                    type="button"
+                                                    @click.prevent="openPlanChangeConfirm({
+                                                        formId: @js($formId),
+                                                        planName: @js($plan->name ?: ucfirst($plan->key)),
+                                                        priceLabel: @js($label),
+                                                        intervalLabel: @js($intervalLabel),
+                                                        amountText: @js($amountDisplay . ' ' . $currency),
+                                                        currentAmountText: @js(!is_null($currentSubscriptionAmountMinor) && $currentSubscriptionCurrency !== '' ? ($currentSubscriptionCurrency . ' ' . number_format($currentSubscriptionAmountMinor / 100, 2)) : ''),
+                                                        direction: @js($planDirection)
+                                                    })"
+                                                    class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5"
+                                                >
                                                     {{ __('Switch plan') }}
                                                 </button>
                                             </form>
@@ -276,6 +392,77 @@
             </div>
         </div>
     </section>
+
+    <div
+        x-cloak
+        x-show="showPlanChangeConfirm"
+        class="fixed inset-0 z-50 overflow-y-auto"
+        aria-labelledby="plan-change-confirm-title"
+        role="dialog"
+        aria-modal="true"
+        @keydown.escape.window="closePlanChangeConfirm()"
+    >
+        <div class="flex min-h-screen items-center justify-center px-4 py-12">
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" @click="closePlanChangeConfirm()"></div>
+
+            <div class="relative glass-panel rounded-[32px] p-8 max-w-lg w-full">
+                <h3 id="plan-change-confirm-title" class="text-xl font-display font-bold text-ink">
+                    {{ __('Confirm Plan Change') }}
+                </h3>
+                <p class="mt-2 text-sm text-ink/60">
+                    {{ __('Please review this change before we ask your payment provider to apply it.') }}
+                </p>
+
+                <div class="mt-6 rounded-2xl border border-ink/10 bg-surface/40 p-4 space-y-2">
+                    <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
+                        <span
+                            class="inline-flex items-center rounded-full border px-2 py-1"
+                            :class="confirmDirection === 'upgrade' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : (confirmDirection === 'downgrade' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-primary/30 bg-primary/10 text-primary')"
+                            x-text="confirmDirection === 'upgrade' ? @js(__('Upgrade')) : (confirmDirection === 'downgrade' ? @js(__('Downgrade')) : @js(__('Switch')))"
+                        ></span>
+                        <span class="text-ink/50" x-text="confirmIntervalLabel"></span>
+                    </div>
+                    <p class="text-lg font-bold text-ink" x-text="confirmPlanName"></p>
+                    <p class="text-sm text-ink/60">
+                        <span x-text="confirmPriceLabel"></span>
+                        <span class="mx-1">&middot;</span>
+                        <span x-text="confirmAmountText"></span>
+                    </p>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-ink/10 bg-surface/30 px-4 py-3 text-sm text-ink/60">
+                    <p>
+                        {{ __('Current') }}:
+                        <span class="font-semibold text-ink" x-text="confirmCurrentPlanName"></span>
+                        <template x-if="confirmCurrentAmountText">
+                            <span>
+                                <span class="mx-1">&middot;</span>
+                                <span class="font-semibold text-ink" x-text="confirmCurrentAmountText"></span>
+                            </span>
+                        </template>
+                    </p>
+                </div>
+
+                <p class="mt-4 text-sm text-ink/70" x-text="confirmImpactText"></p>
+
+                <div class="mt-6 flex flex-wrap items-center gap-3">
+                    <button
+                        type="button"
+                        @click="submitConfirmedPlanChange()"
+                        :disabled="confirmSubmitting"
+                        :aria-disabled="confirmSubmitting"
+                        class="btn-primary"
+                    >
+                        <span x-show="!confirmSubmitting" x-text="confirmButtonLabel"></span>
+                        <span x-show="confirmSubmitting">{{ __('Submitting...') }}</span>
+                    </button>
+                    <button type="button" @click="closePlanChangeConfirm()" class="btn-secondary">
+                        {{ __('Keep Current Plan') }}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     </div> <!-- End x-data -->
 @endsection
 

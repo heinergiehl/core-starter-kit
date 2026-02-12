@@ -40,6 +40,18 @@
                     $supportsLocalCancel = in_array($subscription->provider->value, ['stripe', 'paddle'], true);
                     $canResume = $supportsLocalCancel && $isPendingCancellation;
                     $canCancel = $supportsLocalCancel && !$isPendingCancellation && in_array($subscription->status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing], true);
+                    $pendingPlanKey = (string) data_get($subscription->metadata, 'pending_plan_key', '');
+                    $pendingPriceKey = (string) data_get($subscription->metadata, 'pending_price_key', '');
+                    $pendingRequestedAt = data_get($subscription->metadata, 'pending_plan_change_requested_at');
+                    $isPendingPlanChange = (string) data_get($subscription->metadata, 'pending_provider_price_id', '') !== '';
+                    $pendingRequestedAtDisplay = null;
+                    if (is_string($pendingRequestedAt) && $pendingRequestedAt !== '') {
+                        try {
+                            $pendingRequestedAtDisplay = \Illuminate\Support\Carbon::parse($pendingRequestedAt)->format('M j, Y H:i');
+                        } catch (\Throwable) {
+                            $pendingRequestedAtDisplay = null;
+                        }
+                    }
                 @endphp
 
                 <!-- Current Plan Card -->
@@ -98,10 +110,14 @@
                             {{ __('Manage Payment Method') }}
                         </a>
 
-                        @if (!$isPendingCancellation && in_array($subscription->status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing], true))
+                        @if (!$isPendingCancellation && !$isPendingPlanChange && in_array($subscription->status, [\App\Enums\SubscriptionStatus::Active, \App\Enums\SubscriptionStatus::Trialing], true))
                             <a href="{{ route('pricing') }}?current_plan={{ $subscription->plan_key }}" class="btn-secondary">
                                 {{ __('Change Plan') }}
                             </a>
+                        @elseif($isPendingPlanChange)
+                            <span class="inline-flex items-center px-3 py-2 rounded-xl text-sm font-medium border border-amber-500/20 bg-amber-500/10 text-amber-700">
+                                {{ __('Plan change pending') }}
+                            </span>
                         @endif
 
                         @if ($canResume)
@@ -127,6 +143,23 @@
                     @if ($isPendingCancellation && $subscription->ends_at)
                         <div class="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
                             {{ __('Your subscription has been canceled. You will retain access until :date.', ['date' => $subscription->ends_at->format('F j, Y')]) }}
+                        </div>
+                    @endif
+
+                    @if ($isPendingPlanChange)
+                        <div class="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+                            <p>{{ __('Your plan change is pending provider confirmation.') }}</p>
+                            @if ($pendingPlanKey !== '')
+                                <p class="mt-1">
+                                    {{ __('Pending target: :plan (:price).', [
+                                        'plan' => ucfirst($pendingPlanKey),
+                                        'price' => $pendingPriceKey !== '' ? $pendingPriceKey : __('unknown interval'),
+                                    ]) }}
+                                </p>
+                            @endif
+                            @if ($pendingRequestedAtDisplay)
+                                <p class="mt-1 text-xs text-amber-700/80">{{ __('Requested at: :date', ['date' => $pendingRequestedAtDisplay]) }}</p>
+                            @endif
                         </div>
                     @endif
                 </div>

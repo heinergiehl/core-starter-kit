@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Domain\Billing;
 
+use App\Domain\Billing\Contracts\BillingRuntimeProvider;
 use App\Domain\Billing\Data\Plan;
 use App\Domain\Billing\Data\Price;
 use App\Domain\Billing\Exceptions\BillingException;
@@ -19,6 +20,59 @@ use Tests\TestCase;
 class SubscriptionServicePlanChangeTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_change_plan_marks_target_as_pending_until_webhook_confirms(): void
+    {
+        $user = User::factory()->create();
+
+        $subscription = Subscription::factory()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'sub_plan_change_pending',
+            'status' => SubscriptionStatus::Active,
+            'plan_key' => 'pro',
+            'metadata' => [
+                'stripe_price_id' => 'price_pro_monthly',
+            ],
+        ]);
+
+        $adapter = $this->mock(BillingRuntimeProvider::class);
+        $adapter->shouldReceive('updateSubscription')
+            ->once()
+            ->withArgs(function ($incomingSubscription, string $newPriceId) use ($subscription): bool {
+                return $incomingSubscription->is($subscription)
+                    && $newPriceId === 'price_growth_monthly';
+            });
+
+        $providerManager = $this->mock(BillingProviderManager::class);
+        $providerManager->shouldReceive('adapter')
+            ->once()
+            ->with(BillingProvider::Stripe->value)
+            ->andReturn($adapter);
+
+        $planService = $this->mock(BillingPlanService::class, function ($mock): void {
+            $mock->shouldReceive('plan')
+                ->once()
+                ->with('growth')
+                ->andReturn($this->buildPlan('growth', PriceType::Recurring, 'monthly', PriceType::Recurring));
+
+            $mock->shouldReceive('providerPriceId')
+                ->once()
+                ->with(BillingProvider::Stripe->value, 'growth', 'monthly')
+                ->andReturn('price_growth_monthly');
+        });
+
+        $service = new SubscriptionService($providerManager, $planService);
+        $service->changePlan($user, 'growth', 'monthly');
+
+        $subscription->refresh();
+
+        $this->assertSame('pro', $subscription->plan_key);
+        $this->assertSame('growth', data_get($subscription->metadata, 'pending_plan_key'));
+        $this->assertSame('monthly', data_get($subscription->metadata, 'pending_price_key'));
+        $this->assertSame('price_growth_monthly', data_get($subscription->metadata, 'pending_provider_price_id'));
+        $this->assertNotNull(data_get($subscription->metadata, 'pending_plan_change_requested_at'));
+    }
 
     public function test_change_plan_rejects_one_time_target(): void
     {
@@ -87,6 +141,49 @@ class SubscriptionServicePlanChangeTest extends TestCase
             $this->fail('Expected BillingException was not thrown.');
         } catch (BillingException $exception) {
             $this->assertSame('BILLING_PLAN_ALREADY_ACTIVE', $exception->getErrorCode());
+        }
+    }
+
+    public function test_change_plan_rejects_duplicate_pending_target_without_provider_call(): void
+    {
+        $user = User::factory()->create();
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'sub_plan_change_already_pending',
+            'status' => SubscriptionStatus::Active,
+            'plan_key' => 'pro',
+            'metadata' => [
+                'stripe_price_id' => 'price_pro_monthly',
+                'pending_plan_key' => 'growth',
+                'pending_price_key' => 'monthly',
+                'pending_provider_price_id' => 'price_growth_monthly',
+            ],
+        ]);
+
+        $providerManager = $this->mock(BillingProviderManager::class);
+        $providerManager->shouldNotReceive('adapter');
+
+        $planService = $this->mock(BillingPlanService::class, function ($mock): void {
+            $mock->shouldReceive('plan')
+                ->once()
+                ->with('growth')
+                ->andReturn($this->buildPlan('growth', PriceType::Recurring, 'monthly', PriceType::Recurring));
+
+            $mock->shouldReceive('providerPriceId')
+                ->once()
+                ->with(BillingProvider::Stripe->value, 'growth', 'monthly')
+                ->andReturn('price_growth_monthly');
+        });
+
+        $service = new SubscriptionService($providerManager, $planService);
+
+        try {
+            $service->changePlan($user, 'growth', 'monthly');
+            $this->fail('Expected BillingException was not thrown.');
+        } catch (BillingException $exception) {
+            $this->assertSame('BILLING_PLAN_CHANGE_ALREADY_PENDING', $exception->getErrorCode());
         }
     }
 
