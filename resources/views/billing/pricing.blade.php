@@ -15,6 +15,8 @@
         $currentSubscriptionCurrency = (string) ($currentSubscriptionContext['currency'] ?? '');
         $currentSubscriptionPlanName = (string) ($currentSubscriptionContext['plan_name'] ?? __('Current plan'));
         $pendingPriceKeyLabel = (string) ($pendingPriceKey ?? '');
+        $isPendingCancellation = (bool) ($isPendingCancellation ?? false);
+        $pendingCancellationDate = $activeSubscription?->ends_at?->format('F j, Y');
 
         $allIntervals = collect($plans)
             ->pluck('prices')
@@ -92,6 +94,20 @@
                 @if (!empty($pendingPlanName))
                     {{ __('Pending target: :plan (:price).', ['plan' => $pendingPlanName, 'price' => $pendingPriceKeyLabel !== '' ? $pendingPriceKeyLabel : __('unknown interval')]) }}
                 @endif
+            </div>
+        @endif
+
+        @if ($isPendingCancellation)
+            <div class="mt-6 flex flex-col gap-3 rounded-2xl border border-blue-500/25 bg-blue-500/10 px-4 py-3 text-sm text-blue-300 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+                <p>
+                    {{ __('Your subscription is scheduled to cancel on :date. Resume it before switching plans.', ['date' => $pendingCancellationDate ?: __('the current period end')]) }}
+                </p>
+                <form method="POST" action="{{ route('billing.resume') }}" data-submit-lock>
+                    @csrf
+                    <button type="submit" class="btn-secondary !py-2 !text-sm">
+                        {{ __('Resume to change plan') }}
+                    </button>
+                </form>
             </div>
         @endif
     </section>
@@ -231,6 +247,10 @@
                                                 </button>
                                             </form>
                                         @endif
+                                    @elseif ($isPendingCancellation && !$isOneTime)
+                                        <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-blue-300 bg-blue-500/10">
+                                            {{ __('Scheduled to cancel') }}
+                                        </p>
                                     @elseif (empty($price->providerIds))
                                         @if ($catalog === 'database')
                                             <p class="inline-block px-2 py-1 text-xs font-medium rounded-md text-amber-500 bg-amber-500/10">{{ __('Missing Price ID') }}</p>

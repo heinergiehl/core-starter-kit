@@ -164,6 +164,78 @@ class PricingPlanChangeTest extends TestCase
             ->assertDontSee(route('billing.change-plan', [], false), false);
     }
 
+    public function test_pending_cancellation_subscriber_sees_resume_to_change_plan_cta(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['starter', 'pro']]);
+
+        $starterProduct = Product::factory()->create([
+            'key' => 'starter',
+            'name' => 'Starter',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+        $proProduct = Product::factory()->create([
+            'key' => 'pro',
+            'name' => 'Pro',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+
+        $starterPrice = Price::factory()->create([
+            'product_id' => $starterProduct->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 2900,
+            'currency' => 'USD',
+        ]);
+        $proPrice = Price::factory()->create([
+            'product_id' => $proProduct->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 5900,
+            'currency' => 'USD',
+        ]);
+
+        PriceProviderMapping::query()->create([
+            'price_id' => $starterPrice->id,
+            'provider' => BillingProvider::Stripe->value,
+            'provider_id' => 'price_starter_monthly',
+        ]);
+        PriceProviderMapping::query()->create([
+            'price_id' => $proPrice->id,
+            'provider' => BillingProvider::Stripe->value,
+            'provider_id' => 'price_pro_monthly',
+        ]);
+
+        $user = User::factory()->create([
+            'email_verified_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'sub_pricing_pending_cancellation',
+            'plan_key' => 'starter',
+            'status' => SubscriptionStatus::Active,
+            'canceled_at' => now()->subMinute(),
+            'ends_at' => now()->addDays(7),
+            'metadata' => [
+                'stripe_price_id' => 'price_starter_monthly',
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('Resume to change plan')
+            ->assertSeeText('Scheduled to cancel')
+            ->assertDontSee(route('billing.change-plan', [], false), false);
+    }
+
     public function test_one_time_customer_sees_upgrade_and_subscription_conversion_ctas(): void
     {
         config(['saas.billing.pricing.shown_plans' => ['hobbyist', 'indie', 'pro']]);

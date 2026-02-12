@@ -178,8 +178,17 @@ class SubscriptionService
             'ends_at' => $endsAt,
         ]);
 
-        event(new SubscriptionCancelled($subscription));
-        $subscription->forceFill(['cancellation_email_sent_at' => now()])->saveQuietly();
+        try {
+            event(new SubscriptionCancelled($subscription));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        try {
+            $subscription->forceFill(['cancellation_email_sent_at' => now()])->saveQuietly();
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         return $endsAt;
     }
@@ -194,8 +203,17 @@ class SubscriptionService
             'ends_at' => null,
         ]);
 
-        event(new SubscriptionResumed($subscription));
-        $subscription->forceFill(['cancellation_email_sent_at' => null])->saveQuietly();
+        try {
+            event(new SubscriptionResumed($subscription));
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        try {
+            $subscription->forceFill(['cancellation_email_sent_at' => null])->saveQuietly();
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     public function syncSubscriptionState(Subscription $subscription): Subscription

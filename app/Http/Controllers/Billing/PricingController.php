@@ -20,6 +20,10 @@ class PricingController
         $user = $request->user();
         $canCheckout = (bool) $user;
         $activeSubscription = $user?->activeSubscription();
+        $isPendingCancellation = (bool) ($activeSubscription
+            && $activeSubscription->canceled_at
+            && $activeSubscription->ends_at
+            && $activeSubscription->ends_at->isFuture());
         $latestOneTimeOrder = $canCheckout ? $checkoutService->latestPaidOneTimeOrder($user) : null;
         $canChangeSubscription = $activeSubscription
             && in_array($activeSubscription->status, [SubscriptionStatus::Active, SubscriptionStatus::Trialing], true)
@@ -91,6 +95,7 @@ class PricingController
                     'is_current_subscription_price' => $isCurrentSubscriptionPrice,
                     'checkout_eligibility' => $checkoutEligibility,
                     'plan_change_pending' => $hasPendingPlanChange,
+                    'pending_cancellation' => $isPendingCancellation,
                 ];
             }
         }
@@ -105,6 +110,8 @@ class PricingController
             'hasPendingPlanChange' => $hasPendingPlanChange,
             'pendingPlanName' => $pendingPlanName,
             'pendingPriceKey' => $pendingPriceKey,
+            'isPendingCancellation' => $isPendingCancellation,
+            'activeSubscription' => $activeSubscription,
         ]);
     }
 

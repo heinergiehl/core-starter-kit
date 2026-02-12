@@ -404,8 +404,13 @@ class StripeAdapter implements BillingRuntimeProvider
                 'cancel_at_period_end' => true,
             ]);
 
-            return \Carbon\Carbon::createFromTimestamp($stripeSubscription->current_period_end);
-        } catch (\Exception $e) {
+            $endsAt = $this->resolveStripeSubscriptionEndAt($subscription, $stripeSubscription);
+            if ($endsAt) {
+                return $endsAt;
+            }
+
+            return $subscription->renews_at ?? now()->addMonth();
+        } catch (\Throwable $e) {
             throw BillingException::failedAction(BillingProvider::Stripe, 'cancel subscription', $e->getMessage());
         }
     }
@@ -441,5 +446,36 @@ class StripeAdapter implements BillingRuntimeProvider
         );
 
         return $client;
+    }
+
+    private function resolveStripeSubscriptionEndAt(Subscription $subscription, mixed $stripeSubscription): ?\Carbon\Carbon
+    {
+        $currentPeriodEnd = data_get($stripeSubscription, 'current_period_end');
+        if (is_numeric($currentPeriodEnd)) {
+            return \Carbon\Carbon::createFromTimestamp((int) $currentPeriodEnd);
+        }
+
+        $cancelAt = data_get($stripeSubscription, 'cancel_at');
+        if (is_numeric($cancelAt)) {
+            return \Carbon\Carbon::createFromTimestamp((int) $cancelAt);
+        }
+
+        try {
+            $freshSubscription = $this->stripeClient()->subscriptions->retrieve($subscription->provider_id, []);
+
+            $freshPeriodEnd = data_get($freshSubscription, 'current_period_end');
+            if (is_numeric($freshPeriodEnd)) {
+                return \Carbon\Carbon::createFromTimestamp((int) $freshPeriodEnd);
+            }
+
+            $freshCancelAt = data_get($freshSubscription, 'cancel_at');
+            if (is_numeric($freshCancelAt)) {
+                return \Carbon\Carbon::createFromTimestamp((int) $freshCancelAt);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
+
+        return null;
     }
 }

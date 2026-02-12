@@ -64,6 +64,24 @@ class BillingController
         } catch (\Throwable $e) {
             report($e);
 
+            $latestSubscription = $subscription->fresh();
+            if ($latestSubscription?->canceled_at && $latestSubscription->ends_at?->isFuture()) {
+                return back()->with('success', __('Your subscription has been canceled. You will retain access until :date.', [
+                    'date' => $latestSubscription->ends_at->format('F j, Y'),
+                ]));
+            }
+
+            try {
+                $syncedSubscription = $this->subscriptionService->syncSubscriptionState($latestSubscription ?? $subscription);
+                if ($syncedSubscription->canceled_at && $syncedSubscription->ends_at?->isFuture()) {
+                    return back()->with('success', __('Your subscription has been canceled. You will retain access until :date.', [
+                        'date' => $syncedSubscription->ends_at->format('F j, Y'),
+                    ]));
+                }
+            } catch (\Throwable $syncException) {
+                report($syncException);
+            }
+
             return back()->with('error', $this->formatCancellationError($e));
         }
     }
