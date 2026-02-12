@@ -184,7 +184,7 @@ class CheckoutServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_blocks_one_time_purchase_when_not_an_upgrade(): void
+    public function it_blocks_one_time_downgrade_in_self_serve_checkout(): void
     {
         $user = User::factory()->create();
 
@@ -203,6 +203,35 @@ class CheckoutServiceTest extends TestCase
         ]);
 
         $plan = $this->oneTimePlan('hobbyist', 4900);
+        $price = $plan->getPrice('once');
+
+        $eligibility = $this->service->evaluateCheckoutEligibility($user, $plan, $price);
+
+        $this->assertFalse($eligibility->allowed);
+        $this->assertSame('BILLING_ONE_TIME_DOWNGRADE_UNSUPPORTED', $eligibility->errorCode);
+        $this->assertStringContainsString('contact support', strtolower((string) $eligibility->message));
+    }
+
+    #[Test]
+    public function it_blocks_one_time_purchase_when_amount_is_not_higher(): void
+    {
+        $user = User::factory()->create();
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_same_amount_'.uniqid(),
+            'plan_key' => 'indie',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 9900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'price_key' => 'once',
+            ],
+        ]);
+
+        $plan = $this->oneTimePlan('agency', 9900);
         $price = $plan->getPrice('once');
 
         $eligibility = $this->service->evaluateCheckoutEligibility($user, $plan, $price);

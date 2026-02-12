@@ -206,7 +206,18 @@
                                                 <p class="text-xs font-medium text-ink/60 bg-surface/40 px-3 py-1.5 rounded-lg">
                                                     {{ $checkoutEligibility?->message ?? __('Checkout unavailable for this option.') }}
                                                 </p>
-                                                <a href="{{ route('billing.index') }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('View billing ->') }}</a>
+                                                @php
+                                                    $isOneTimeDowngradeBlocked = ($checkoutEligibility?->errorCode ?? null) === 'BILLING_ONE_TIME_DOWNGRADE_UNSUPPORTED';
+                                                    $supportEmail = (string) config('saas.support.email', '');
+                                                    $supportDiscord = (string) config('saas.support.discord', '');
+                                                @endphp
+                                                @if ($isOneTimeDowngradeBlocked && $supportEmail !== '')
+                                                    <a href="mailto:{{ $supportEmail }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('Contact support ->') }}</a>
+                                                @elseif ($isOneTimeDowngradeBlocked && $supportDiscord !== '')
+                                                    <a href="{{ $supportDiscord }}" target="_blank" rel="noopener noreferrer" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('Contact support ->') }}</a>
+                                                @else
+                                                    <a href="{{ route('billing.index') }}" class="block text-xs font-medium text-primary hover:text-primary/80">{{ __('View billing ->') }}</a>
+                                                @endif
                                             </div>
                                         @endif
                                     @elseif (!$user)

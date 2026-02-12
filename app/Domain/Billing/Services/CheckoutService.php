@@ -198,6 +198,13 @@ class CheckoutService
         $targetAmount = (int) round((float) $targetPrice->amount);
         $currentAmount = (int) ($latestOneTimeOrder->amount ?? 0);
 
+        if ($targetAmount < $currentAmount) {
+            return CheckoutEligibility::deny(
+                'BILLING_ONE_TIME_DOWNGRADE_UNSUPPORTED',
+                __('One-time downgrades are not available in self-serve checkout. Please contact support.')
+            );
+        }
+
         if ($targetAmount <= $currentAmount) {
             return CheckoutEligibility::deny(
                 'BILLING_ONE_TIME_UPGRADE_ONLY',
