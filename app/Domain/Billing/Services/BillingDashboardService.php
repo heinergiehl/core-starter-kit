@@ -148,7 +148,7 @@ class BillingDashboardService
 
         try {
             $plan = $this->planService->plan($planKey);
-        } catch (\RuntimeException) {
+        } catch (\Throwable) {
             return [null, null];
         }
 

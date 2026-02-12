@@ -531,7 +531,7 @@ class CheckoutService
 
         try {
             $plan = $this->planService->plan($planKey);
-        } catch (\RuntimeException) {
+        } catch (\Throwable) {
             return $fallbackAmount;
         }
 
