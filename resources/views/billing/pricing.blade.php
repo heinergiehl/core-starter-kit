@@ -34,69 +34,7 @@
         ];
     @endphp
 
-    <div
-        x-data="{
-            interval: '{{ $defaultInterval }}',
-            showPlanChangeConfirm: false,
-            confirmSubmitting: false,
-            confirmFormId: null,
-            confirmPlanName: '',
-            confirmPriceLabel: '',
-            confirmIntervalLabel: '',
-            confirmAmountText: '',
-            confirmCurrentPlanName: @js($currentSubscriptionPlanName),
-            confirmCurrentAmountText: '',
-            confirmDirection: 'switch',
-            confirmImpactText: '',
-            confirmButtonLabel: @js(__('Confirm Plan Change')),
-            openPlanChangeConfirm(payload) {
-                this.confirmFormId = payload.formId;
-                this.confirmPlanName = payload.planName;
-                this.confirmPriceLabel = payload.priceLabel;
-                this.confirmIntervalLabel = payload.intervalLabel;
-                this.confirmAmountText = payload.amountText;
-                this.confirmCurrentAmountText = payload.currentAmountText ?? '';
-                this.confirmDirection = payload.direction ?? 'switch';
-                this.confirmSubmitting = false;
-
-                if (this.confirmDirection === 'upgrade') {
-                    this.confirmButtonLabel = @js(__('Confirm Upgrade'));
-                    this.confirmImpactText = @js(__('Your provider will apply prorations automatically. Upgrades can trigger an immediate or next-invoice charge.'));
-                } else if (this.confirmDirection === 'downgrade') {
-                    this.confirmButtonLabel = @js(__('Confirm Downgrade'));
-                    this.confirmImpactText = @js(__('Your provider will apply prorations automatically. Downgrades usually create invoice credit, not an automatic card refund.'));
-                } else {
-                    this.confirmButtonLabel = @js(__('Confirm Plan Change'));
-                    this.confirmImpactText = @js(__('Your provider will apply prorations automatically based on your existing billing period.'));
-                }
-
-                this.showPlanChangeConfirm = true;
-            },
-            closePlanChangeConfirm() {
-                this.showPlanChangeConfirm = false;
-                this.confirmSubmitting = false;
-                this.confirmFormId = null;
-            },
-            submitConfirmedPlanChange() {
-                if (!this.confirmFormId || this.confirmSubmitting) {
-                    return;
-                }
-
-                const form = document.getElementById(this.confirmFormId);
-                if (!form) {
-                    return;
-                }
-
-                this.confirmSubmitting = true;
-                if (typeof form.requestSubmit === 'function') {
-                    form.requestSubmit();
-                    return;
-                }
-
-                form.submit();
-            }
-        }"
-    >
+    <div x-data="{ interval: '{{ $defaultInterval }}' }">
     <section class="py-12">
         <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
             <div class="max-w-2xl">
@@ -277,15 +215,16 @@
                                                 <input type="hidden" name="price" value="{{ $price->key }}">
                                                 <button
                                                     type="button"
-                                                    @click.prevent="openPlanChangeConfirm({
+                                                    onclick="openPlanChangeConfirmModal({
                                                         formId: @js($formId),
-                                                        planName: @js($plan->name ?: ucfirst($plan->key)),
+                                                        planName: @js((string) ($plan->name ?: ucfirst($plan->key))),
                                                         priceLabel: @js($label),
                                                         intervalLabel: @js($intervalLabel),
                                                         amountText: @js($amountDisplay . ' ' . $currency),
+                                                        currentPlanName: @js($currentSubscriptionPlanName),
                                                         currentAmountText: @js(!is_null($currentSubscriptionAmountMinor) && $currentSubscriptionCurrency !== '' ? ($currentSubscriptionCurrency . ' ' . number_format($currentSubscriptionAmountMinor / 100, 2)) : ''),
                                                         direction: @js($planDirection)
-                                                    })"
+                                                    });"
                                                     class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5"
                                                 >
                                                     {{ __('Switch plan') }}
@@ -394,16 +333,14 @@
     </section>
 
     <div
-        x-cloak
-        x-show="showPlanChangeConfirm"
-        class="fixed inset-0 z-50 overflow-y-auto"
+        id="plan-change-confirm-modal"
+        class="hidden fixed inset-0 z-50 overflow-y-auto"
         aria-labelledby="plan-change-confirm-title"
         role="dialog"
         aria-modal="true"
-        @keydown.escape.window="closePlanChangeConfirm()"
     >
         <div class="flex min-h-screen items-center justify-center px-4 py-12">
-            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" @click="closePlanChangeConfirm()"></div>
+            <div class="fixed inset-0 bg-black/60 backdrop-blur-sm" onclick="closePlanChangeConfirmModal()"></div>
 
             <div class="relative glass-panel rounded-[32px] p-8 max-w-lg w-full">
                 <h3 id="plan-change-confirm-title" class="text-xl font-display font-bold text-ink">
@@ -416,53 +353,176 @@
                 <div class="mt-6 rounded-2xl border border-ink/10 bg-surface/40 p-4 space-y-2">
                     <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide">
                         <span
+                            id="plan-change-confirm-badge"
                             class="inline-flex items-center rounded-full border px-2 py-1"
-                            :class="confirmDirection === 'upgrade' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : (confirmDirection === 'downgrade' ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' : 'border-primary/30 bg-primary/10 text-primary')"
-                            x-text="confirmDirection === 'upgrade' ? @js(__('Upgrade')) : (confirmDirection === 'downgrade' ? @js(__('Downgrade')) : @js(__('Switch')))"
                         ></span>
-                        <span class="text-ink/50" x-text="confirmIntervalLabel"></span>
+                        <span id="plan-change-confirm-interval" class="text-ink/50"></span>
                     </div>
-                    <p class="text-lg font-bold text-ink" x-text="confirmPlanName"></p>
-                    <p class="text-sm text-ink/60">
-                        <span x-text="confirmPriceLabel"></span>
-                        <span class="mx-1">&middot;</span>
-                        <span x-text="confirmAmountText"></span>
-                    </p>
+                    <p id="plan-change-confirm-plan" class="text-lg font-bold text-ink"></p>
+                    <p id="plan-change-confirm-target" class="text-sm text-ink/60"></p>
                 </div>
 
                 <div class="mt-4 rounded-2xl border border-ink/10 bg-surface/30 px-4 py-3 text-sm text-ink/60">
                     <p>
                         {{ __('Current') }}:
-                        <span class="font-semibold text-ink" x-text="confirmCurrentPlanName"></span>
-                        <template x-if="confirmCurrentAmountText">
-                            <span>
-                                <span class="mx-1">&middot;</span>
-                                <span class="font-semibold text-ink" x-text="confirmCurrentAmountText"></span>
-                            </span>
-                        </template>
+                        <span id="plan-change-confirm-current-plan" class="font-semibold text-ink"></span>
+                        <span id="plan-change-confirm-current-amount-wrap" class="hidden">
+                            <span class="mx-1">&middot;</span>
+                            <span id="plan-change-confirm-current-amount" class="font-semibold text-ink"></span>
+                        </span>
                     </p>
                 </div>
 
-                <p class="mt-4 text-sm text-ink/70" x-text="confirmImpactText"></p>
+                <p id="plan-change-confirm-impact" class="mt-4 text-sm text-ink/70"></p>
 
                 <div class="mt-6 flex flex-wrap items-center gap-3">
                     <button
+                        id="plan-change-confirm-submit"
                         type="button"
-                        @click="submitConfirmedPlanChange()"
-                        :disabled="confirmSubmitting"
-                        :aria-disabled="confirmSubmitting"
                         class="btn-primary"
                     >
-                        <span x-show="!confirmSubmitting" x-text="confirmButtonLabel"></span>
-                        <span x-show="confirmSubmitting">{{ __('Submitting...') }}</span>
+                        <span id="plan-change-confirm-submit-label">{{ __('Confirm Plan Change') }}</span>
+                        <span id="plan-change-confirm-submit-loading" class="hidden">{{ __('Submitting...') }}</span>
                     </button>
-                    <button type="button" @click="closePlanChangeConfirm()" class="btn-secondary">
+                    <button type="button" onclick="closePlanChangeConfirmModal()" class="btn-secondary">
                         {{ __('Keep Current Plan') }}
                     </button>
                 </div>
             </div>
         </div>
     </div>
+
+    <script>
+        (() => {
+            const modal = document.getElementById('plan-change-confirm-modal');
+            const submitButton = document.getElementById('plan-change-confirm-submit');
+
+            if (!modal || !submitButton) {
+                return;
+            }
+
+            const badge = document.getElementById('plan-change-confirm-badge');
+            const interval = document.getElementById('plan-change-confirm-interval');
+            const planName = document.getElementById('plan-change-confirm-plan');
+            const target = document.getElementById('plan-change-confirm-target');
+            const currentPlan = document.getElementById('plan-change-confirm-current-plan');
+            const currentAmountWrap = document.getElementById('plan-change-confirm-current-amount-wrap');
+            const currentAmount = document.getElementById('plan-change-confirm-current-amount');
+            const impact = document.getElementById('plan-change-confirm-impact');
+            const submitLabel = document.getElementById('plan-change-confirm-submit-label');
+            const submitLoading = document.getElementById('plan-change-confirm-submit-loading');
+
+            const currentPlanFallback = @js($currentSubscriptionPlanName);
+            const directionLabels = {
+                upgrade: @js(__('Upgrade')),
+                downgrade: @js(__('Downgrade')),
+                switch: @js(__('Switch')),
+            };
+            const submitLabels = {
+                upgrade: @js(__('Confirm Upgrade')),
+                downgrade: @js(__('Confirm Downgrade')),
+                switch: @js(__('Confirm Plan Change')),
+            };
+            const impactLabels = {
+                upgrade: @js(__('Your provider will apply prorations automatically. Upgrades can trigger an immediate or next-invoice charge.')),
+                downgrade: @js(__('Your provider will apply prorations automatically. Downgrades usually create invoice credit, not an automatic card refund.')),
+                switch: @js(__('Your provider will apply prorations automatically based on your existing billing period.')),
+            };
+            const badgeStyles = {
+                upgrade: ['border-emerald-500/30', 'bg-emerald-500/10', 'text-emerald-400'],
+                downgrade: ['border-amber-500/30', 'bg-amber-500/10', 'text-amber-400'],
+                switch: ['border-primary/30', 'bg-primary/10', 'text-primary'],
+            };
+
+            let targetFormId = null;
+
+            const setSubmitting = (isSubmitting) => {
+                submitButton.disabled = isSubmitting;
+                submitButton.setAttribute('aria-disabled', isSubmitting ? 'true' : 'false');
+                submitLabel.classList.toggle('hidden', isSubmitting);
+                submitLoading.classList.toggle('hidden', !isSubmitting);
+            };
+
+            const setDirection = (direction) => {
+                const normalizedDirection = (direction === 'upgrade' || direction === 'downgrade') ? direction : 'switch';
+                const allStyleClasses = [
+                    ...badgeStyles.upgrade,
+                    ...badgeStyles.downgrade,
+                    ...badgeStyles.switch,
+                ];
+
+                badge.classList.remove(...allStyleClasses);
+                badge.classList.add(...badgeStyles[normalizedDirection]);
+                badge.textContent = directionLabels[normalizedDirection];
+
+                submitLabel.textContent = submitLabels[normalizedDirection];
+                impact.textContent = impactLabels[normalizedDirection];
+            };
+
+            window.openPlanChangeConfirmModal = (payload = {}) => {
+                targetFormId = payload.formId ?? null;
+                setDirection(payload.direction ?? 'switch');
+
+                interval.textContent = payload.intervalLabel ?? '';
+                planName.textContent = payload.planName ?? '';
+
+                const targetParts = [payload.priceLabel, payload.amountText]
+                    .filter((value) => typeof value === 'string' && value.trim() !== '');
+                target.textContent = targetParts.length > 0 ? targetParts.join(' - ') : '-';
+
+                const resolvedCurrentPlan = (typeof payload.currentPlanName === 'string' && payload.currentPlanName.trim() !== '')
+                    ? payload.currentPlanName
+                    : currentPlanFallback;
+                currentPlan.textContent = resolvedCurrentPlan ?? '';
+
+                const currentAmountText = (typeof payload.currentAmountText === 'string')
+                    ? payload.currentAmountText.trim()
+                    : '';
+                if (currentAmountText !== '') {
+                    currentAmount.textContent = currentAmountText;
+                    currentAmountWrap.classList.remove('hidden');
+                } else {
+                    currentAmount.textContent = '';
+                    currentAmountWrap.classList.add('hidden');
+                }
+
+                setSubmitting(false);
+                modal.classList.remove('hidden');
+            };
+
+            window.closePlanChangeConfirmModal = () => {
+                modal.classList.add('hidden');
+                setSubmitting(false);
+                targetFormId = null;
+            };
+
+            submitButton.addEventListener('click', () => {
+                if (!targetFormId || submitButton.disabled) {
+                    return;
+                }
+
+                const form = document.getElementById(targetFormId);
+                if (!form) {
+                    return;
+                }
+
+                setSubmitting(true);
+
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                    return;
+                }
+
+                form.submit();
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+                    window.closePlanChangeConfirmModal();
+                }
+            });
+        })();
+    </script>
     </div> <!-- End x-data -->
 @endsection
 
