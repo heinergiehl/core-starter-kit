@@ -87,15 +87,11 @@ class SecurityHeaders
         // but Vite might be serving from saas-kit.test or 127.0.0.1
         $viteDevServer = '';
         $viteWss = '';
-        $unsafeEval = '';
+        // This starter currently relies on Alpine/Livewire runtime expression evaluation.
+        // Keep unsafe-eval enabled until the frontend is fully migrated to CSP-safe evaluators.
+        $unsafeEval = " 'unsafe-eval'";
         // Allow https: for form actions to prevent blocking seemingly valid secure submissions
         $formAction = "'self' https:";
-
-        $allowUnsafeEval = app()->isLocal() || (bool) config('saas.security.allow_unsafe_eval', false);
-
-        if ($allowUnsafeEval) {
-            $unsafeEval = " 'unsafe-eval'";
-        }
 
         if (app()->isLocal()) {
             $hosts = array_unique([
