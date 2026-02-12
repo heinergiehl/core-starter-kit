@@ -370,6 +370,30 @@ class StripeAdapter implements BillingRuntimeProvider
         }
     }
 
+    public function syncSubscriptionState(Subscription $subscription): void
+    {
+        try {
+            $stripeSubscription = $this->stripeClient()->subscriptions->retrieve($subscription->provider_id, []);
+            $payload = $stripeSubscription->toArray();
+
+            $metadata = data_get($payload, 'metadata');
+            if (! is_array($metadata)) {
+                $metadata = [];
+            }
+
+            if (! array_key_exists('user_id', $metadata) || $metadata['user_id'] === null || $metadata['user_id'] === '') {
+                $metadata['user_id'] = (string) $subscription->user_id;
+            }
+
+            data_set($payload, 'metadata', $metadata);
+
+            app(StripeSubscriptionHandler::class)
+                ->syncSubscription($payload, 'manual.subscription.sync');
+        } catch (\Throwable $e) {
+            throw BillingException::failedAction(BillingProvider::Stripe, 'sync subscription state', $e->getMessage());
+        }
+    }
+
     public function cancelSubscription(Subscription $subscription): \Carbon\Carbon
     {
         $client = $this->stripeClient();

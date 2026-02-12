@@ -464,6 +464,56 @@ class PaddleAdapter implements BillingRuntimeProvider
         }
     }
 
+    public function syncSubscriptionState(Subscription $subscription): void
+    {
+        $apiKey = $this->config['api_key'] ?? null;
+        if (! $apiKey) {
+            throw BillingException::missingConfiguration(BillingProvider::Paddle, 'api_key');
+        }
+
+        $response = $this->paddleRequest($apiKey)
+            ->get("/subscriptions/{$subscription->provider_id}", [
+                'include' => 'next_transaction',
+            ]);
+
+        if (! $response->successful()) {
+            throw BillingException::failedAction(BillingProvider::Paddle, 'sync subscription state', $response->body());
+        }
+
+        $data = $response->json('data');
+        if (! is_array($data) || $data === []) {
+            throw BillingException::failedAction(BillingProvider::Paddle, 'sync subscription state', 'subscription payload is empty');
+        }
+
+        $priceId = data_get($data, 'items.0.price_id')
+            ?? data_get($data, 'items.0.price.id')
+            ?? null;
+
+        if ($priceId && ! data_get($data, 'items.0.price_id')) {
+            data_set($data, 'items.0.price_id', $priceId);
+        }
+
+        $customData = data_get($data, 'custom_data');
+        if (! is_array($customData)) {
+            $customData = [];
+        }
+
+        if (! array_key_exists('user_id', $customData) || $customData['user_id'] === null || $customData['user_id'] === '') {
+            $customData['user_id'] = $subscription->user_id;
+        }
+
+        $resolvedPlanKey = $priceId
+            ? $this->planService->resolvePlanKeyByProviderId($this->provider(), (string) $priceId)
+            : null;
+        if ($resolvedPlanKey) {
+            $customData['plan_key'] = $resolvedPlanKey;
+        }
+
+        data_set($data, 'custom_data', $customData);
+
+        app(PaddleSubscriptionHandler::class)->syncSubscription($data);
+    }
+
     public function cancelSubscription(Subscription $subscription): \Carbon\Carbon
     {
         $apiKey = $this->config['api_key'] ?? null;

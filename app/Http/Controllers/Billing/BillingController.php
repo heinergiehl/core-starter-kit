@@ -157,6 +157,44 @@ class BillingController
         }
     }
 
+    /**
+     * Retry provider sync for a pending subscription plan change.
+     */
+    public function syncPendingPlanChange(Request $request): RedirectResponse
+    {
+        $user = $request->user();
+        abort_unless($user, 403);
+
+        $subscription = $user->activeSubscription();
+        if (! $subscription) {
+            return back()->with('error', __('No active subscription found.'));
+        }
+
+        $hasPendingPlanChange = (string) data_get($subscription->metadata, 'pending_plan_key', '') !== ''
+            || (string) data_get($subscription->metadata, 'pending_provider_price_id', '') !== '';
+
+        if (! $hasPendingPlanChange) {
+            return back()->with('info', __('No pending plan change found to sync.'));
+        }
+
+        try {
+            $subscription = $this->subscriptionService->syncSubscriptionState($subscription);
+
+            $stillPending = (string) data_get($subscription->metadata, 'pending_plan_key', '') !== ''
+                || (string) data_get($subscription->metadata, 'pending_provider_price_id', '') !== '';
+
+            if ($stillPending) {
+                return back()->with('info', __('Sync requested. Your provider still reports this plan change as pending.'));
+            }
+
+            return back()->with('success', __('Subscription state synced successfully. Your current plan is now up to date.'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', __('Failed to sync subscription state from your billing provider. Please try again or contact support.'));
+        }
+    }
+
     private function resolvePlanName(?string $planKey): string
     {
         if (! $planKey) {
@@ -174,6 +212,13 @@ class BillingController
 
     private function formatCancellationError(\Throwable $exception): string
     {
+        if ($exception instanceof BillingException) {
+            return match ($exception->getErrorCode()) {
+                'BILLING_PLAN_CHANGE_ALREADY_PENDING' => __('A subscription plan change is still pending provider confirmation. Please wait for it to finish before cancelling.'),
+                default => __('Failed to cancel subscription. Please try again or contact support.'),
+            };
+        }
+
         $message = $exception->getMessage();
 
         if (str_contains($message, 'subscription_locked_pending_changes')) {

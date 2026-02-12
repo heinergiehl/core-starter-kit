@@ -120,6 +120,14 @@ class SubscriptionService
             ->first();
 
         $normalizedStatus = $this->normalizeSubscriptionStatus($data->status);
+        $existingMetadata = (array) ($existingSubscription?->metadata ?? []);
+        $incomingMetadata = is_array($data->metadata) ? $data->metadata : [];
+        $mergedMetadata = $this->mergeProviderMetadataWithPendingState(
+            $data->provider,
+            $existingMetadata,
+            $incomingMetadata,
+            $data->planKey
+        );
 
         // 1. Capture Old State
         $previousPlanKey = $existingSubscription?->plan_key;
@@ -140,7 +148,7 @@ class SubscriptionService
                 'renews_at' => $data->renewsAt,
                 'ends_at' => $data->endsAt,
                 'canceled_at' => $data->canceledAt,
-                'metadata' => $data->metadata,
+                'metadata' => $mergedMetadata,
             ]
         );
 
@@ -152,6 +160,16 @@ class SubscriptionService
 
     public function cancel(Subscription $subscription): \Carbon\Carbon
     {
+        $hasPendingPlanChange = (string) data_get($subscription->metadata, 'pending_plan_key', '') !== ''
+            || (string) data_get($subscription->metadata, 'pending_provider_price_id', '') !== '';
+
+        if ($hasPendingPlanChange) {
+            throw new BillingException(
+                __('This subscription currently has a pending plan change. Please wait for provider confirmation before cancelling.'),
+                'BILLING_PLAN_CHANGE_ALREADY_PENDING'
+            );
+        }
+
         $endsAt = $this->providerManager->adapter($subscription->provider->value)
             ->cancelSubscription($subscription);
 
@@ -178,6 +196,14 @@ class SubscriptionService
 
         event(new SubscriptionResumed($subscription));
         $subscription->forceFill(['cancellation_email_sent_at' => null])->saveQuietly();
+    }
+
+    public function syncSubscriptionState(Subscription $subscription): Subscription
+    {
+        $this->providerManager->adapter($subscription->provider->value)
+            ->syncSubscriptionState($subscription);
+
+        return $subscription->fresh() ?? $subscription;
     }
 
     protected function dispatchEvents(Subscription $subscription, ?string $previousPlanKey, bool $wasCanceledOrGrace): void
@@ -278,6 +304,85 @@ class SubscriptionService
                 ?? data_get($metadata, 'items.data.0.price.id')
                 ?? data_get($metadata, 'metadata.stripe_price_id'),
             BillingProvider::Paddle => data_get($metadata, 'paddle_price_id')
+                ?? data_get($metadata, 'items.0.price.id')
+                ?? data_get($metadata, 'items.0.price_id'),
+            default => data_get($metadata, 'price_id'),
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $existingMetadata
+     * @param  array<string, mixed>  $incomingMetadata
+     * @return array<string, mixed>
+     */
+    private function mergeProviderMetadataWithPendingState(
+        string $provider,
+        array $existingMetadata,
+        array $incomingMetadata,
+        string $incomingPlanKey
+    ): array {
+        $mergedMetadata = array_merge($existingMetadata, $incomingMetadata);
+
+        $pendingPlanKey = (string) ($existingMetadata['pending_plan_key'] ?? '');
+        $pendingProviderPriceId = (string) ($existingMetadata['pending_provider_price_id'] ?? '');
+        $hasPendingPlanChange = $pendingPlanKey !== '' || $pendingProviderPriceId !== '';
+
+        if (! $hasPendingPlanChange) {
+            return $mergedMetadata;
+        }
+
+        $incomingProviderPriceId = $this->resolveProviderPriceIdFromMetadata($provider, $incomingMetadata);
+        $pendingConfirmed = ($pendingPlanKey !== '' && $incomingPlanKey === $pendingPlanKey)
+            || ($pendingProviderPriceId !== '' && $incomingProviderPriceId !== '' && hash_equals($pendingProviderPriceId, $incomingProviderPriceId));
+
+        if ($pendingConfirmed) {
+            return $this->withoutPendingPlanChangeMetadata($mergedMetadata);
+        }
+
+        foreach ([
+            'pending_plan_key',
+            'pending_price_key',
+            'pending_provider_price_id',
+            'pending_previous_plan_key',
+            'pending_plan_change_requested_at',
+        ] as $key) {
+            if (array_key_exists($key, $existingMetadata)) {
+                $mergedMetadata[$key] = $existingMetadata[$key];
+            }
+        }
+
+        return $mergedMetadata;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function withoutPendingPlanChangeMetadata(array $metadata): array
+    {
+        unset(
+            $metadata['pending_plan_key'],
+            $metadata['pending_price_key'],
+            $metadata['pending_provider_price_id'],
+            $metadata['pending_previous_plan_key'],
+            $metadata['pending_plan_change_requested_at'],
+        );
+
+        return $metadata;
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function resolveProviderPriceIdFromMetadata(string $provider, array $metadata): ?string
+    {
+        $normalizedProvider = strtolower(trim($provider));
+
+        return match ($normalizedProvider) {
+            BillingProvider::Stripe->value => data_get($metadata, 'stripe_price_id')
+                ?? data_get($metadata, 'items.data.0.price.id')
+                ?? data_get($metadata, 'metadata.stripe_price_id'),
+            BillingProvider::Paddle->value => data_get($metadata, 'paddle_price_id')
                 ?? data_get($metadata, 'items.0.price.id')
                 ?? data_get($metadata, 'items.0.price_id'),
             default => data_get($metadata, 'price_id'),

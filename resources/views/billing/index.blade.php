@@ -160,6 +160,12 @@
                             @if ($pendingRequestedAtDisplay)
                                 <p class="mt-1 text-xs text-amber-700/80">{{ __('Requested at: :date', ['date' => $pendingRequestedAtDisplay]) }}</p>
                             @endif
+                            <form method="POST" action="{{ route('billing.sync-pending-plan-change') }}" class="mt-4" data-submit-lock>
+                                @csrf
+                                <button type="submit" class="btn-secondary !py-2 !text-sm">
+                                    {{ __('Retry Provider Sync') }}
+                                </button>
+                            </form>
                         </div>
                     @endif
                 </div>

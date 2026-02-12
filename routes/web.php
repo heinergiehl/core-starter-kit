@@ -192,6 +192,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('billing.resume');
     Route::post('/billing/change-plan', [\App\Http\Controllers\Billing\BillingController::class, 'changePlan'])
         ->name('billing.change-plan');
+    Route::post('/billing/sync-pending-plan-change', [\App\Http\Controllers\Billing\BillingController::class, 'syncPendingPlanChange'])
+        ->name('billing.sync-pending-plan-change');
     Route::get('/billing/portal/{provider?}', BillingPortalController::class)
         ->name('billing.portal');
 

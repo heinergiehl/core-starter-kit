@@ -28,6 +28,11 @@ interface BillingRuntimeProvider
     public function resumeSubscription(\App\Domain\Billing\Models\Subscription $subscription): void;
 
     /**
+     * Pull and normalize the latest subscription state from the provider API.
+     */
+    public function syncSubscriptionState(\App\Domain\Billing\Models\Subscription $subscription): void;
+
+    /**
      * Validate the webhook request and return normalized event data.
      *
      * @return array{id: string, type: string|null, payload: array}
