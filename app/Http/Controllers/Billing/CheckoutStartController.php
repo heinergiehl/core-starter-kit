@@ -15,8 +15,7 @@ class CheckoutStartController
         Request $request,
         BillingPlanService $plans,
         CheckoutService $checkoutService,
-    ): View|RedirectResponse
-    {
+    ): View|RedirectResponse {
         $providers = $plans->providers();
         $provider = $request->query('provider');
 
