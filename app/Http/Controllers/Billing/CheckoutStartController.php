@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Billing;
 
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Billing\Services\CheckoutService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -10,7 +11,11 @@ use RuntimeException;
 
 class CheckoutStartController
 {
-    public function __invoke(Request $request, BillingPlanService $plans): View|RedirectResponse
+    public function __invoke(
+        Request $request,
+        BillingPlanService $plans,
+        CheckoutService $checkoutService,
+    ): View|RedirectResponse
     {
         $providers = $plans->providers();
         $provider = $request->query('provider');
@@ -60,6 +65,23 @@ class CheckoutStartController
 
         $couponEnabledProviders = array_map('strtolower', config('saas.billing.discounts.providers', ['stripe']));
         $couponEnabled = $provider && in_array($provider, $couponEnabledProviders, true);
+        $upgradeCreditAmount = 0;
+        $upgradeAmountDue = null;
+
+        $user = $request->user();
+        if ($user) {
+            $eligibility = $checkoutService->evaluateCheckoutEligibility($user, $plan, $price);
+
+            if ($eligibility->allowed && $eligibility->isUpgrade && $price->mode() === \App\Enums\PaymentMode::OneTime) {
+                $upgradeCreditAmount = $checkoutService->oneTimeUpgradeCreditAmount($user, $plan, $price);
+
+                if ($upgradeCreditAmount > 0) {
+                    $targetAmount = (int) round((float) $price->amount);
+                    $upgradeAmountDue = max($targetAmount - $upgradeCreditAmount, 0);
+                    $couponEnabled = false;
+                }
+            }
+        }
 
         return view('billing.checkout-start', [
             'provider' => $provider,
@@ -68,6 +90,8 @@ class CheckoutStartController
             'price' => $price,
             'price_currency' => $priceCurrency,
             'coupon_enabled' => $couponEnabled,
+            'upgrade_credit_amount' => $upgradeCreditAmount,
+            'upgrade_amount_due' => $upgradeAmountDue,
             'social_providers' => config('saas.auth.social_providers', ['google', 'github', 'linkedin']),
         ]);
     }

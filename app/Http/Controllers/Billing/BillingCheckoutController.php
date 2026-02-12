@@ -2,12 +2,16 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\BillingProviderManager;
 use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
+use App\Enums\DiscountType;
+use App\Enums\PaymentMode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -128,6 +132,45 @@ class BillingCheckoutController
                 ->withInput();
         }
 
+        $autoUpgradeCreditAmount = 0;
+        if ($eligibility->isUpgrade && $price->mode() === PaymentMode::OneTime) {
+            $autoUpgradeCreditAmount = $checkoutService->oneTimeUpgradeCreditAmount(
+                $user,
+                $genericPlan,
+                $price
+            );
+        }
+
+        if ($autoUpgradeCreditAmount > 0) {
+            if ($discount) {
+                return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                    ->withErrors([
+                        'coupon' => __('One-time upgrade credits cannot be combined with coupons.'),
+                    ])
+                    ->withInput();
+            }
+
+            try {
+                $discount = $this->createOneTimeUpgradeCreditDiscount(
+                    providers: $providers,
+                    provider: $provider,
+                    userId: $user->id,
+                    planKey: $data['plan'],
+                    priceKey: $data['price'],
+                    currency: $priceCurrency,
+                    creditAmount: $autoUpgradeCreditAmount,
+                );
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                    ->withErrors([
+                        'billing' => __('Unable to apply your upgrade credit right now. Please try again or contact support.'),
+                    ])
+                    ->withInput();
+            }
+        }
+
         $quantity = $checkoutService->calculateQuantity($genericPlan);
 
         $checkoutSession = $checkoutService->createCheckoutSession(
@@ -213,5 +256,51 @@ class BillingCheckoutController
         }
 
         return redirect()->away($checkoutUrl);
+    }
+
+    private function createOneTimeUpgradeCreditDiscount(
+        BillingProviderManager $providers,
+        string $provider,
+        int $userId,
+        string $planKey,
+        string $priceKey,
+        string $currency,
+        int $creditAmount
+    ): Discount {
+        $discount = Discount::query()->create([
+            'code' => $this->upgradeCreditCode($userId),
+            'name' => 'One-time upgrade credit',
+            'description' => 'Automatic credit from previous one-time purchase',
+            'provider' => $provider,
+            'provider_type' => $provider === 'stripe' ? 'coupon' : null,
+            'type' => DiscountType::Fixed,
+            'amount' => $creditAmount,
+            'currency' => strtoupper((string) $currency),
+            'max_redemptions' => 1,
+            'is_active' => true,
+            'starts_at' => now(),
+            'ends_at' => now()->addHours(6),
+            'plan_keys' => [$planKey],
+            'price_keys' => [$priceKey],
+            'metadata' => [
+                'auto_upgrade_credit' => true,
+                'user_id' => $userId,
+            ],
+        ]);
+
+        try {
+            $providerId = $providers->adapter($provider)->createDiscount($discount);
+            $discount->update(['provider_id' => $providerId]);
+        } catch (Throwable $exception) {
+            $discount->delete();
+            throw $exception;
+        }
+
+        return $discount->fresh();
+    }
+
+    private function upgradeCreditCode(int $userId): string
+    {
+        return 'UPG-'.$userId.'-'.Str::upper(Str::random(10));
     }
 }

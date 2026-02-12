@@ -4,11 +4,25 @@
 @section('meta_description', __('Complete your subscription and start using the product.'))
 
 @section('content')
+    @php
+        $upgradeCreditAmount = (int) ($upgrade_credit_amount ?? 0);
+        $upgradeAmountDue = $upgrade_amount_due;
+        $currencyCode = strtoupper((string) ($price_currency ?? $price->currency ?? 'USD'));
+        $priceAmountRaw = (float) ($price->amount ?? 0);
+        $priceAmountMinor = (int) round($priceAmountRaw);
+        $isMinorAmount = (bool) ($price->amountIsMinor ?? true);
+        $formatMoney = function (int|float $amount, bool $isMinor) {
+            $display = $isMinor ? ((float) $amount / 100) : (float) $amount;
+
+            return number_format($display, 2);
+        };
+    @endphp
+
     <section class="py-16">
         <div class="glass-panel rounded-3xl p-8">
             <div class="flex flex-col gap-3 text-center">
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-secondary">{{ __('Checkout') }}</p>
-                <h1 class="font-display text-3xl">{{ __('Complete your subscription') }}</h1>
+                <h1 class="font-display text-3xl">{{ __('Complete your checkout') }}</h1>
                 <p class="text-sm text-ink/70">
                     @auth
                         {{ __('Confirm your details to continue to payment.') }}
@@ -142,21 +156,37 @@
                             <span class="font-semibold text-ink">{{ $price->label ?? $price->key ?? '' }}</span>
                         </div>
                         @if (!empty($price->amount))
-                            @php
-                                $amountValue = (float) $price->amount;
-                            @endphp
                             <div class="flex items-center justify-between">
                                 <span>{{ ucfirst($price->interval ?? __('one-time')) }}</span>
                                 <span class="font-semibold text-ink">
-                                    {{ number_format(!empty($price->amountIsMinor) ? ($amountValue / 100) : $amountValue, 2) }}
-                                    {{ strtoupper((string) ($price_currency ?? $price->currency ?? 'USD')) }}
+                                    {{ $formatMoney($priceAmountMinor, $isMinorAmount) }}
+                                    {{ $currencyCode }}
                                 </span>
                             </div>
+
+                            @if ($upgradeCreditAmount > 0)
+                                <div class="flex items-center justify-between">
+                                    <span>{{ __('Upgrade credit') }}</span>
+                                    <span class="font-semibold text-emerald-500">
+                                        -{{ $formatMoney($upgradeCreditAmount, true) }}
+                                        {{ $currencyCode }}
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between border-t border-ink/10 pt-3">
+                                    <span class="font-semibold text-ink">{{ __('Due today') }}</span>
+                                    <span class="font-semibold text-ink">
+                                        {{ $formatMoney((int) ($upgradeAmountDue ?? 0), true) }}
+                                        {{ $currencyCode }}
+                                    </span>
+                                </div>
+                            @endif
                         @endif
                     </div>
 
                     <div class="mt-6 rounded-xl border border-ink/10 bg-surface/60 px-4 py-3 text-xs text-ink/60">
-                        @if ($provider)
+                        @if ($upgradeCreditAmount > 0)
+                            {{ __('Your upgrade credit is applied automatically during payment.') }}
+                        @elseif ($provider)
                             {{ __('Payment is securely handled by :provider.', ['provider' => ucfirst($provider)]) }}
                         @else
                             {{ __('Select a payment provider to continue.') }}

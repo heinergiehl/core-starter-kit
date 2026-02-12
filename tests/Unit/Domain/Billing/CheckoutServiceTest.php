@@ -268,6 +268,70 @@ class CheckoutServiceTest extends TestCase
         $this->assertTrue($eligibility->isUpgrade);
     }
 
+    #[Test]
+    public function it_computes_one_time_upgrade_credit_from_previous_order(): void
+    {
+        $user = User::factory()->create();
+
+        $previousOrder = Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_credit_'.uniqid(),
+            'plan_key' => 'hobbyist',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'price_key' => 'once',
+            ],
+        ]);
+
+        $targetPlan = $this->oneTimePlan('agency', 14999);
+        $targetPrice = $targetPlan->getPrice('once');
+
+        $credit = $this->service->oneTimeUpgradeCreditAmount(
+            $user,
+            $targetPlan,
+            $targetPrice,
+            $previousOrder
+        );
+
+        $this->assertSame(4900, $credit);
+    }
+
+    #[Test]
+    public function it_returns_zero_upgrade_credit_for_non_one_time_targets(): void
+    {
+        $user = User::factory()->create();
+
+        $previousOrder = Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_id' => 'pi_credit_sub_'.uniqid(),
+            'plan_key' => 'hobbyist',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'price_key' => 'once',
+            ],
+        ]);
+
+        $targetPlan = $this->recurringPlan('pro', 2900);
+        $targetPrice = $targetPlan->getPrice('monthly');
+
+        $credit = $this->service->oneTimeUpgradeCreditAmount(
+            $user,
+            $targetPlan,
+            $targetPrice,
+            $previousOrder
+        );
+
+        $this->assertSame(0, $credit);
+    }
+
     private function recurringPlan(string $planKey, int $amount): Plan
     {
         return new Plan(

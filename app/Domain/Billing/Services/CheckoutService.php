@@ -216,6 +216,48 @@ class CheckoutService
     }
 
     /**
+     * Returns the one-time upgrade credit amount (minor units) that should be
+     * applied for a one-time -> higher one-time upgrade.
+     */
+    public function oneTimeUpgradeCreditAmount(
+        User $user,
+        Plan $targetPlan,
+        Price $targetPrice,
+        ?Order $latestOneTimeOrder = null,
+    ): int {
+        if ($targetPrice->mode() !== PaymentMode::OneTime) {
+            return 0;
+        }
+
+        $latestOneTimeOrder ??= $this->latestPaidOneTimeOrder($user);
+        if (! $latestOneTimeOrder) {
+            return 0;
+        }
+
+        $targetCurrency = strtoupper((string) $targetPrice->currency);
+        $currentCurrency = strtoupper((string) ($latestOneTimeOrder->currency ?? ''));
+        if ($targetCurrency !== '' && $currentCurrency !== '' && $targetCurrency !== $currentCurrency) {
+            return 0;
+        }
+
+        $currentPriceKey = (string) data_get($latestOneTimeOrder->metadata, 'price_key', '');
+        if ($latestOneTimeOrder->plan_key === $targetPlan->key
+            && ($currentPriceKey === '' || $currentPriceKey === $targetPrice->key)
+        ) {
+            return 0;
+        }
+
+        $targetAmount = (int) round((float) $targetPrice->amount);
+        $currentAmount = (int) ($latestOneTimeOrder->amount ?? 0);
+
+        if ($currentAmount <= 0 || $targetAmount <= $currentAmount) {
+            return 0;
+        }
+
+        return $currentAmount;
+    }
+
+    /**
      * Create a Paddle transaction and return the transaction ID.
      *
      * @return string|RedirectResponse Transaction ID on success, RedirectResponse on failure
