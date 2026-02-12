@@ -5,8 +5,10 @@ This guide covers a practical testing workflow for the kit: automated tests plus
 ## 1) Prep
 - Ensure `.env` is configured (DB, `APP_URL`, `MAIL_MAILER=log`).
 - Run migrations + seed data:
-- `php artisan migrate --seed`
-- `php artisan storage:link`
+```bash
+php artisan migrate --seed
+php artisan storage:link
+```
 - Clear caches after env changes:
   - `php artisan optimize:clear`
 - Demo billing catalog + discounts seed only in `local`/`testing`. Set `BILLING_CATALOG=database` to see DB-backed plans on `/pricing`.
@@ -17,6 +19,11 @@ This guide covers a practical testing workflow for the kit: automated tests plus
 Run the default test suite:
 ```bash
 php artisan test
+```
+
+Or via Composer (clears config first):
+```bash
+composer test
 ```
 
 Optional frontend build check:

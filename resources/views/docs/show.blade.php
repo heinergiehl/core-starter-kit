@@ -17,13 +17,22 @@
         </div>
 
         <div class="docs-layout">
-            <aside class="docs-sidebar">
+            <aside class="docs-sidebar" x-data="{ query: '' }">
                 <p class="docs-sidebar-label">{{ __('Documentation') }}</p>
+
+                <div class="docs-sidebar-search">
+                    <label class="sr-only" for="docs-sidebar-search">{{ __('Search docs') }}</label>
+                    <input id="docs-sidebar-search" type="search" class="docs-search-input docs-search-input-sm"
+                        placeholder="{{ __('Filter docs…') }}" x-model.debounce.150ms="query" />
+                </div>
 
                 <nav class="docs-sidebar-nav">
                     @foreach ($docs as $item)
                         @php $isCurrent = ($item['slug'] ?? null) === ($doc['slug'] ?? null); @endphp
+                        @php($search = str(($item['title'] ?? '').' '.($item['slug'] ?? ''))->lower()->toString())
                         <a href="{{ route('docs.show', ['page' => $item['slug']]) }}"
+                            data-search="{{ $search }}" data-current="{{ $isCurrent ? '1' : '0' }}"
+                            x-show="query.trim() === '' || $el.dataset.search.includes(query.trim().toLowerCase()) || $el.dataset.current === '1'"
                             class="{{ $isCurrent ? 'docs-sidebar-link docs-sidebar-link-active' : 'docs-sidebar-link' }}">
                             {{ $item['title'] }}
                         </a>
@@ -35,11 +44,34 @@
                 <header class="docs-article-header">
                     <h1 class="docs-article-title">{{ $doc['title'] }}</h1>
                     <p class="docs-article-summary">{{ $doc['summary'] }}</p>
+                    <p class="docs-article-meta">
+                        {{ $doc['filename'] }} · {{ __('Updated') }} {{ $doc['updated_at'] }}
+                    </p>
                 </header>
 
                 <div class="docs-prose">
                     {!! $content !!}
                 </div>
+
+                @if (! empty($prevDoc) || ! empty($nextDoc))
+                    <nav class="docs-pagination" aria-label="{{ __('Documentation navigation') }}">
+                        @if (! empty($prevDoc))
+                            <a href="{{ route('docs.show', ['page' => $prevDoc['slug']]) }}"
+                                class="docs-pagination-link docs-pagination-link-prev">
+                                <span class="docs-pagination-label">{{ __('Previous') }}</span>
+                                <span class="docs-pagination-title">{{ $prevDoc['title'] }}</span>
+                            </a>
+                        @endif
+
+                        @if (! empty($nextDoc))
+                            <a href="{{ route('docs.show', ['page' => $nextDoc['slug']]) }}"
+                                class="docs-pagination-link docs-pagination-link-next">
+                                <span class="docs-pagination-label">{{ __('Next') }}</span>
+                                <span class="docs-pagination-title">{{ $nextDoc['title'] }}</span>
+                            </a>
+                        @endif
+                    </nav>
+                @endif
             </article>
 
             @if (! empty($toc))

@@ -1,6 +1,6 @@
 # Versions
 
-Fill this file with the exact major/minor versions pinned in this repo.
+This document lists the dependency versions this repo is currently built and tested against.
 
 Source of truth:
 - `composer.json` for PHP/Laravel/Filament/Livewire
@@ -10,23 +10,23 @@ Source of truth:
 Update this file on every release that changes dependencies.
 
 ## Backend
-- PHP: >= 8.2
-- Laravel: 12.x
-- Filament: 4.4.x
-- Livewire: 3.7.x
-- Social login: Socialite (not installed)
+- PHP (constraint): `^8.2`
+- Laravel (locked): `12.49.0`
+- Filament (locked): `4.6.3`
+- Livewire (locked): `3.7.8`
+- Socialite (locked): `5.24.2`
 
 ## Billing adapters
-- Stripe SDK or package: stripe/stripe-php 19.x
-- Paddle SDK or package: not installed
+- Stripe SDK (locked): `19.3.0`
+- Paddle SDK: not pinned (adapter is implemented without an official SDK package)
 
 ## Frontend
-- Node.js: >= 20
-- Vite: 7.x
-- Tailwind CSS: 3.1.x
-- Alpine.js: 3.4.x
+- Node.js: see `README.md` requirements
+- Vite (locked): `7.3.0`
+- Tailwind CSS (locked): `3.4.19`
+- Alpine.js (locked): `3.15.3`
 
 ## Tooling
-- Pint: 1.x
+- Pint (locked): `1.27.0`
+- Test runner (locked): `PHPUnit 11.5.50`
 - PHPStan/Larastan: not installed
-- Test runner: PHPUnit 11.x

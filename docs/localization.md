@@ -72,3 +72,13 @@ Plan names, summaries, and features can come from `config/saas.php` or the datab
 If you want to localize them:
 - store per-locale copy in the database and render the correct locale, or
 - replace plan copy with translation keys and use `__()` in the pricing view.
+
+## 7) Add a new locale (checklist)
+1) Add the locale to `config/saas.php` (`saas.locales.supported`)
+2) Create `resources/lang/{locale}.json`
+3) (Recommended) Add group files for auth/validation under `resources/lang/{locale}/...`
+4) Confirm route generation is locale-aware:
+   - marketing routes live under `/{locale}/...` (example: `/en/docs`)
+5) Smoke-test:
+   - Switch language via the selector
+   - Refresh and confirm it persists (session + user profile)

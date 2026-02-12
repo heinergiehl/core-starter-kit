@@ -186,6 +186,9 @@ See:
 ---
 
 ## Docs
+When running locally, you can browse these in the app at `/{locale}/docs` (example: `/en/docs`).
+
+- `docs/getting-started.md` - start here: local setup + where to configure things
 - `docs/architecture.md` - boundaries, entitlements, webhook pipeline
 - `docs/billing.md` - providers, env/config, webhooks
 - `docs/billing-go-live-checklist.md` - release gate for subscription + one-time billing flows

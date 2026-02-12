@@ -1,25 +1,17 @@
 # Theming and Branding
 
-This kit provides a theming and branding system designed for SSR + Filament.
+This kit uses **templates + CSS variables + admin-managed branding settings** to keep theming flexible without rewriting your Tailwind setup.
 
-## 1) Design goals
-- Simple and safe defaults
-- Easy to customize without rewriting Tailwind config
-- Global branding overrides via Admin Panel
+## 1) Mental model (how styling is decided)
+Customer-facing pages (marketing, auth, dashboard, and `/{locale}/docs`) follow this precedence:
 
----
+1) **Template defaults** (palette + vibe)
+2) **Branding overrides** saved in the database
 
-## 2) Token model (CSS variables)
-
-Use CSS variables as the stable design token API:
+The stable token API is **CSS variables** (RGB triplets):
 - `--color-primary`
 - `--color-secondary`
 - `--color-accent`
-- `--color-bg`
-- `--color-fg`
-
-Light/dark:
-- define token sets for `:root` and `.dark`
 
 Example:
 ```css
@@ -27,54 +19,45 @@ Example:
 .dark { --color-primary: 129 140 248; }
 ```
 
-Tailwind integration:
-- map Tailwind colors to `rgb(var(--color-primary) / <alpha-value>)` patterns
+## 2) Quickstart: change branding without touching CSS
+1) Login as an admin (`admin@example.com` / `password`)
+2) Visit the Admin Panel: `/admin`
+3) Go to **Settings → Branding**
+4) Set:
+   - Application name
+   - Logo + favicon
+   - Template (for customer-facing pages)
+   - Optional interface colors (primary/secondary/accent)
+   - Optional email colors (emails only)
+5) Click **Save changes**
 
----
+## 3) Where things live (code + data)
 
-## 3) Branding settings
+### 3.1 Templates
+- Config: `config/template.php`
+- CSS: `resources/css/templates/_*.css`
+- Default selector env var: `SAAS_TEMPLATE=default|void|aurora|prism|velvet|frost|ember|ocean`
 
-### 3.1 App-level settings
-- app name
-- logo
-- support email
-- support discord URL
-- invoice name, billing email, tax ID, and footer (for provider invoices)
+### 3.2 Branding settings (Admin overrides)
+- Admin UI: `app/Filament/Admin/Pages/ManageBranding.php`
+- Model/table: `app/Domain/Settings/Models/BrandSetting.php` → `brand_settings`
+- Runtime resolution: `app/Domain/Settings/Services/BrandingService.php`
 
-Store in:
-- config for defaults
-- DB for overrides (recommended), e.g., `settings` table
+## 4) Assets (logo/favicon) and hosting notes
+- Uploads are stored on the `public` disk under `storage/app/public/branding/...`.
+- Ensure you run `php artisan storage:link` in each environment.
+- If your host restricts `/storage`, the app includes a fallback route:
+  - `GET /branding/{path}`
 
----
+## 5) Email branding workflow
+1) Update email colors in **Settings → Branding**
+2) Render fixtures:
+```bash
+php artisan email:qa:render
+```
+3) Run the checklist in [Email Client QA](email-client-qa.md)
 
-## 4) Theme editor UI (Admin Panel)
-Provide a page for admins:
-- upload logo
-- select brand colors
-- preview in a small live area
-- save settings
-
-Requirements:
-- validate uploads (type/size)
-- sanitize inputs
-- audit log optional
-
----
-
-## 5) Assets and sizing
-- Provide light and dark logo variants if possible
-- Keep a square icon for favicons and PWA usage
-- Enforce max dimensions to keep layout stable
-
----
-
-## 6) Email branding (optional)
-- Use the same logo and primary color in notification emails
-- Ensure emails remain readable in light/dark email clients
-
----
-
-## 7) Accessibility and testing
-- Check contrast for primary and accent colors
-- Ensure focus states remain visible after theming
-- Feature test: admin can update theme settings
+## 6) Accessibility guardrails
+- Prefer darker primary colors when using white button text (contrast matters).
+- Verify focus states after palette changes.
+- Check a few key pages in both light and dark modes.

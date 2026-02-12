@@ -203,6 +203,22 @@ body {
         @apply mt-8 rounded-2xl border border-dashed border-ink/20 bg-surface/20 p-6 text-sm text-ink/70;
     }
 
+    .docs-search {
+        @apply mt-8;
+    }
+
+    .docs-search-input {
+        @apply w-full rounded-2xl border border-ink/10 bg-white/80 px-4 py-3 text-sm text-ink shadow-sm outline-none transition placeholder:text-ink/40 focus:border-primary/40 focus:ring-2 focus:ring-primary/15;
+    }
+
+    .dark .docs-search-input {
+        @apply border-white/10 bg-white/5 text-white placeholder:text-white/40;
+    }
+
+    .docs-search-input-sm {
+        @apply rounded-xl px-3 py-2;
+    }
+
     .docs-index-grid {
         @apply mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3;
     }
@@ -265,6 +281,10 @@ body {
         letter-spacing: 0.18em;
     }
 
+    .docs-sidebar-search {
+        @apply px-2 pb-3;
+    }
+
     .docs-sidebar-nav {
         @apply space-y-1;
     }
@@ -303,6 +323,11 @@ body {
 
     .docs-article-summary {
         @apply mt-3 max-w-3xl text-sm leading-6 text-ink/70 sm:text-base;
+    }
+
+    .docs-article-meta {
+        @apply mt-3 text-xs font-semibold uppercase text-ink/45;
+        letter-spacing: 0.18em;
     }
 
     .docs-prose {
@@ -368,6 +393,31 @@ body {
 
     .docs-prose :where(tbody td):not(:where([class~="not-prose"] *)) {
         @apply border-b border-ink/10;
+    }
+
+    .docs-pagination {
+        @apply mt-10 grid gap-4 sm:grid-cols-2;
+    }
+
+    .docs-pagination-link {
+        @apply block rounded-2xl border border-ink/10 bg-white/80 p-5 transition duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg hover:shadow-primary/10;
+    }
+
+    .dark .docs-pagination-link {
+        @apply border-white/10 bg-white/5 hover:border-primary/40;
+    }
+
+    .docs-pagination-link-next {
+        @apply sm:col-start-2;
+    }
+
+    .docs-pagination-label {
+        @apply text-xs font-semibold uppercase text-ink/45;
+        letter-spacing: 0.18em;
+    }
+
+    .docs-pagination-title {
+        @apply mt-1 block text-sm font-semibold text-ink;
     }
 
     .docs-toc {

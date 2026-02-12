@@ -7,6 +7,7 @@ namespace App\Http\Controllers\Content;
 use DOMDocument;
 use DOMElement;
 use DOMXPath;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -33,19 +34,24 @@ class DocsController
 
         abort_if($doc === null, 404);
 
+        $docsList = array_values($docs);
+        [$prevDoc, $nextDoc] = $this->neighborDocs($docsList, $page);
+
         $markdown = File::get($doc['path']);
         $rendered = $this->renderMarkdown($markdown);
 
         return view('docs.show', [
             'doc' => $doc,
-            'docs' => array_values($docs),
+            'docs' => $docsList,
             'content' => $rendered['html'],
             'toc' => $rendered['toc'],
+            'prevDoc' => $prevDoc,
+            'nextDoc' => $nextDoc,
         ]);
     }
 
     /**
-     * @return array<string, array{slug: string, title: string, path: string, summary: string}>
+     * @return array<string, array{slug: string, title: string, path: string, summary: string, filename: string, updated_at: string}>
      */
     private function availableDocs(): array
     {
@@ -75,12 +81,80 @@ class DocsController
                 'title' => $this->extractTitle($markdown, $slug),
                 'path' => $file->getPathname(),
                 'summary' => $this->extractSummary($markdown, $slug),
+                'filename' => $file->getFilename(),
+                'updated_at' => Carbon::createFromTimestampUTC($file->getMTime())
+                    ->setTimezone(config('app.timezone', 'UTC'))
+                    ->toDateString(),
             ];
         }
 
-        ksort($docs);
+        $docs = $this->sortDocs($docs);
 
         return $docs;
+    }
+
+    /**
+     * @param  array<string, array{slug: string, title: string, path: string, summary: string, filename: string, updated_at: string}>  $docs
+     * @return array<string, array{slug: string, title: string, path: string, summary: string, filename: string, updated_at: string}>
+     */
+    private function sortDocs(array $docs): array
+    {
+        $order = array_flip($this->docsSortOrder());
+
+        uksort($docs, static function (string $a, string $b) use ($order): int {
+            $posA = $order[$a] ?? PHP_INT_MAX;
+            $posB = $order[$b] ?? PHP_INT_MAX;
+
+            if ($posA !== $posB) {
+                return $posA <=> $posB;
+            }
+
+            return $a <=> $b;
+        });
+
+        return $docs;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function docsSortOrder(): array
+    {
+        return [
+            'getting-started',
+            'architecture',
+            'features',
+            'theming',
+            'localization',
+            'billing',
+            'testing',
+            'security',
+            'billing-go-live-checklist',
+            'email-client-qa',
+            'versions',
+        ];
+    }
+
+    /**
+     * @param  list<array{slug: string, title: string, path: string, summary: string, filename: string, updated_at: string}>  $docs
+     * @return array{0: ?array{slug: string, title: string, path: string, summary: string, filename: string, updated_at: string}, 1: ?array{slug: string, title: string, path: string, summary: string, filename: string, updated_at: string}}
+     */
+    private function neighborDocs(array $docs, string $slug): array
+    {
+        $count = count($docs);
+
+        for ($i = 0; $i < $count; $i++) {
+            if (($docs[$i]['slug'] ?? null) !== $slug) {
+                continue;
+            }
+
+            return [
+                $i > 0 ? $docs[$i - 1] : null,
+                $i < $count - 1 ? $docs[$i + 1] : null,
+            ];
+        }
+
+        return [null, null];
     }
 
     /**
@@ -116,6 +190,8 @@ class DocsController
         if ($firstH1 instanceof DOMElement) {
             $firstH1->parentNode?->removeChild($firstH1);
         }
+
+        $this->rewriteMarkdownLinks($xpath);
 
         $usedHeadingIds = [];
         $toc = [];
@@ -158,6 +234,46 @@ class DocsController
             'html' => $renderedHtml !== '' ? $renderedHtml : $html,
             'toc' => $toc,
         ];
+    }
+
+    private function rewriteMarkdownLinks(DOMXPath $xpath): void
+    {
+        foreach ($xpath->query('//a[@href]') as $link) {
+            if (! $link instanceof DOMElement) {
+                continue;
+            }
+
+            $href = trim((string) $link->getAttribute('href'));
+
+            if ($href === '' || str_starts_with($href, '#')) {
+                continue;
+            }
+
+            // Leave absolute URLs, mailto:, etc untouched.
+            if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $href) === 1) {
+                continue;
+            }
+
+            // Leave site-absolute paths untouched.
+            if (str_starts_with($href, '/')) {
+                continue;
+            }
+
+            $parts = explode('#', $href, 2);
+            $path = $parts[0] ?? '';
+            $fragment = $parts[1] ?? '';
+
+            $path = Str::startsWith($path, './') ? Str::after($path, './') : $path;
+
+            if (preg_match('/^[A-Za-z0-9-]+\\.md$/', $path) !== 1) {
+                continue;
+            }
+
+            $slug = Str::beforeLast($path, '.md');
+            $rewritten = $slug.($fragment !== '' ? "#{$fragment}" : '');
+
+            $link->setAttribute('href', $rewritten);
+        }
     }
 
     /**

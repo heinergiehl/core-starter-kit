@@ -1,6 +1,6 @@
 # Feature Matrix
 
-This document compares the current kit with the SaaSykit public feature list and highlights what is complete, partial, or still planned.
+This document is a high-level map of what ships in the kit today and what is still planned.
 
 Status legend:
 - Done: implemented in the core kit
@@ -52,7 +52,7 @@ Status legend:
 
 ---
 
-## Next targets (based on SaaSykit parity)
+## Next targets (recommended)
 1) Harden webhook verification for Paddle.
-2) Branded email templates.
-3) One-command deploy workflow.
+2) Expand branded email templates + fixtures.
+3) Add a one-command deploy workflow/runbook.
