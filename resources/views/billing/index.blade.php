@@ -193,6 +193,13 @@
             @elseif($recentOneTimeOrder)
                 <!-- One-Time Purchase Success -->
                 <div class="glass-panel rounded-[32px] p-8 text-center">
+                    @php
+                        $chargedAmount = (int) ($recentOneTimeOrder->amount ?? 0);
+                        $chargedCurrency = strtoupper((string) ($recentOneTimeOrder->currency ?? 'USD'));
+                        $catalogAmount = isset($recentOneTimePlanAmount) ? (int) $recentOneTimePlanAmount : null;
+                        $catalogCurrency = strtoupper((string) ($recentOneTimePlanCurrency ?? $chargedCurrency));
+                        $showCatalogValue = $catalogAmount && $catalogAmount > 0 && $catalogAmount !== $chargedAmount;
+                    @endphp
                     <div class="mx-auto w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-4">
                         <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -202,9 +209,14 @@
                     <p class="mt-2 text-ink/60 max-w-md mx-auto">{{ __('Thank you for your purchase. Your order has been processed successfully.') }}</p>
                     <div class="mt-6">
                         <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border text-emerald-600 bg-emerald-500/10 border-emerald-500/20">
-                            {{ __('Paid') }} • {{ strtoupper($recentOneTimeOrder->currency) }} {{ number_format($recentOneTimeOrder->amount / 100, 2) }}
+                            {{ __('Charged') }} - {{ $chargedCurrency }} {{ number_format($chargedAmount / 100, 2) }}
                         </span>
                     </div>
+                    @if ($showCatalogValue)
+                        <p class="mt-3 text-sm text-ink/60">
+                            {{ __('Plan value') }} - {{ $catalogCurrency }} {{ number_format($catalogAmount / 100, 2) }}
+                        </p>
+                    @endif
                     <div class="mt-4">
                         <span class="text-xs font-mono text-ink/40">{{ __('Order ID: :id', ['id' => $recentOneTimeOrder->id]) }}</span>
                     </div>
@@ -239,7 +251,7 @@
                                 <div class="card-inner px-5 py-4 flex items-center justify-between">
                                     <div>
                                         <p class="font-semibold text-ink">{{ $order->product?->name ?? $order->plan_key }}</p>
-                                        <p class="text-xs text-ink/50">{{ __('Order') }} #{{ $order->id }} · {{ $order->created_at->format('M d, Y') }}</p>
+                                        <p class="text-xs text-ink/50">{{ __('Order') }} #{{ $order->id }} - {{ $order->created_at->format('M d, Y') }}</p>
                                     </div>
                                     <div class="text-right">
                                         <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-lg">

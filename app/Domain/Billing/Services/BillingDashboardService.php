@@ -24,6 +24,8 @@ class BillingDashboardService
      *    invoices: Collection,
      *    pendingOrder: ?Order,
      *    recentOneTimeOrder: ?Order,
+     *    recentOneTimePlanAmount: ?int,
+     *    recentOneTimePlanCurrency: ?string,
      *    oneTimeOrders: Collection,
      *    canCancel: bool
      * }
@@ -34,6 +36,8 @@ class BillingDashboardService
         $plan = null;
         $invoices = collect();
         $pendingOrder = null;
+        $recentOneTimePlanAmount = null;
+        $recentOneTimePlanCurrency = null;
 
         if ($subscription) {
             try {
@@ -94,6 +98,10 @@ class BillingDashboardService
             })
             ->first();
 
+        if ($recentOneTimeOrder) {
+            [$recentOneTimePlanAmount, $recentOneTimePlanCurrency] = $this->resolveOneTimeOrderCatalogValue($recentOneTimeOrder);
+        }
+
         // Get all one-time orders for purchase history
         $oneTimeOrders = Order::query()
             ->where('user_id', $user->id)
@@ -121,8 +129,59 @@ class BillingDashboardService
             'invoices',
             'pendingOrder',
             'recentOneTimeOrder',
+            'recentOneTimePlanAmount',
+            'recentOneTimePlanCurrency',
             'oneTimeOrders',
             'canCancel'
         );
+    }
+
+    /**
+     * @return array{0: ?int, 1: ?string}
+     */
+    private function resolveOneTimeOrderCatalogValue(Order $order): array
+    {
+        $planKey = (string) ($order->plan_key ?? '');
+        if ($planKey === '') {
+            return [null, null];
+        }
+
+        try {
+            $plan = $this->planService->plan($planKey);
+        } catch (\RuntimeException) {
+            return [null, null];
+        }
+
+        $priceKey = (string) (
+            data_get($order->metadata, 'price_key')
+            ?? data_get($order->metadata, 'metadata.price_key')
+            ?? data_get($order->metadata, 'custom_data.price_key')
+            ?? ''
+        );
+
+        $price = $priceKey !== '' ? $plan->getPrice($priceKey) : null;
+        if (! $price) {
+            foreach ($plan->prices as $candidate) {
+                if ($candidate->mode() === \App\Enums\PaymentMode::OneTime) {
+                    $price = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if (! $price) {
+            return [null, null];
+        }
+
+        $amount = (float) $price->amount;
+        if ($amount <= 0) {
+            return [null, null];
+        }
+
+        $minorAmount = $price->amountIsMinor
+            ? (int) round($amount)
+            : (int) round($amount * 100);
+
+        return [$minorAmount, strtoupper((string) $price->currency)];
     }
 }

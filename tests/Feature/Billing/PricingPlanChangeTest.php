@@ -174,6 +174,93 @@ class PricingPlanChangeTest extends TestCase
             ->assertSeeText('You already own this one-time plan.');
     }
 
+    public function test_discounted_one_time_upgrade_still_treats_customer_as_higher_tier_owner(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['hobbyist', 'indie', 'agency']]);
+
+        $hobbyist = Product::factory()->create([
+            'key' => 'hobbyist',
+            'name' => 'Hobbyist',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+        $indie = Product::factory()->create([
+            'key' => 'indie',
+            'name' => 'Indie',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+        $agency = Product::factory()->create([
+            'key' => 'agency',
+            'name' => 'Agency',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+
+        $hobbyistPrice = Price::factory()->create([
+            'product_id' => $hobbyist->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 4900,
+            'currency' => 'USD',
+        ]);
+        $indiePrice = Price::factory()->create([
+            'product_id' => $indie->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 9999,
+            'currency' => 'USD',
+        ]);
+        $agencyPrice = Price::factory()->create([
+            'product_id' => $agency->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 14999,
+            'currency' => 'USD',
+        ]);
+
+        foreach ([$hobbyistPrice, $indiePrice, $agencyPrice] as $priceModel) {
+            PriceProviderMapping::query()->create([
+                'price_id' => $priceModel->id,
+                'provider' => BillingProvider::Stripe->value,
+                'provider_id' => 'price_'.$priceModel->id,
+            ]);
+        }
+
+        $user = User::factory()->create([
+            'email_verified_at' => now(),
+            'onboarding_completed_at' => now(),
+        ]);
+
+        // User upgraded to agency with credit and paid only the delta.
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe->value,
+            'provider_id' => 'pi_agency_delta_paid',
+            'plan_key' => 'agency',
+            'status' => OrderStatus::Paid->value,
+            'amount' => 5000,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'metadata' => [
+                    'price_key' => 'once',
+                ],
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('You already own this one-time plan.')
+            ->assertSeeText('One-time downgrades are not available in self-serve checkout. Please contact support.')
+            ->assertDontSeeText('Upgrade One-time');
+    }
+
     public function test_one_time_downgrade_attempt_shows_support_contact_cta(): void
     {
         config([

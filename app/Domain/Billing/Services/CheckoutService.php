@@ -38,6 +38,7 @@ class CheckoutService
 {
     public function __construct(
         private readonly BillingProviderManager $providerManager,
+        private readonly BillingPlanService $planService,
     ) {}
 
     /**
@@ -185,7 +186,7 @@ class CheckoutService
             );
         }
 
-        $currentPriceKey = (string) data_get($latestOneTimeOrder->metadata, 'price_key', '');
+        $currentPriceKey = $this->resolveOrderPriceKey($latestOneTimeOrder);
         if ($latestOneTimeOrder->plan_key === $targetPlan->key
             && ($currentPriceKey === '' || $currentPriceKey === $targetPrice->key)
         ) {
@@ -196,7 +197,7 @@ class CheckoutService
         }
 
         $targetAmount = (int) round((float) $targetPrice->amount);
-        $currentAmount = (int) ($latestOneTimeOrder->amount ?? 0);
+        $currentAmount = $this->resolveOwnedOneTimeAmount($latestOneTimeOrder);
 
         if ($targetAmount < $currentAmount) {
             return CheckoutEligibility::deny(
@@ -240,7 +241,7 @@ class CheckoutService
             return 0;
         }
 
-        $currentPriceKey = (string) data_get($latestOneTimeOrder->metadata, 'price_key', '');
+        $currentPriceKey = $this->resolveOrderPriceKey($latestOneTimeOrder);
         if ($latestOneTimeOrder->plan_key === $targetPlan->key
             && ($currentPriceKey === '' || $currentPriceKey === $targetPrice->key)
         ) {
@@ -248,7 +249,7 @@ class CheckoutService
         }
 
         $targetAmount = (int) round((float) $targetPrice->amount);
-        $currentAmount = (int) ($latestOneTimeOrder->amount ?? 0);
+        $currentAmount = $this->resolveOwnedOneTimeAmount($latestOneTimeOrder);
 
         if ($currentAmount <= 0 || $targetAmount <= $currentAmount) {
             return 0;
@@ -517,5 +518,58 @@ class CheckoutService
             ?? data_get($metadata, 'provider_subscription_id');
 
         return empty($subscriptionId);
+    }
+
+    private function resolveOwnedOneTimeAmount(Order $order): int
+    {
+        $fallbackAmount = (int) ($order->amount ?? 0);
+        $planKey = (string) ($order->plan_key ?? '');
+
+        if ($planKey === '') {
+            return $fallbackAmount;
+        }
+
+        try {
+            $plan = $this->planService->plan($planKey);
+        } catch (\RuntimeException) {
+            return $fallbackAmount;
+        }
+
+        $priceKey = $this->resolveOrderPriceKey($order);
+        $price = $priceKey !== '' ? $plan->getPrice($priceKey) : null;
+
+        if (! $price) {
+            foreach ($plan->prices as $candidate) {
+                if ($candidate->mode() === PaymentMode::OneTime) {
+                    $price = $candidate;
+                    break;
+                }
+            }
+        }
+
+        if (! $price) {
+            return $fallbackAmount;
+        }
+
+        $amount = (float) $price->amount;
+        if ($amount <= 0) {
+            return $fallbackAmount;
+        }
+
+        if ($price->amountIsMinor) {
+            return (int) round($amount);
+        }
+
+        return (int) round($amount * 100);
+    }
+
+    private function resolveOrderPriceKey(Order $order): string
+    {
+        return (string) (
+            data_get($order->metadata, 'price_key')
+            ?? data_get($order->metadata, 'metadata.price_key')
+            ?? data_get($order->metadata, 'custom_data.price_key')
+            ?? ''
+        );
     }
 }
