@@ -108,6 +108,16 @@ jobs:
         run: |
           set -Eeuo pipefail
           missing=0
+
+          warn_if_default() {
+            local var="$1"
+            local default_value="$2"
+
+            if [ -z "${!var:-}" ]; then
+              echo "::warning::${var} is not set. Using workflow default: ${default_value}"
+            fi
+          }
+
           required_vars=(
             APP_KEY
             APP_URL
@@ -133,9 +143,10 @@ jobs:
             echo "::warning::PADDLE_CLIENT_SIDE_TOKEN is not set. Paddle inline checkout UI token is optional."
           fi
 
-          if [ -z "${DB_HOST:-}" ] || [ -z "${DB_DATABASE:-}" ] || [ -z "${DB_USERNAME:-}" ] || [ -z "${DB_PASSWORD:-}" ]; then
-            echo "::warning::DB_* secrets/vars not fully set. Deploy will use workflow default database values."
-          fi
+          warn_if_default DB_HOST 172.17.0.1
+          warn_if_default DB_DATABASE laravel
+          warn_if_default DB_USERNAME root
+          warn_if_default DB_PASSWORD secret
 
       - name: Generate .env
         env:
