@@ -208,9 +208,14 @@
                     <div class="mt-4">
                         <span class="text-xs font-mono text-ink/40">{{ __('Order ID: :id', ['id' => $recentOneTimeOrder->id]) }}</span>
                     </div>
-                    <a href="{{ route('dashboard') }}" class="btn-primary mt-6 inline-block">
-                        {{ __('Go to Dashboard') }}
-                    </a>
+                    <div class="mt-6 flex flex-wrap items-center justify-center gap-3">
+                        <a href="{{ route('pricing') }}" class="btn-secondary inline-block">
+                            {{ __('View Plans') }}
+                        </a>
+                        <a href="{{ route('dashboard') }}" class="btn-primary inline-block">
+                            {{ __('Go to Dashboard') }}
+                        </a>
+                    </div>
                 </div>
 
             @else
@@ -249,7 +254,10 @@
                             @endforeach
                         </div>
                         
-                        <div class="mt-6 pt-6 border-t border-ink/5 text-center">
+                        <div class="mt-6 pt-6 border-t border-ink/5 text-center flex flex-wrap items-center justify-center gap-3">
+                            <a href="{{ route('pricing') }}" class="btn-secondary inline-block">
+                                {{ __('View Plans') }}
+                            </a>
                             <a href="{{ route('dashboard') }}" class="btn-primary inline-block">
                                 {{ __('Go to Dashboard') }}
                             </a>
