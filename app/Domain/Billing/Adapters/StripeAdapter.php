@@ -209,7 +209,7 @@ class StripeAdapter implements BillingRuntimeProvider
             $payload['percent_off'] = $discount->amount;
         } else {
             $payload['amount_off'] = $discount->amount;
-            $payload['currency'] = $discount->currency ?? config('saas.billing.pricing.currency', 'USD');
+            $payload['currency'] = strtolower((string) ($discount->currency ?? config('saas.billing.pricing.currency', 'USD')));
         }
 
         // Map Limits & Dates
@@ -220,9 +220,6 @@ class StripeAdapter implements BillingRuntimeProvider
         if ($discount->ends_at) {
             $payload['redeem_by'] = $discount->ends_at->timestamp;
         }
-
-        // Try to use the code as ID for better readability in Stripe Dashboard
-        $payload['id'] = $discount->code;
 
         try {
             $client = $this->stripeClient();
@@ -270,7 +267,8 @@ class StripeAdapter implements BillingRuntimeProvider
             'cancel_url' => $request->cancelUrl,
             'client_reference_id' => (string) $request->user->id,
             'metadata' => $metadata,
-            'allow_promotion_codes' => true,
+            // Stripe checkout should not prompt for promo codes when a discount is already attached.
+            'allow_promotion_codes' => $request->discount ? false : true,
             // Customize the submit button based on payment type
             'submit_type' => $mode === PaymentMode::Subscription ? 'auto' : 'pay',
             // Add custom text for better user experience
