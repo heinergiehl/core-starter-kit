@@ -133,14 +133,28 @@ class BillingController
         try {
             $this->subscriptionService->changePlan($user, $data['plan'], $data['price']);
 
-            // Get plan name for success message (optional, could be moved to service return, but acceptable here)
-            // For simplicity, we just use the plan key or let the user see the update on index
-            // But let's keep the nice message
-            $newPlanName = $this->resolvePlanName($data['plan']);
+            $updatedSubscription = $user->activeSubscription();
+            if ($updatedSubscription) {
+                try {
+                    $updatedSubscription = $this->subscriptionService->syncSubscriptionState($updatedSubscription);
+                } catch (\Throwable $syncException) {
+                    report($syncException);
+                }
+
+                $stillPending = (string) data_get($updatedSubscription->metadata, 'pending_plan_key', '') !== ''
+                    || (string) data_get($updatedSubscription->metadata, 'pending_provider_price_id', '') !== '';
+
+                if (! $stillPending && $updatedSubscription->plan_key === $data['plan']) {
+                    return redirect()->route('billing.index')
+                        ->with('success', __('Your subscription has been updated to :plan.', [
+                            'plan' => $this->resolvePlanName($data['plan']),
+                        ]));
+                }
+            }
 
             return redirect()->route('billing.index')
                 ->with('info', __('Your subscription plan change to :plan is pending provider confirmation.', [
-                    'plan' => $newPlanName,
+                    'plan' => $this->resolvePlanName($data['plan']),
                 ]));
         } catch (BillingException $e) {
             report($e);
@@ -231,6 +245,14 @@ class BillingController
     private function formatPlanChangeError(\Throwable $exception): string
     {
         if ($exception instanceof BillingException) {
+            if ($exception->getErrorCode() === 'BILLING_ACTION_FAILED') {
+                $message = strtolower($exception->getMessage());
+
+                if (str_contains($message, 'no such price') || str_contains($message, 'price not found')) {
+                    return __('The selected plan price is not configured in your billing provider account. Please update the provider price mapping and try again.');
+                }
+            }
+
             return match ($exception->getErrorCode()) {
                 'BILLING_SUBSCRIPTION_PENDING_CANCELLATION' => __('Please resume your pending cancellation before changing plans.'),
                 'BILLING_PROVIDER_PRICE_UNAVAILABLE' => __('The selected plan is not available for your billing provider.'),
