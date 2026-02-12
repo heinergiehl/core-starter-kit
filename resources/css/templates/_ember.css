@@ -104,13 +104,13 @@ html[data-template="ember"] .glass-panel:hover {
    BUTTONS - Fire gradient
    ============================================ */
 html[data-template="ember"] .btn-primary {
-    background: linear-gradient(135deg, #FB923C 0%, #F97316 30%, #EA580C 60%, #DC2626 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) 30%, rgb(var(--color-secondary)) 60%, rgb(var(--color-accent)) 100%);
     background-size: 200% 200%;
     border: none;
     border-radius: var(--radius-btn);
     box-shadow:
-        0 4px 20px rgba(251, 146, 60, 0.4),
-        0 0 40px rgba(251, 146, 60, 0.1);
+        0 4px 20px rgba(var(--color-primary), 0.4),
+        0 0 40px rgba(var(--color-primary), 0.1);
     font-weight: 600;
     transition: all 0.3s ease;
     animation: ember-btn-glow 4s ease infinite;
@@ -131,20 +131,20 @@ html[data-template="ember"] .btn-primary {
 html[data-template="ember"] .btn-primary:hover {
     transform: translateY(-2px) scale(1.02);
     box-shadow:
-        0 8px 30px rgba(251, 146, 60, 0.5),
-        0 0 60px rgba(251, 146, 60, 0.15);
+        0 8px 30px rgba(var(--color-primary), 0.5),
+        0 0 60px rgba(var(--color-primary), 0.15);
 }
 
 html[data-template="ember"] .btn-secondary {
-    background: rgba(251, 146, 60, 0.1);
-    border: 1px solid rgba(251, 146, 60, 0.3);
-    color: #FB923C;
+    background: rgba(var(--color-primary), 0.1);
+    border: 1px solid rgba(var(--color-primary), 0.3);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
 }
 
 html[data-template="ember"] .btn-secondary:hover {
-    background: rgba(251, 146, 60, 0.2);
-    border-color: rgba(251, 146, 60, 0.5);
+    background: rgba(var(--color-primary), 0.2);
+    border-color: rgba(var(--color-primary), 0.5);
 }
 
 /* ============================================
@@ -152,11 +152,9 @@ html[data-template="ember"] .btn-secondary:hover {
    ============================================ */
 html[data-template="ember"] .text-gradient {
     background: linear-gradient(90deg,
-            #FCD34D 0%,
-            #FB923C 25%,
-            #F97316 50%,
-            #EA580C 75%,
-            #DC2626 100%);
+            rgb(var(--color-accent)) 0%,
+            rgb(var(--color-primary)) 35%,
+            rgb(var(--color-secondary)) 100%);
     background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
@@ -205,21 +203,21 @@ html[data-template="ember"] input[type="email"],
 html[data-template="ember"] input[type="password"],
 html[data-template="ember"] textarea {
     background: rgba(28, 25, 23, 0.8);
-    border: 1px solid rgba(251, 146, 60, 0.2);
+    border: 1px solid rgba(var(--color-primary), 0.2);
     color: #FFF7ED;
     border-radius: var(--radius-btn);
 }
 
 html[data-template="ember"] input::placeholder,
 html[data-template="ember"] textarea::placeholder {
-    color: rgba(251, 146, 60, 0.4);
+    color: rgba(var(--color-primary), 0.4);
 }
 
 html[data-template="ember"] input:focus,
 html[data-template="ember"] textarea:focus {
-    border-color: #FB923C;
+    border-color: rgb(var(--color-primary));
     box-shadow:
-        0 0 0 4px rgba(251, 146, 60, 0.15),
-        0 0 20px rgba(251, 146, 60, 0.1);
+        0 0 0 4px rgba(var(--color-primary), 0.15),
+        0 0 20px rgba(var(--color-primary), 0.1);
     outline: none;
 }

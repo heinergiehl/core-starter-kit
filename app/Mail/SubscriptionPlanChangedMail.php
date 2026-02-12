@@ -33,6 +33,7 @@ class SubscriptionPlanChangedMail extends Mailable
     {
         return new Content(
             view: 'emails.subscription.plan-changed',
+            text: 'emails.text.subscription.plan-changed',
             with: [
                 'user' => $this->user,
                 'previousPlanName' => $this->previousPlanName,

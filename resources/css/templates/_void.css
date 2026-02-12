@@ -115,12 +115,12 @@ html[data-template="void"] .glass-panel:hover {
    BUTTONS - Electric with glow pulse
    ============================================ */
 html[data-template="void"] .btn-primary {
-    background: linear-gradient(135deg, #06B6D4 0%, #0EA5E9 50%, #D946EF 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) 50%, rgb(var(--color-secondary)) 100%);
     border: none;
     border-radius: var(--radius-btn);
     box-shadow:
         var(--glow-primary),
-        0 4px 15px rgba(6, 182, 212, 0.3);
+        0 4px 15px rgba(var(--color-primary), 0.3);
     font-family: var(--font-sans);
     text-transform: uppercase;
     letter-spacing: 0.1em;
@@ -131,14 +131,14 @@ html[data-template="void"] .btn-primary {
 html[data-template="void"] .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow:
-        0 0 60px rgba(6, 182, 212, 0.5),
-        0 8px 25px rgba(6, 182, 212, 0.4);
+        0 0 60px rgba(var(--color-primary), 0.5),
+        0 8px 25px rgba(var(--color-primary), 0.4);
 }
 
 html[data-template="void"] .btn-secondary {
     background: transparent;
-    border: 1px solid rgba(6, 182, 212, 0.4);
-    color: #22D3EE;
+    border: 1px solid rgba(var(--color-primary), 0.4);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
     font-family: var(--font-sans);
     text-transform: uppercase;
@@ -147,9 +147,9 @@ html[data-template="void"] .btn-secondary {
 }
 
 html[data-template="void"] .btn-secondary:hover {
-    background: rgba(6, 182, 212, 0.1);
-    border-color: rgba(6, 182, 212, 0.7);
-    box-shadow: 0 0 20px rgba(6, 182, 212, 0.2);
+    background: rgba(var(--color-primary), 0.1);
+    border-color: rgba(var(--color-primary), 0.7);
+    box-shadow: 0 0 20px rgba(var(--color-primary), 0.2);
 }
 
 /* ============================================
@@ -157,11 +157,10 @@ html[data-template="void"] .btn-secondary:hover {
    ============================================ */
 html[data-template="void"] .text-gradient {
     background: linear-gradient(90deg,
-            #22D3EE 0%,
-            #06B6D4 25%,
-            #E879F9 50%,
-            #D946EF 75%,
-            #FB7185 100%);
+            rgb(var(--color-primary)) 0%,
+            rgb(var(--color-primary)) 25%,
+            rgb(var(--color-secondary)) 70%,
+            rgb(var(--color-accent)) 100%);
     background-size: 200% auto;
     -webkit-background-clip: text;
     background-clip: text;
@@ -210,7 +209,7 @@ html[data-template="void"] .card-inner::before {
     left: 0;
     right: 0;
     height: 2px;
-    background: linear-gradient(90deg, #06B6D4, #D946EF, #FB7185);
+    background: linear-gradient(90deg, rgb(var(--color-primary)), rgb(var(--color-secondary)), rgb(var(--color-accent)));
 }
 
 /* ============================================
@@ -221,8 +220,8 @@ html[data-template="void"] input[type="email"],
 html[data-template="void"] input[type="password"],
 html[data-template="void"] textarea {
     background: rgba(2, 6, 23, 0.8);
-    border: 1px solid rgba(6, 182, 212, 0.3);
-    color: #A5F3FC;
+    border: 1px solid rgba(var(--color-primary), 0.3);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
     font-family: var(--font-sans);
     caret-color: #22D3EE;
@@ -230,15 +229,15 @@ html[data-template="void"] textarea {
 
 html[data-template="void"] input::placeholder,
 html[data-template="void"] textarea::placeholder {
-    color: rgba(6, 182, 212, 0.4);
+    color: rgba(var(--color-primary), 0.4);
 }
 
 html[data-template="void"] input:focus,
 html[data-template="void"] textarea:focus {
-    border-color: #22D3EE;
+    border-color: rgb(var(--color-primary));
     box-shadow:
-        0 0 0 3px rgba(6, 182, 212, 0.15),
-        0 0 20px rgba(6, 182, 212, 0.2);
+        0 0 0 3px rgba(var(--color-primary), 0.15),
+        0 0 20px rgba(var(--color-primary), 0.2);
     outline: none;
 }
 

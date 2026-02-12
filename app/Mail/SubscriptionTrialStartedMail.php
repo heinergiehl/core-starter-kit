@@ -33,6 +33,7 @@ class SubscriptionTrialStartedMail extends Mailable
     {
         return new Content(
             view: 'emails.subscription.trial-started',
+            text: 'emails.text.subscription.trial-started',
             with: [
                 'user' => $this->user,
                 'planName' => $this->planName,

@@ -4,8 +4,16 @@
     
     $branding = app(BrandingService::class);
     $activeTemplate = $branding->templateForGuest();
+    $previewTemplate = (string) request()->query('template_preview', '');
+    $availableTemplates = array_keys(config('template.templates', []));
+
+    if ($previewTemplate !== '' && in_array($previewTemplate, $availableTemplates, true)) {
+        $activeTemplate = $previewTemplate;
+    }
+
+    $themeCssOverrides = $branding->themeCssVariableOverrides();
 @endphp
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}" @if($themeCssOverrides !== '') style="{{ $themeCssOverrides }}" @endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,10 +35,20 @@
         <link rel="apple-touch-icon" href="{{ $faviconUrl }}?v={{ $faviconVersion }}">
 
         @php
-            $brandFonts = config('saas.branding.fonts', []);
-            $fontSans = $brandFonts['sans'] ?? 'Instrument Sans';
-            $fontDisplay = $brandFonts['display'] ?? 'Instrument Serif';
+            $templateConfig = config("template.templates.{$activeTemplate}", []);
+            $templateFonts = $templateConfig['fonts'] ?? [];
+            $fontSans = $templateFonts['sans'] ?? config('saas.branding.fonts.sans', 'Plus Jakarta Sans');
+            $fontDisplay = $templateFonts['display'] ?? config('saas.branding.fonts.display', 'Outfit');
+
+            $fontFamilies = collect([$fontSans, $fontDisplay])
+                ->unique()
+                ->map(fn ($font) => str_replace(' ', '+', $font) . ':wght@300;400;500;600;700')
+                ->implode('&family=');
         @endphp
+
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family={{ $fontFamilies }}&display=swap" rel="stylesheet">
 
         <style>
             :root {

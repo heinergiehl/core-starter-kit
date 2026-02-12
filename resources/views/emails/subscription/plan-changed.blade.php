@@ -1,7 +1,7 @@
 @extends('emails.layout')
 
 @section('content')
-    <h1>Your plan has been updated</h1>
+    <h1 style="margin: 0 0 16px; font-size: 24px; font-weight: 600; line-height: 1.3; color: #1e293b;">Your plan has been updated</h1>
 
     <p>Hi {{ $user->name ?? 'there' }},</p>
 
@@ -21,13 +21,11 @@
 
     <p>If you have any questions about this change, you can review your billing details below.</p>
 
-    <div class="text-center">
-        <a href="{{ config('app.url') }}/billing" class="btn">
-            Manage Billing
-        </a>
-    </div>
+    <x-email.button :href="config('app.url') . '/billing'">
+        Manage Billing
+    </x-email.button>
 
-    <p class="muted mt-4">
+    <p style="margin: 16px 0 0; color: #64748b; font-size: 14px; line-height: 1.6;">
         Thank you for continuing with {{ config('app.name') }}.
     </p>
 @endsection

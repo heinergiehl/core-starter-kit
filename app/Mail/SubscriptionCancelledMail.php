@@ -32,6 +32,7 @@ class SubscriptionCancelledMail extends Mailable
     {
         return new Content(
             view: 'emails.subscription.cancelled',
+            text: 'emails.text.subscription.cancelled',
             with: [
                 'user' => $this->user,
                 'planName' => $this->planName,

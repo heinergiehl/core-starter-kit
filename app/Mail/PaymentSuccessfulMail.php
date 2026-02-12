@@ -34,6 +34,7 @@ class PaymentSuccessfulMail extends Mailable
     {
         return new Content(
             view: 'emails.payment.successful',
+            text: 'emails.text.payment.successful',
             with: [
                 'user' => $this->user,
                 'planName' => $this->planName,

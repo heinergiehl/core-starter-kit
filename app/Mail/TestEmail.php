@@ -19,6 +19,7 @@ class TestEmail extends Mailable
     {
         return new Content(
             view: 'emails.test',
+            text: 'emails.text.test',
             with: [
                 'messageText' => $this->messageText,
             ]

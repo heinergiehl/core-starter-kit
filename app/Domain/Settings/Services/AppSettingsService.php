@@ -18,25 +18,51 @@ class AppSettingsService
 
     public function all(): array
     {
-        if (! $this->isAvailable()) {
-            return [];
+        $all = [];
+
+        foreach ($this->raw() as $key => $setting) {
+            $all[$key] = $this->decodeValue(
+                $setting['value'],
+                $setting['type'],
+                $setting['is_encrypted']
+            );
         }
 
-        return Cache::rememberForever(self::CACHE_KEY, function (): array {
-            return AppSetting::query()
-                ->get()
-                ->mapWithKeys(function (AppSetting $setting): array {
-                    return [$setting->key => $this->decodeValue($setting->value, $setting->type, $setting->is_encrypted)];
-                })
-                ->all();
-        });
+        return $all;
     }
 
     public function get(string $key, mixed $default = null): mixed
     {
-        $all = $this->all();
+        $setting = $this->raw()[$key] ?? null;
 
-        return array_key_exists($key, $all) ? $all[$key] : $default;
+        if ($setting === null) {
+            return $default;
+        }
+
+        return $this->decodeValue(
+            $setting['value'],
+            $setting['type'],
+            $setting['is_encrypted']
+        );
+    }
+
+    public function has(string $key): bool
+    {
+        if (! array_key_exists($key, $this->raw())) {
+            return false;
+        }
+
+        $value = $this->get($key);
+
+        if ($value === null) {
+            return false;
+        }
+
+        if (is_string($value)) {
+            return trim($value) !== '';
+        }
+
+        return true;
     }
 
     public function set(string $key, mixed $value, ?string $group = null, ?string $type = null, bool $encrypted = false): AppSetting
@@ -112,6 +138,31 @@ class AppSettingsService
         };
     }
 
+    /**
+     * @return array<string, array{value: ?string, type: string, is_encrypted: bool}>
+     */
+    private function raw(): array
+    {
+        if (! $this->isAvailable()) {
+            return [];
+        }
+
+        return Cache::rememberForever(self::CACHE_KEY, function (): array {
+            return AppSetting::query()
+                ->get()
+                ->mapWithKeys(function (AppSetting $setting): array {
+                    return [
+                        $setting->key => [
+                            'value' => $setting->value,
+                            'type' => $setting->type,
+                            'is_encrypted' => $setting->is_encrypted,
+                        ],
+                    ];
+                })
+                ->all();
+        });
+    }
+
     private function encodeValue(mixed $value, string $type, bool $encrypted): ?string
     {
         if ($value === null) {
@@ -135,7 +186,13 @@ class AppSettingsService
             return null;
         }
 
-        $raw = $encrypted ? Crypt::decryptString($value) : $value;
+        try {
+            $raw = $encrypted ? Crypt::decryptString($value) : $value;
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
 
         return match ($type) {
             'bool' => $raw === '1',

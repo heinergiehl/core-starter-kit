@@ -34,6 +34,7 @@ class PaymentFailedMail extends Mailable
     {
         return new Content(
             view: 'emails.billing.payment-failed',
+            text: 'emails.text.billing.payment-failed',
             with: [
                 'user' => $this->user,
                 'planName' => $this->planName,

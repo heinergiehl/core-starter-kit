@@ -16,6 +16,10 @@ class ResetPasswordNotification extends ResetPassword
             ->view('emails.auth.reset-password', [
                 'url' => $url,
                 'count' => config('auth.passwords.'.config('auth.defaults.passwords').'.expire'),
+            ])
+            ->text('emails.text.auth.reset-password', [
+                'url' => $url,
+                'count' => config('auth.passwords.'.config('auth.defaults.passwords').'.expire'),
             ]);
     }
 }

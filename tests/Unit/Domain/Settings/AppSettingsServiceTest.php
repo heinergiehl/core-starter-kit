@@ -4,6 +4,7 @@ namespace Tests\Unit\Domain\Settings;
 
 use App\Domain\Settings\Services\AppSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class AppSettingsServiceTest extends TestCase
@@ -59,5 +60,23 @@ class AppSettingsServiceTest extends TestCase
         $service->set('support.email', 'second@example.com', 'support');
 
         $this->assertSame('second@example.com', $service->get('support.email'));
+    }
+
+    public function test_cache_keeps_encrypted_values_ciphertext_at_rest(): void
+    {
+        Cache::forget('app_settings.all');
+
+        $service = app(AppSettingsService::class);
+        $service->set('mail.postmark.token', 'secret-token', 'mail', null, true);
+
+        $this->assertSame('secret-token', $service->get('mail.postmark.token'));
+
+        $cached = Cache::get('app_settings.all');
+
+        $this->assertIsArray($cached);
+        $this->assertArrayHasKey('mail.postmark.token', $cached);
+        $this->assertIsArray($cached['mail.postmark.token']);
+        $this->assertTrue($cached['mail.postmark.token']['is_encrypted']);
+        $this->assertNotSame('secret-token', $cached['mail.postmark.token']['value']);
     }
 }

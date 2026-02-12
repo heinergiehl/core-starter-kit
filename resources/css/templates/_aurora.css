@@ -93,15 +93,15 @@ html[data-template="aurora"] .glass-panel:hover {
    ============================================ */
 html[data-template="aurora"] .btn-primary {
     background: linear-gradient(135deg,
-            rgba(16, 185, 129, 0.9) 0%,
-            rgba(6, 182, 212, 0.9) 50%,
-            rgba(139, 92, 246, 0.9) 100%);
+            rgba(var(--color-primary), 0.9) 0%,
+            rgba(var(--color-primary), 0.9) 50%,
+            rgba(var(--color-secondary), 0.9) 100%);
     background-size: 200% 200%;
     border: none;
     border-radius: var(--radius-btn);
     box-shadow:
-        0 4px 20px rgba(16, 185, 129, 0.3),
-        0 0 40px rgba(16, 185, 129, 0.1);
+        0 4px 20px rgba(var(--color-primary), 0.3),
+        0 0 40px rgba(var(--color-primary), 0.1);
     font-weight: 500;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     animation: aurora-btn-flow 6s ease infinite;
@@ -122,22 +122,22 @@ html[data-template="aurora"] .btn-primary {
 html[data-template="aurora"] .btn-primary:hover {
     transform: translateY(-3px);
     box-shadow:
-        0 8px 30px rgba(16, 185, 129, 0.4),
-        0 0 60px rgba(16, 185, 129, 0.15);
+        0 8px 30px rgba(var(--color-primary), 0.4),
+        0 0 60px rgba(var(--color-primary), 0.15);
 }
 
 html[data-template="aurora"] .btn-secondary {
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    color: #34D399;
+    background: rgba(var(--color-primary), 0.08);
+    border: 1px solid rgba(var(--color-primary), 0.25);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
     backdrop-filter: blur(8px);
     transition: all 0.3s ease;
 }
 
 html[data-template="aurora"] .btn-secondary:hover {
-    background: rgba(16, 185, 129, 0.15);
-    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(var(--color-primary), 0.15);
+    border-color: rgba(var(--color-primary), 0.4);
 }
 
 /* ============================================
@@ -145,10 +145,10 @@ html[data-template="aurora"] .btn-secondary:hover {
    ============================================ */
 html[data-template="aurora"] .text-gradient {
     background: linear-gradient(135deg,
-            #34D399 0%,
-            #22D3EE 40%,
-            #A78BFA 70%,
-            #F472B6 100%);
+            rgb(var(--color-primary)) 0%,
+            rgb(var(--color-primary)) 40%,
+            rgb(var(--color-secondary)) 70%,
+            rgb(var(--color-accent)) 100%);
     background-size: 300% 300%;
     -webkit-background-clip: text;
     background-clip: text;
@@ -208,21 +208,21 @@ html[data-template="aurora"] input[type="email"],
 html[data-template="aurora"] input[type="password"],
 html[data-template="aurora"] textarea {
     background: rgba(6, 78, 59, 0.6);
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(var(--color-primary), 0.2);
     color: #D1FAE5;
     border-radius: var(--radius-btn);
 }
 
 html[data-template="aurora"] input::placeholder,
 html[data-template="aurora"] textarea::placeholder {
-    color: rgba(16, 185, 129, 0.4);
+    color: rgba(var(--color-primary), 0.4);
 }
 
 html[data-template="aurora"] input:focus,
 html[data-template="aurora"] textarea:focus {
-    border-color: rgba(16, 185, 129, 0.5);
+    border-color: rgba(var(--color-primary), 0.5);
     box-shadow:
-        0 0 0 4px rgba(16, 185, 129, 0.1),
-        0 0 30px rgba(16, 185, 129, 0.1);
+        0 0 0 4px rgba(var(--color-primary), 0.1),
+        0 0 30px rgba(var(--color-primary), 0.1);
     outline: none;
 }

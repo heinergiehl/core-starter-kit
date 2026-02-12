@@ -9,6 +9,7 @@ use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
@@ -17,6 +18,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Validation\ValidationException;
 
 class ManageEmailSettings extends Page implements HasForms
 {
@@ -58,29 +60,48 @@ class ManageEmailSettings extends Page implements HasForms
                             ->label('Mail provider')
                             ->options(app(MailSettingsService::class)->providerOptions())
                             ->required()
+                            ->live()
                             ->native(false),
                         TextInput::make('from_address')
                             ->label('From address')
                             ->email()
+                            ->required()
                             ->maxLength(255),
                         TextInput::make('from_name')
                             ->label('From name')
+                            ->required()
                             ->maxLength(255),
+                    ])
+                    ->columns(2),
+                Section::make('Credential rotation')
+                    ->description('Leave secret inputs blank to keep existing credentials. Use these toggles to clear stored secrets.')
+                    ->schema([
+                        Toggle::make('clear_mailgun_secret')
+                            ->label('Clear Mailgun secret'),
+                        Toggle::make('clear_postmark_token')
+                            ->label('Clear Postmark token'),
+                        Toggle::make('clear_ses_key')
+                            ->label('Clear SES access key'),
+                        Toggle::make('clear_ses_secret')
+                            ->label('Clear SES secret key'),
                     ])
                     ->columns(2),
                 Section::make('Mailgun')
                     ->schema([
                         TextInput::make('mailgun_domain')
                             ->label('Domain')
+                            ->required(fn (Get $get): bool => $get('mail_provider') === 'mailgun')
                             ->maxLength(255),
                         TextInput::make('mailgun_secret')
                             ->label('Secret')
                             ->password()
                             ->revealable()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->helperText('Leave blank to keep the existing secret.'),
                         TextInput::make('mailgun_endpoint')
                             ->label('Endpoint')
                             ->placeholder('api.mailgun.net')
+                            ->required(fn (Get $get): bool => $get('mail_provider') === 'mailgun')
                             ->maxLength(255),
                     ])
                     ->visible(fn (Get $get): bool => $get('mail_provider') === 'mailgun')
@@ -91,7 +112,8 @@ class ManageEmailSettings extends Page implements HasForms
                             ->label('Server token')
                             ->password()
                             ->revealable()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->helperText('Leave blank to keep the existing token.'),
                     ])
                     ->visible(fn (Get $get): bool => $get('mail_provider') === 'postmark')
                     ->columns(2),
@@ -101,15 +123,18 @@ class ManageEmailSettings extends Page implements HasForms
                             ->label('Access key')
                             ->password()
                             ->revealable()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->helperText('Leave blank to keep the existing key.'),
                         TextInput::make('ses_secret')
                             ->label('Secret key')
                             ->password()
                             ->revealable()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->helperText('Leave blank to keep the existing secret key.'),
                         TextInput::make('ses_region')
                             ->label('Region')
                             ->placeholder('us-east-1')
+                            ->required(fn (Get $get): bool => $get('mail_provider') === 'ses')
                             ->maxLength(255),
                     ])
                     ->visible(fn (Get $get): bool => $get('mail_provider') === 'ses')
@@ -123,6 +148,8 @@ class ManageEmailSettings extends Page implements HasForms
         $data = $this->form->getState();
         $settings = app(AppSettingsService::class);
 
+        $this->validateProviderSecretRequirements($data, $settings);
+
         $settings->set('mail.provider', $data['mail_provider'] ?? null, 'mail');
         $settings->set('mail.from.address', $data['from_address'] ?? null, 'mail');
         $settings->set('mail.from.name', $data['from_name'] ?? null, 'mail');
@@ -130,11 +157,33 @@ class ManageEmailSettings extends Page implements HasForms
         $settings->set('mail.mailgun.domain', $data['mailgun_domain'] ?? null, 'mail');
         $settings->set('mail.mailgun.endpoint', $data['mailgun_endpoint'] ?? null, 'mail');
 
-        $this->setSecretIfFilled($settings, 'mail.mailgun.secret', $data['mailgun_secret'] ?? null);
-        $this->setSecretIfFilled($settings, 'mail.postmark.token', $data['postmark_token'] ?? null);
-        $this->setSecretIfFilled($settings, 'mail.ses.key', $data['ses_key'] ?? null);
-        $this->setSecretIfFilled($settings, 'mail.ses.secret', $data['ses_secret'] ?? null);
+        $this->storeSecret(
+            $settings,
+            'mail.mailgun.secret',
+            $data['mailgun_secret'] ?? null,
+            (bool) ($data['clear_mailgun_secret'] ?? false)
+        );
+        $this->storeSecret(
+            $settings,
+            'mail.postmark.token',
+            $data['postmark_token'] ?? null,
+            (bool) ($data['clear_postmark_token'] ?? false)
+        );
+        $this->storeSecret(
+            $settings,
+            'mail.ses.key',
+            $data['ses_key'] ?? null,
+            (bool) ($data['clear_ses_key'] ?? false)
+        );
+        $this->storeSecret(
+            $settings,
+            'mail.ses.secret',
+            $data['ses_secret'] ?? null,
+            (bool) ($data['clear_ses_secret'] ?? false)
+        );
         $settings->set('mail.ses.region', $data['ses_region'] ?? null, 'mail');
+        $settings->applyToConfig();
+        app(MailSettingsService::class)->applyConfig();
 
         Notification::make()
             ->title('Email settings updated.')
@@ -160,7 +209,21 @@ class ManageEmailSettings extends Page implements HasForms
                         ->default('This is a test email from your SaaS kit.'),
                 ])
                 ->action(function (array $data): void {
-                    Mail::to($data['to'])->send(new TestEmail($data['message'] ?? 'Test email'));
+                    app(MailSettingsService::class)->applyConfig();
+
+                    try {
+                        Mail::to($data['to'])->send(new TestEmail($data['message'] ?? 'Test email'));
+                    } catch (\Throwable $exception) {
+                        report($exception);
+
+                        Notification::make()
+                            ->title('Test email failed.')
+                            ->body('Could not send email. Verify provider credentials and check application logs.')
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
 
                     Notification::make()
                         ->title('Test email sent.')
@@ -170,12 +233,90 @@ class ManageEmailSettings extends Page implements HasForms
         ];
     }
 
-    private function setSecretIfFilled(AppSettingsService $settings, string $key, ?string $value): void
+    private function validateProviderSecretRequirements(array $data, AppSettingsService $settings): void
     {
-        if ($value === null || trim($value) === '') {
+        $provider = (string) ($data['mail_provider'] ?? '');
+        $errors = [];
+        $validProviders = array_keys(app(MailSettingsService::class)->providerOptions());
+
+        if (! in_array($provider, $validProviders, true)) {
+            $errors['data.mail_provider'] = 'Please select a valid mail provider.';
+        }
+
+        if ($provider === 'mailgun' && $this->secretMissingForProvider(
+            $settings,
+            'mail.mailgun.secret',
+            $data['mailgun_secret'] ?? null,
+            (bool) ($data['clear_mailgun_secret'] ?? false)
+        )) {
+            $errors['data.mailgun_secret'] = 'Mailgun secret is required when Mailgun is selected.';
+        }
+
+        if ($provider === 'postmark' && $this->secretMissingForProvider(
+            $settings,
+            'mail.postmark.token',
+            $data['postmark_token'] ?? null,
+            (bool) ($data['clear_postmark_token'] ?? false)
+        )) {
+            $errors['data.postmark_token'] = 'Postmark server token is required when Postmark is selected.';
+        }
+
+        if ($provider === 'ses' && $this->secretMissingForProvider(
+            $settings,
+            'mail.ses.key',
+            $data['ses_key'] ?? null,
+            (bool) ($data['clear_ses_key'] ?? false)
+        )) {
+            $errors['data.ses_key'] = 'SES access key is required when Amazon SES is selected.';
+        }
+
+        if ($provider === 'ses' && $this->secretMissingForProvider(
+            $settings,
+            'mail.ses.secret',
+            $data['ses_secret'] ?? null,
+            (bool) ($data['clear_ses_secret'] ?? false)
+        )) {
+            $errors['data.ses_secret'] = 'SES secret key is required when Amazon SES is selected.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    private function secretMissingForProvider(
+        AppSettingsService $settings,
+        string $key,
+        ?string $incomingValue,
+        bool $clearRequested
+    ): bool {
+        if ($incomingValue !== null && trim($incomingValue) !== '') {
+            return false;
+        }
+
+        if ($clearRequested) {
+            return true;
+        }
+
+        return ! $settings->has($key);
+    }
+
+    private function storeSecret(
+        AppSettingsService $settings,
+        string $key,
+        ?string $value,
+        bool $clearRequested = false
+    ): void {
+        $trimmedValue = $value !== null ? trim($value) : '';
+
+        if ($trimmedValue !== '') {
+            $settings->set($key, $trimmedValue, 'mail', null, true);
+
             return;
         }
 
-        $settings->set($key, $value, 'mail', null, true);
+        if ($clearRequested) {
+            $settings->set($key, null, 'mail', null, true);
+        }
     }
 }

@@ -1,7 +1,7 @@
 @extends('emails.layout')
 
 @section('content')
-    <h1>Your trial has started</h1>
+    <h1 style="margin: 0 0 16px; font-size: 24px; font-weight: 600; line-height: 1.3; color: #1e293b;">Your trial has started</h1>
 
     <p>Hi {{ $user->name ?? 'there' }},</p>
 
@@ -18,7 +18,7 @@
         @endif
     </div>
 
-    <p>You have full access to the features in your plan during the trial.</p>
+    <p>You have full access to your plan features during the trial:</p>
 
     <ul style="margin: 16px 0; padding-left: 24px; color: #334155;">
         @if(isset($features) && is_array($features) && count($features))
@@ -32,13 +32,11 @@
         @endif
     </ul>
 
-    <div class="text-center">
-        <a href="{{ config('app.url') }}/dashboard" class="btn">
-            Start Your Trial
-        </a>
-    </div>
+    <x-email.button :href="config('app.url') . '/dashboard'">
+        Start Your Trial
+    </x-email.button>
 
-    <p class="muted mt-4">
+    <p style="margin: 16px 0 0; color: #64748b; font-size: 14px; line-height: 1.6;">
         You can manage your subscription anytime from your account settings.
     </p>
 @endsection

@@ -44,7 +44,7 @@
                     </x-nav-link>
 
                     @if($isAdmin)
-                        <x-nav-link :href="url('/admin')" :active="request()->is('admin*')" class="font-medium text-purple-500 hover:text-purple-400">
+                        <x-nav-link :href="url('/admin')" :active="request()->is('admin*')" class="font-medium text-primary hover:text-primary/80">
                             {{ __('Admin') }}
                         </x-nav-link>
                     @endif
@@ -133,7 +133,7 @@
                 {{ __('Blog') }}
             </x-responsive-nav-link>
             @if($isAdmin)
-                <x-responsive-nav-link :href="url('/admin')" :active="request()->is('admin*')" class="text-purple-500 hover:text-purple-400 hover:bg-purple-500/10">
+                <x-responsive-nav-link :href="url('/admin')" :active="request()->is('admin*')" class="text-primary hover:text-primary/80 hover:bg-primary/10">
                     {{ __('Admin') }}
                 </x-responsive-nav-link>
             @endif

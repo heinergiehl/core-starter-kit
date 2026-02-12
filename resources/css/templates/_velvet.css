@@ -30,8 +30,8 @@ html[data-template="velvet"] {
     --radius-btn: 4px;
 
     /* Velvet-specific */
-    --gold-gradient: linear-gradient(135deg, #D4AF37 0%, #F5E6A3 40%, #D4AF37 60%, #AA8C2C 100%);
-    --gold-shimmer: linear-gradient(90deg, transparent 0%, rgba(212, 175, 55, 0.3) 50%, transparent 100%);
+    --gold-gradient: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgba(var(--color-primary), 0.65) 40%, rgb(var(--color-primary)) 60%, rgba(var(--color-primary), 0.85) 100%);
+    --gold-shimmer: linear-gradient(90deg, transparent 0%, rgba(var(--color-primary), 0.3) 50%, transparent 100%);
 }
 
 html[data-template="velvet"].dark {
@@ -132,8 +132,8 @@ html[data-template="velvet"] .btn-primary:hover {
 
 html[data-template="velvet"] .btn-secondary {
     background: transparent;
-    border: 1px solid rgba(212, 175, 55, 0.5);
-    color: #D4AF37;
+    border: 1px solid rgba(var(--color-primary), 0.5);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
     font-family: var(--font-display);
     letter-spacing: 0.12em;
@@ -142,8 +142,8 @@ html[data-template="velvet"] .btn-secondary {
 }
 
 html[data-template="velvet"] .btn-secondary:hover {
-    background: rgba(212, 175, 55, 0.1);
-    border-color: rgba(212, 175, 55, 0.8);
+    background: rgba(var(--color-primary), 0.1);
+    border-color: rgba(var(--color-primary), 0.8);
 }
 
 /* ============================================
@@ -177,7 +177,7 @@ html[data-template="velvet"] h1::after {
     display: block;
     text-align: center;
     margin-top: 16px;
-    color: #D4AF37;
+    color: rgb(var(--color-primary));
     font-size: 12px;
     letter-spacing: 24px;
 }
@@ -246,14 +246,14 @@ html[data-template="velvet"] textarea {
 
 html[data-template="velvet"] input::placeholder,
 html[data-template="velvet"] textarea::placeholder {
-    color: rgba(212, 175, 55, 0.3);
+    color: rgba(var(--color-primary), 0.3);
     font-style: italic;
 }
 
 html[data-template="velvet"] input:focus,
 html[data-template="velvet"] textarea:focus {
-    border-bottom-color: #D4AF37;
-    box-shadow: 0 2px 0 #D4AF37;
+    border-bottom-color: rgb(var(--color-primary));
+    box-shadow: 0 2px 0 rgb(var(--color-primary));
     outline: none;
 }
 

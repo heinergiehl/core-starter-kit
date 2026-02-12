@@ -34,6 +34,7 @@ class SubscriptionStartedMail extends Mailable
     {
         return new Content(
             view: 'emails.subscription.started',
+            text: 'emails.text.subscription.started',
             with: [
                 'user' => $this->user,
                 'planName' => $this->planName,

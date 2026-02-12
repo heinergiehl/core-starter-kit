@@ -13,6 +13,9 @@ class VerifyEmailNotification extends VerifyEmail
             ->subject(__('Verify Email Address'))
             ->view('emails.auth.verify-email', [
                 'url' => $url,
+            ])
+            ->text('emails.text.auth.verify-email', [
+                'url' => $url,
             ]);
     }
 }

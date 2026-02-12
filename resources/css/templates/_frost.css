@@ -81,11 +81,11 @@ html[data-template="frost"] .glass-panel:hover {
    BUTTONS - Ice crystal
    ============================================ */
 html[data-template="frost"] .btn-primary {
-    background: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 50%, #0284C7 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) 50%, rgb(var(--color-secondary)) 100%);
     border: none;
     border-radius: var(--radius-btn);
     box-shadow:
-        0 4px 16px rgba(56, 189, 248, 0.3),
+        0 4px 16px rgba(var(--color-primary), 0.3),
         0 0 0 1px rgba(255, 255, 255, 0.2) inset;
     font-weight: 500;
     transition: all 0.3s ease;
@@ -94,28 +94,28 @@ html[data-template="frost"] .btn-primary {
 html[data-template="frost"] .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow:
-        0 8px 24px rgba(56, 189, 248, 0.4),
+        0 8px 24px rgba(var(--color-primary), 0.4),
         0 0 0 1px rgba(255, 255, 255, 0.3) inset;
 }
 
 html[data-template="frost"] .btn-secondary {
-    background: rgba(56, 189, 248, 0.08);
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: #0284C7;
+    background: rgba(var(--color-primary), 0.08);
+    border: 1px solid rgba(var(--color-primary), 0.3);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
     backdrop-filter: blur(8px);
 }
 
 html[data-template="frost"] .btn-secondary:hover {
-    background: rgba(56, 189, 248, 0.15);
-    border-color: rgba(56, 189, 248, 0.5);
+    background: rgba(var(--color-primary), 0.15);
+    border-color: rgba(var(--color-primary), 0.5);
 }
 
 /* ============================================
    TEXT STYLES - Icy gradient
    ============================================ */
 html[data-template="frost"] .text-gradient {
-    background: linear-gradient(135deg, #38BDF8 0%, #0EA5E9 40%, #7DD3FC 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) 40%, rgb(var(--color-secondary)) 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -154,7 +154,7 @@ html[data-template="frost"] input[type="email"],
 html[data-template="frost"] input[type="password"],
 html[data-template="frost"] textarea {
     background: rgba(255, 255, 255, 0.8);
-    border: 1px solid rgba(56, 189, 248, 0.2);
+    border: 1px solid rgba(var(--color-primary), 0.2);
     color: #0F172A;
     border-radius: var(--radius-btn);
 }
@@ -169,7 +169,7 @@ html[data-template="frost"].dark textarea {
 
 html[data-template="frost"] input:focus,
 html[data-template="frost"] textarea:focus {
-    border-color: #38BDF8;
-    box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.15);
+    border-color: rgb(var(--color-primary));
+    box-shadow: 0 0 0 4px rgba(var(--color-primary), 0.15);
     outline: none;
 }

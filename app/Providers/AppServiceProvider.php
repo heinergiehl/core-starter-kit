@@ -9,6 +9,7 @@ use App\Domain\Settings\Services\MailSettingsService;
 use App\Support\Authorization\PermissionGuardrails;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -39,6 +40,11 @@ class AppServiceProvider extends ServiceProvider
 
         app(AppSettingsService::class)->applyToConfig();
         app(MailSettingsService::class)->applyConfig();
+
+        Queue::before(function (): void {
+            app(AppSettingsService::class)->applyToConfig();
+            app(MailSettingsService::class)->applyConfig();
+        });
 
         URL::defaults([
             'locale' => app(LocalizedRouteService::class)->defaultLocale(),

@@ -31,6 +31,7 @@ class SubscriptionResumedMail extends Mailable
     {
         return new Content(
             view: 'emails.subscription.resumed',
+            text: 'emails.text.subscription.resumed',
             with: [
                 'user' => $this->user,
                 'planName' => $this->planName,

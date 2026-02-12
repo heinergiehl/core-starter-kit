@@ -163,6 +163,11 @@ class FilamentAccessTest extends TestCase
         Livewire::test(ManageBranding::class)
             ->set('data.app_name', 'ShipSolid QA')
             ->set('data.template', 'default')
+            ->set('data.color_primary', '#4f46e5')
+            ->set('data.color_secondary', '#a855f7')
+            ->set('data.color_accent', '#be185d')
+            ->set('data.email_primary_color', '#1D4ED8')
+            ->set('data.email_secondary_color', '#112233')
             ->set('data.invoice_email', 'billing@example.com')
             ->call('save')
             ->assertHasNoErrors();
@@ -171,7 +176,75 @@ class FilamentAccessTest extends TestCase
             'id' => BrandSetting::GLOBAL_ID,
             'app_name' => 'ShipSolid QA',
             'template' => 'default',
+            'color_primary' => '#4F46E5',
+            'color_secondary' => '#A855F7',
+            'color_accent' => '#BE185D',
+            'email_primary_color' => '#1D4ED8',
+            'email_secondary_color' => '#112233',
             'invoice_email' => 'billing@example.com',
+        ]);
+    }
+
+    public function test_manage_branding_rejects_low_contrast_email_colors(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ManageBranding::class)
+            ->set('data.template', 'default')
+            ->set('data.email_primary_color', '#F8FAFC')
+            ->set('data.email_secondary_color', '#F1F5F9')
+            ->call('save')
+            ->assertHasErrors(['data.email_primary_color', 'data.email_secondary_color']);
+    }
+
+    public function test_manage_branding_can_reset_interface_colors_to_template_defaults(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ManageBranding::class)
+            ->set('data.template', 'default')
+            ->set('data.color_primary', '#191A14')
+            ->set('data.color_secondary', '#002BFF')
+            ->set('data.color_accent', '#FF1111')
+            ->call('resetInterfaceColors')
+            ->assertSet('data.color_primary', null)
+            ->assertSet('data.color_secondary', null)
+            ->assertSet('data.color_accent', null)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('brand_settings', [
+            'id' => BrandSetting::GLOBAL_ID,
+            'color_primary' => null,
+            'color_secondary' => null,
+            'color_accent' => null,
+        ]);
+    }
+
+    public function test_manage_branding_can_reset_email_colors_to_defaults(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ManageBranding::class)
+            ->set('data.template', 'default')
+            ->set('data.email_primary_color', '#1D4ED8')
+            ->set('data.email_secondary_color', '#112233')
+            ->call('resetEmailColors')
+            ->assertSet('data.email_primary_color', null)
+            ->assertSet('data.email_secondary_color', null)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('brand_settings', [
+            'id' => BrandSetting::GLOBAL_ID,
+            'email_primary_color' => null,
+            'email_secondary_color' => null,
         ]);
     }
 }

@@ -1,15 +1,15 @@
 @extends('emails.layout')
 
 @section('content')
-    <h1>Your subscription is active! 🚀</h1>
-    
+    <h1 style="margin: 0 0 16px; font-size: 24px; font-weight: 600; line-height: 1.3; color: #1e293b;">Your subscription is active</h1>
+
     <p>Hi {{ $user->name ?? 'there' }},</p>
-    
-    <p>Great news! Your <strong>{{ $planName ?? 'subscription' }}</strong> is now active.</p>
-    
+
+    <p>Great news. Your <strong>{{ $planName ?? 'subscription' }}</strong> is now active.</p>
+
     <div style="background-color: #f0fdf4; border-radius: 8px; padding: 16px; margin: 24px 0; border-left: 4px solid #22c55e;">
         <p style="margin: 0; color: #166534; font-weight: 600;">
-            ✓ Payment confirmed
+            Payment confirmed
         </p>
         @if(isset($amount) && isset($currency))
             <p style="margin: 8px 0 0; color: #166534;">
@@ -17,9 +17,9 @@
             </p>
         @endif
     </div>
-    
-    <p>You now have access to all the features included in your plan. Here's what you can do:</p>
-    
+
+    <p>You now have access to all the features included in your plan:</p>
+
     <ul style="margin: 16px 0; padding-left: 24px; color: #334155;">
         @if(isset($features) && is_array($features))
             @foreach($features as $feature)
@@ -31,14 +31,12 @@
             <li style="margin-bottom: 8px;">Regular updates</li>
         @endif
     </ul>
-    
-    <div class="text-center">
-        <a href="{{ config('app.url') }}/dashboard" class="btn">
-            Start Using {{ config('app.name') }}
-        </a>
-    </div>
-    
-    <p class="muted mt-4">
+
+    <x-email.button :href="config('app.url') . '/dashboard'">
+        Start Using {{ config('app.name') }}
+    </x-email.button>
+
+    <p style="margin: 16px 0 0; color: #64748b; font-size: 14px; line-height: 1.6;">
         You can manage your subscription anytime from your account settings.
     </p>
 @endsection

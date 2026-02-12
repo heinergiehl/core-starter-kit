@@ -117,13 +117,13 @@ html[data-template="ocean"] .glass-panel:hover {
    BUTTONS - Bioluminescent
    ============================================ */
 html[data-template="ocean"] .btn-primary {
-    background: linear-gradient(135deg, #22D3EE 0%, #06B6D4 30%, #3B82F6 70%, #10B981 100%);
+    background: linear-gradient(135deg, rgb(var(--color-primary)) 0%, rgb(var(--color-primary)) 30%, rgb(var(--color-secondary)) 70%, rgb(var(--color-accent)) 100%);
     background-size: 200% 200%;
     border: none;
     border-radius: var(--radius-btn);
     box-shadow:
-        0 4px 24px rgba(34, 211, 238, 0.35),
-        0 0 50px rgba(34, 211, 238, 0.1);
+        0 4px 24px rgba(var(--color-primary), 0.35),
+        0 0 50px rgba(var(--color-primary), 0.1);
     font-weight: 500;
     transition: all 0.4s ease;
     animation: ocean-btn-shift 8s ease infinite;
@@ -144,21 +144,21 @@ html[data-template="ocean"] .btn-primary {
 html[data-template="ocean"] .btn-primary:hover {
     transform: translateY(-3px);
     box-shadow:
-        0 8px 36px rgba(34, 211, 238, 0.45),
-        0 0 70px rgba(34, 211, 238, 0.15);
+        0 8px 36px rgba(var(--color-primary), 0.45),
+        0 0 70px rgba(var(--color-primary), 0.15);
 }
 
 html[data-template="ocean"] .btn-secondary {
-    background: rgba(34, 211, 238, 0.08);
-    border: 1px solid rgba(34, 211, 238, 0.25);
-    color: #22D3EE;
+    background: rgba(var(--color-primary), 0.08);
+    border: 1px solid rgba(var(--color-primary), 0.25);
+    color: rgb(var(--color-primary));
     border-radius: var(--radius-btn);
     backdrop-filter: blur(8px);
 }
 
 html[data-template="ocean"] .btn-secondary:hover {
-    background: rgba(34, 211, 238, 0.15);
-    border-color: rgba(34, 211, 238, 0.4);
+    background: rgba(var(--color-primary), 0.15);
+    border-color: rgba(var(--color-primary), 0.4);
 }
 
 /* ============================================
@@ -166,11 +166,10 @@ html[data-template="ocean"] .btn-secondary:hover {
    ============================================ */
 html[data-template="ocean"] .text-gradient {
     background: linear-gradient(135deg,
-            #22D3EE 0%,
-            #06B6D4 25%,
-            #3B82F6 50%,
-            #10B981 75%,
-            #14B8A6 100%);
+            rgb(var(--color-primary)) 0%,
+            rgb(var(--color-primary)) 25%,
+            rgb(var(--color-secondary)) 65%,
+            rgb(var(--color-accent)) 100%);
     background-size: 300% 300%;
     -webkit-background-clip: text;
     background-clip: text;
@@ -227,21 +226,21 @@ html[data-template="ocean"] input[type="email"],
 html[data-template="ocean"] input[type="password"],
 html[data-template="ocean"] textarea {
     background: rgba(3, 7, 30, 0.8);
-    border: 1px solid rgba(34, 211, 238, 0.2);
+    border: 1px solid rgba(var(--color-primary), 0.2);
     color: #E0F2FE;
     border-radius: var(--radius-btn);
 }
 
 html[data-template="ocean"] input::placeholder,
 html[data-template="ocean"] textarea::placeholder {
-    color: rgba(34, 211, 238, 0.4);
+    color: rgba(var(--color-primary), 0.4);
 }
 
 html[data-template="ocean"] input:focus,
 html[data-template="ocean"] textarea:focus {
-    border-color: #22D3EE;
+    border-color: rgb(var(--color-primary));
     box-shadow:
-        0 0 0 4px rgba(34, 211, 238, 0.12),
-        0 0 30px rgba(34, 211, 238, 0.1);
+        0 0 0 4px rgba(var(--color-primary), 0.12),
+        0 0 30px rgba(var(--color-primary), 0.1);
     outline: none;
 }

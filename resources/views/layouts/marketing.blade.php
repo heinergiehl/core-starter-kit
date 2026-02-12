@@ -4,10 +4,18 @@
     
     $branding = app(BrandingService::class);
     $forcedTemplate = trim($__env->yieldContent('template'));
+    $previewTemplate = (string) request()->query('template_preview', '');
+    $availableTemplates = array_keys(config('template.templates', []));
     $activeTemplate = $forcedTemplate !== '' ? $forcedTemplate : $branding->templateForGuest();
+
+    if ($previewTemplate !== '' && in_array($previewTemplate, $availableTemplates, true)) {
+        $activeTemplate = $previewTemplate;
+    }
+
+    $themeCssOverrides = $branding->themeCssVariableOverrides();
     $bodyClass = trim($__env->yieldContent('body_class'));
 @endphp
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-template="{{ $activeTemplate }}" @if($themeCssOverrides !== '') style="{{ $themeCssOverrides }}" @endif>
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
