@@ -2,9 +2,9 @@
 
 namespace Tests\Unit\Domain\Billing;
 
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Price;
 use App\Domain\Billing\Models\Product;
-use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\SaasStatsService;
 use App\Enums\OrderStatus;

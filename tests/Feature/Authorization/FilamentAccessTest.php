@@ -2,8 +2,8 @@
 
 namespace Tests\Feature\Authorization;
 
-use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Subscription;
 use App\Domain\Settings\Models\BrandSetting;
 use App\Enums\OrderStatus;
 use App\Enums\PermissionName;
