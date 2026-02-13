@@ -344,7 +344,7 @@
     </div>
 
     @if ($repoAccessEnabled && $canRequestRepoAccess)
-        <div id="repo-access-modal" class="{{ $showRepoAccessModal ? '' : 'hidden' }} fixed inset-0 z-50 overflow-y-auto" aria-labelledby="repo-access-modal-title" role="dialog" aria-modal="true">
+        <div id="repo-access-modal" class="{{ $showRepoAccessModal ? 'pointer-events-auto' : 'hidden pointer-events-none' }} fixed inset-0 z-50 overflow-y-auto" aria-labelledby="repo-access-modal-title" role="dialog" aria-modal="true">
             <div class="flex min-h-screen items-center justify-center px-4 py-12">
                 <div id="repo-access-modal-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm"></div>
 
@@ -432,10 +432,21 @@
                 let searchRequestController = null;
                 let autoCloseTimer = null;
                 let hasAutoClosed = false;
+                let announcedGrantStatus = null;
                 const syncButtonDefaultText = syncButton?.textContent?.trim() || @json(__('Confirm and Grant Access'));
                 const closeButtonDefaultText = closeButton?.textContent?.trim() || @json(__('Later'));
                 const pollIntervalMs = 3000;
                 const autoCloseAfterSuccessMs = 1400;
+
+                const notify = (message, type = 'info') => {
+                    if (!message) {
+                        return;
+                    }
+
+                    window.dispatchEvent(new CustomEvent('notify', {
+                        detail: { message, type },
+                    }));
+                };
 
                 const setFeedback = (message, tone = 'info') => {
                     feedbackElement.textContent = message || '';
@@ -513,12 +524,16 @@
 
                 const openModal = () => {
                     modal.classList.remove('hidden');
+                    modal.classList.remove('pointer-events-none');
+                    modal.classList.add('pointer-events-auto');
                     document.body.classList.add('overflow-hidden');
                     startPolling();
                 };
 
                 const closeModal = () => {
                     modal.classList.add('hidden');
+                    modal.classList.add('pointer-events-none');
+                    modal.classList.remove('pointer-events-auto');
                     document.body.classList.remove('overflow-hidden');
                     clearPromptQueryParams();
                     stopPolling();
@@ -657,6 +672,23 @@
                         autoCloseTimer = null;
                         hasAutoClosed = false;
                     }
+
+                    const grantStatus = String(state.grant_status || '');
+                    if (grantStatus !== announcedGrantStatus) {
+                        if (grantStatus === 'invited') {
+                            notify(
+                                @json(__('GitHub invitation sent. Ask the customer to check email or GitHub notifications and accept the invitation.')),
+                                'success'
+                            );
+                        } else if (grantStatus === 'granted') {
+                            notify(
+                                @json(__('Repository access has been granted successfully.')),
+                                'success'
+                            );
+                        }
+                    }
+
+                    announcedGrantStatus = grantStatus;
                 };
 
                 const fetchStatus = async () => {
@@ -783,7 +815,9 @@
 
                         const status = String(data.status || '');
                         const tone = ['queued', 'processing'].includes(status) ? 'info' : 'success';
-                        setFeedback(data.message || @json(__('Repository access sync has been queued.')), tone);
+                        const queuedMessage = data.message || @json(__('Repository access sync has been queued.'));
+                        setFeedback(queuedMessage, tone);
+                        notify(queuedMessage, tone);
                         await fetchStatus();
                     } catch (error) {
                         setFeedback(error.message || @json(__('Could not queue repository access sync.')), 'error');

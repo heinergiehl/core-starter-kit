@@ -93,6 +93,9 @@
             </div>
         </div>
         @livewireScripts
-        <x-livewire-toasts />
+        <x-livewire-toasts
+            mobile-position="top-4 inset-x-4"
+            position="sm:top-4 sm:right-4 sm:inset-x-auto"
+        />
     </body>
 </html>

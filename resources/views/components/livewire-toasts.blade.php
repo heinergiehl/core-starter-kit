@@ -1,3 +1,8 @@
+@props([
+    'mobilePosition' => 'top-4 inset-x-4',
+    'position' => 'sm:top-4 sm:right-4 sm:inset-x-auto',
+])
+
 {{--
     Livewire Toast Listener
     
@@ -24,7 +29,7 @@
         }
     }"
     x-on:notify.window="add($event.detail.message, $event.detail.type)"
-    class="fixed top-4 right-4 z-[200] flex flex-col gap-3 pointer-events-none"
+    class="fixed {{ $mobilePosition }} {{ $position }} z-[200] flex flex-col gap-3 pointer-events-none"
     aria-live="polite"
 >
     <template x-for="toast in toasts" :key="toast.id">
