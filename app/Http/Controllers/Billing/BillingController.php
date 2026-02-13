@@ -29,13 +29,11 @@ class BillingController
         abort_unless($user, 403);
 
         $data = $this->dashboardService->getData($user);
-        $githubAccount = $this->repoAccessService->githubAccount($user);
         $repoAccessGrant = $this->repoAccessService->grantForUser($user);
 
         $data = array_merge($data, [
             'repoAccessEnabled' => $this->repoAccessService->isEnabled(),
             'repoAccessGrant' => $repoAccessGrant,
-            'repoAccessGithubAccount' => $githubAccount,
             'repoAccessRepository' => $this->repoAccessService->repositoryLabel(),
             'canRequestRepoAccess' => $this->repoAccessService->hasEligiblePurchase($user),
         ]);

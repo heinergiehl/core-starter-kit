@@ -71,6 +71,27 @@ class RepoAccessService
             ->first();
     }
 
+    public function selectedGitHubUsername(User $user): ?string
+    {
+        $grant = $this->grantForUser($user);
+        $username = trim((string) ($grant?->github_username ?? ''));
+
+        return $username !== '' ? $username : null;
+    }
+
+    public function effectiveGitHubUsername(User $user): ?string
+    {
+        $selected = $this->selectedGitHubUsername($user);
+        if ($selected !== null) {
+            return $selected;
+        }
+
+        $account = $this->githubAccount($user);
+        $fallback = trim((string) ($account?->provider_name ?? ''));
+
+        return $fallback !== '' ? $fallback : null;
+    }
+
     public function queueGrant(User $user, string $source): void
     {
         if (! $this->isEnabled()) {
@@ -107,6 +128,30 @@ class RepoAccessService
                 'metadata' => [
                     'source' => 'disconnect',
                 ],
+            ]
+        );
+    }
+
+    public function setGitHubUsername(User $user, string $username, ?int $githubId = null, string $source = 'username_selected'): RepoAccessGrant
+    {
+        $normalized = trim($username);
+        $metadata = [
+            'source' => $source,
+        ];
+
+        if ($githubId !== null && $githubId > 0) {
+            $metadata['github_user_id'] = $githubId;
+        }
+
+        return $this->upsertGrant(
+            $user,
+            RepoAccessGrantStatus::AwaitingGitHubLink,
+            [
+                'github_username' => $normalized,
+                'last_error' => null,
+                'invited_at' => null,
+                'granted_at' => null,
+                'metadata' => $metadata,
             ]
         );
     }

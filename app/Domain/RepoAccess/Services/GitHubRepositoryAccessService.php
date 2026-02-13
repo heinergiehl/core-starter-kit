@@ -206,6 +206,11 @@ class GitHubRepositoryAccessService
 
     private function resolveGitHubUsername(User $user, string $token): ?string
     {
+        $selected = trim((string) ($this->repoAccessService->selectedGitHubUsername($user) ?? ''));
+        if ($this->looksLikeGitHubUsername($selected)) {
+            return $selected;
+        }
+
         $account = SocialAccount::query()
             ->where('user_id', $user->id)
             ->where('provider', OAuthProvider::GitHub)

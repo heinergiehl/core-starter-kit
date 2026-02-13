@@ -19,7 +19,7 @@ enum RepoAccessGrantStatus: string implements HasColor, HasLabel
         return match ($this) {
             self::Queued => __('Queued'),
             self::Processing => __('Processing'),
-            self::AwaitingGitHubLink => __('Awaiting GitHub Link'),
+            self::AwaitingGitHubLink => __('Awaiting GitHub Username'),
             self::Invited => __('Invitation Sent'),
             self::Granted => __('Access Granted'),
             self::Failed => __('Failed'),

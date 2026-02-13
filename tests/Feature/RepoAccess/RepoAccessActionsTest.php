@@ -12,6 +12,7 @@ use App\Enums\OrderStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -200,5 +201,88 @@ class RepoAccessActionsTest extends TestCase
             'repository_name' => 'saas-kit-private',
             'status' => 'awaiting_github_link',
         ]);
+    }
+
+    public function test_github_search_endpoint_returns_matches_for_eligible_user(): void
+    {
+        $user = User::factory()->create();
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        Http::fake([
+            'https://api.github.com/search/users*' => Http::response([
+                'items' => [
+                    [
+                        'login' => 'octocat',
+                        'id' => 1,
+                        'avatar_url' => 'https://avatars.githubusercontent.com/u/1',
+                        'html_url' => 'https://github.com/octocat',
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/repo-access/github/search?q=octo');
+
+        $response->assertOk()
+            ->assertJson([
+                'items' => [
+                    [
+                        'login' => 'octocat',
+                        'id' => 1,
+                    ],
+                ],
+            ]);
+    }
+
+    public function test_selecting_username_allows_sync_without_social_oauth_link(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        Http::fake([
+            'https://api.github.com/users/octocat' => Http::response([
+                'login' => 'octocat',
+                'id' => 1,
+                'avatar_url' => 'https://avatars.githubusercontent.com/u/1',
+                'html_url' => 'https://github.com/octocat',
+            ], 200),
+        ]);
+
+        $selectResponse = $this->actingAs($user)->postJson('/repo-access/github/select', [
+            'login' => 'octocat',
+        ]);
+
+        $selectResponse->assertOk()
+            ->assertJsonPath('user.login', 'octocat');
+
+        $this->assertDatabaseHas('repo_access_grants', [
+            'user_id' => $user->id,
+            'provider' => 'github',
+            'repository_owner' => 'acme',
+            'repository_name' => 'saas-kit-private',
+            'github_username' => 'octocat',
+            'status' => 'awaiting_github_link',
+        ]);
+
+        $syncResponse = $this->actingAs($user)->postJson('/repo-access/sync');
+
+        $syncResponse->assertStatus(202)
+            ->assertJson([
+                'status' => 'queued',
+            ]);
+
+        Queue::assertPushed(GrantGitHubRepositoryAccessJob::class, function ($job) use ($user) {
+            return $job->userId === $user->id;
+        });
     }
 }

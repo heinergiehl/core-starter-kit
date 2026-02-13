@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\RepoAccess;
 
+use App\Domain\Billing\Models\Order;
 use App\Domain\Identity\Models\SocialAccount;
 use App\Domain\RepoAccess\Models\RepoAccessGrant;
+use App\Enums\BillingProvider;
 use App\Enums\OAuthProvider;
+use App\Enums\OrderStatus;
 use App\Enums\RepoAccessGrantStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -24,20 +27,42 @@ class RepoAccessProfileUiTest extends TestCase
         config()->set('repo_access.github.repository', 'saas-kit-private');
     }
 
-    public function test_profile_shows_connect_button_when_github_is_not_connected(): void
+    public function test_profile_shows_username_search_when_no_github_username_selected(): void
     {
         $user = User::factory()->create();
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_profile_1',
+            'plan_key' => 'lifetime',
+            'status' => OrderStatus::Paid,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'metadata' => [],
+        ]);
 
         $response = $this->actingAs($user)->get('/profile');
 
         $response->assertOk();
-        $response->assertSee('Connect GitHub');
-        $response->assertSee('Not connected');
+        $response->assertSee('Find GitHub account');
+        $response->assertSee('Not selected');
     }
 
-    public function test_profile_shows_connected_account_and_grant_status(): void
+    public function test_profile_shows_selected_username_and_grant_status(): void
     {
         $user = User::factory()->create();
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_profile_2',
+            'plan_key' => 'lifetime',
+            'status' => OrderStatus::Paid,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'metadata' => [],
+        ]);
 
         SocialAccount::query()->create([
             'user_id' => $user->id,
@@ -47,21 +72,25 @@ class RepoAccessProfileUiTest extends TestCase
             'provider_name' => 'octocat',
         ]);
 
-        RepoAccessGrant::query()->create([
-            'user_id' => $user->id,
-            'provider' => 'github',
-            'repository_owner' => 'acme',
-            'repository_name' => 'saas-kit-private',
-            'github_username' => 'octocat',
-            'status' => RepoAccessGrantStatus::Granted,
-            'granted_at' => now(),
-        ]);
+        RepoAccessGrant::query()->updateOrCreate(
+            [
+                'user_id' => $user->id,
+                'provider' => 'github',
+                'repository_owner' => 'acme',
+                'repository_name' => 'saas-kit-private',
+            ],
+            [
+                'github_username' => 'octocat',
+                'status' => RepoAccessGrantStatus::Granted,
+                'granted_at' => now(),
+            ]
+        );
 
         $response = $this->actingAs($user)->get('/profile');
 
         $response->assertOk();
         $response->assertSee('@octocat');
         $response->assertSee('Access Granted');
-        $response->assertSee('Switch GitHub Account');
+        $response->assertSee('Sync Repo Access Now');
     }
 }
