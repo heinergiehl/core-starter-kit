@@ -11,25 +11,142 @@ $width = match ($width) {
     '48' => 'w-48',
     default => $width,
 };
+
+$dropdownId = 'dropdown-'.\Illuminate\Support\Str::ulid();
 @endphp
 
-<div class="relative" x-data="{ open: false }" @click.outside="open = false" @close.stop="open = false">
-    <div @click="open = ! open">
+<div class="relative z-[320] pointer-events-auto" data-dropdown>
+    <div
+        data-dropdown-trigger
+        aria-haspopup="true"
+        aria-expanded="false"
+        aria-controls="{{ $dropdownId }}"
+    >
         {{ $trigger }}
     </div>
 
-    <div x-show="open"
-            x-transition:enter="transition ease-out duration-200"
-            x-transition:enter-start="opacity-0 scale-95"
-            x-transition:enter-end="opacity-100 scale-100"
-            x-transition:leave="transition ease-in duration-75"
-            x-transition:leave-start="opacity-100 scale-100"
-            x-transition:leave-end="opacity-0 scale-95"
-            class="absolute z-[120] mt-2 {{ $width }} rounded-xl {{ $alignmentClasses }}"
-            style="display: none;"
-            @click="open = false">
+    <div
+        id="{{ $dropdownId }}"
+        data-dropdown-panel
+        class="absolute z-[330] mt-2 hidden {{ $width }} rounded-xl {{ $alignmentClasses }}"
+    >
         <div class="rounded-xl {{ $contentClasses }}">
             {{ $content }}
         </div>
     </div>
 </div>
+
+@once
+    <script>
+        (() => {
+            const roots = () => Array.from(document.querySelectorAll('[data-dropdown]'));
+            const getParts = (root) => ({
+                trigger: root.querySelector('[data-dropdown-trigger]'),
+                panel: root.querySelector('[data-dropdown-panel]'),
+            });
+
+            const closeDropdown = (root) => {
+                const { trigger, panel } = getParts(root);
+                if (!trigger || !panel) {
+                    return;
+                }
+
+                panel.classList.add('hidden');
+                trigger.setAttribute('aria-expanded', 'false');
+            };
+
+            const openDropdown = (root) => {
+                const { trigger, panel } = getParts(root);
+                if (!trigger || !panel) {
+                    return;
+                }
+
+                panel.classList.remove('hidden');
+                trigger.setAttribute('aria-expanded', 'true');
+            };
+
+            const toggleDropdown = (root) => {
+                const { panel } = getParts(root);
+                if (!panel) {
+                    return;
+                }
+
+                if (panel.classList.contains('hidden')) {
+                    roots().forEach((candidate) => {
+                        if (candidate !== root) {
+                            closeDropdown(candidate);
+                        }
+                    });
+                    openDropdown(root);
+                    return;
+                }
+
+                closeDropdown(root);
+            };
+
+            const setupDropdown = (root) => {
+                if (root.dataset.dropdownReady === '1') {
+                    return;
+                }
+
+                const { trigger, panel } = getParts(root);
+                if (!trigger || !panel) {
+                    return;
+                }
+
+                root.dataset.dropdownReady = '1';
+
+                trigger.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleDropdown(root);
+                });
+
+                trigger.addEventListener('keydown', (event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleDropdown(root);
+                    }
+
+                    if (event.key === 'Escape') {
+                        closeDropdown(root);
+                    }
+                });
+
+                panel.addEventListener('click', (event) => {
+                    if (event.target.closest('a, button')) {
+                        closeDropdown(root);
+                    }
+                });
+            };
+
+            const setupAll = () => {
+                roots().forEach(setupDropdown);
+            };
+
+            document.addEventListener('click', (event) => {
+                roots().forEach((root) => {
+                    if (!root.contains(event.target)) {
+                        closeDropdown(root);
+                    }
+                });
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') {
+                    return;
+                }
+
+                roots().forEach(closeDropdown);
+            });
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setupAll);
+            } else {
+                setupAll();
+            }
+
+            document.addEventListener('livewire:navigated', setupAll);
+        })();
+    </script>
+@endonce
