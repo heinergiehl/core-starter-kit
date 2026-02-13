@@ -120,7 +120,7 @@
             @endif
         @else
             <a href="{{ route('login') }}" class="hidden text-sm font-medium transition sm:inline-flex text-ink/70 hover:text-ink">{{ __('Sign In') }}</a>
-            <a href="{{ route('register') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Get Started') }}</a>
+            <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Get Started') }}</a>
         @endauth
 
         {{-- Mobile Menu Button --}}
@@ -184,7 +184,7 @@
                 </form>
             @else
                 <a href="{{ route('login') }}" class="block px-4 py-2 text-sm font-medium rounded-lg text-ink/70 hover:text-ink hover:bg-surface/50">{{ __('Sign In') }}</a>
-                <a href="{{ route('register') }}" class="block px-4 py-2 text-sm font-medium rounded-lg text-primary hover:text-primary/80 hover:bg-primary/5">{{ __('Get Started') }}</a>
+                <a href="{{ route('pricing') }}" class="block px-4 py-2 text-sm font-medium rounded-lg text-primary hover:text-primary/80 hover:bg-primary/5">{{ __('Get Started') }}</a>
             @endauth
         </div>
     </div>

@@ -2,6 +2,7 @@
 
 @section('title', 'Processing Billing - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', 'Confirming your billing status and activating your plan.')
+@section('meta_robots', 'noindex,follow')
 
 @section('content')
     @php

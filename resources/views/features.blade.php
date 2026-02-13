@@ -5,11 +5,7 @@
 @section('og_image', asset('marketing/checkout-provider-select-focus.png'))
 
 @push('meta')
-    <link rel="canonical" href="{{ route('features') }}">
-    <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="keywords" content="{{ __('laravel saas features, laravel stripe paddle billing starter, filament admin panel saas operations, laravel blog seo starter, onboarding localization saas') }}">
-    <meta name="twitter:title" content="{{ __('SaaS features for real production launches') }}">
-    <meta name="twitter:description" content="{{ __('From login and checkout to product operations and content workflows, this starter ships complete execution surfaces.') }}">
 
     @php
         $featureNames = [

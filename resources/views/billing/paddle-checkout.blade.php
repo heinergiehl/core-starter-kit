@@ -2,6 +2,7 @@
 
 @section('title', 'Checkout - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', 'Complete your checkout securely.')
+@section('meta_robots', 'noindex,follow')
 
 @section('content')
     <section class="py-6 md:py-12">

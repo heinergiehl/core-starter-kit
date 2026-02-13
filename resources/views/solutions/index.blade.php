@@ -5,8 +5,6 @@
 @section('og_image', asset('marketing/localhost_8000_admin.png'))
 
 @push('meta')
-    <link rel="canonical" href="{{ route('solutions.index') }}">
-    <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="keywords" content="{{ __('laravel saas use cases, laravel stripe paddle billing starter, filament admin saas operations, laravel blog seo starter, laravel onboarding localization') }}">
 
     @php

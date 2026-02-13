@@ -39,6 +39,8 @@
 
         <title>{{ $pageTitle }}</title>
         <meta name="description" content="{{ $pageDescription }}">
+        <link rel="canonical" href="{{ url()->current() }}">
+        <meta name="robots" content="@yield('meta_robots', 'index,follow,max-image-preview:large')">
         <meta property="og:title" content="{{ $pageTitle }}">
         <meta property="og:description" content="{{ $pageDescription }}">
         <meta property="og:type" content="@yield('og_type', 'website')">
@@ -47,6 +49,12 @@
         <meta property="og:locale" content="{{ str_replace('-', '_', app()->getLocale()) }}">
         <meta property="og:image" content="{{ $ogImage }}">
         <meta name="twitter:card" content="summary_large_image">
+        @php
+            $twitterTitle = trim($__env->yieldContent('twitter_title')) ?: $pageTitle;
+            $twitterDescription = trim($__env->yieldContent('twitter_description')) ?: $pageDescription;
+        @endphp
+        <meta name="twitter:title" content="{{ $twitterTitle }}">
+        <meta name="twitter:description" content="{{ $twitterDescription }}">
         <meta name="twitter:image" content="{{ $ogImage }}">
         @php
             $alternateLocaleUrls = [];

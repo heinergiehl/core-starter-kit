@@ -29,6 +29,8 @@
 
         <title>{{ $pageTitle }}</title>
         <meta name="description" content="{{ $pageDescription }}">
+        <link rel="canonical" href="{{ url()->current() }}">
+        <meta name="robots" content="@yield('meta_robots', 'noindex,follow')">
         <meta property="og:title" content="{{ $pageTitle }}">
         <meta property="og:description" content="{{ $pageDescription }}">
         <meta property="og:type" content="@yield('og_type', 'website')">
@@ -77,7 +79,7 @@
     <body class="font-sans antialiased bg-surface text-ink">
         <div class="min-h-screen bg-hero-glow flex flex-col justify-center items-center px-6 py-10">
             <div class="flex items-center gap-3 text-lg font-semibold">
-                <a href="/" class="flex items-center gap-3">
+                <a href="{{ route('home') }}" class="flex items-center gap-3">
                     <x-application-logo class="h-14 w-14 text-primary" />
                     <span class="font-display text-2xl tracking-tight">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
                 </a>

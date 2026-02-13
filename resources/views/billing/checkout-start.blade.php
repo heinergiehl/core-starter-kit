@@ -2,6 +2,7 @@
 
 @section('title', __('Checkout') . ' - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', __('Complete your subscription and start using the product.'))
+@section('meta_robots', 'noindex,follow')
 
 @section('content')
     @php

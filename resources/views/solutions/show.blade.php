@@ -5,8 +5,6 @@
 @section('og_image', asset($solutionPage['hero_image']))
 
 @push('meta')
-    <link rel="canonical" href="{{ $solutionPage['url'] }}">
-    <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="keywords" content="{{ implode(', ', $solutionPage['keywords']) }}">
 
     <script type="application/ld+json">

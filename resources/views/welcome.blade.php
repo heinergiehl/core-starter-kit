@@ -5,11 +5,7 @@
 @section('og_image', asset('marketing/checkout-form-stripe-focus.png'))
 
 @push('meta')
-    <link rel="canonical" href="{{ route('home') }}">
-    <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="keywords" content="{{ __('laravel saas starter kit, laravel stripe paddle billing starter, filament admin panel saas starter, laravel blog seo starter, onboarding localization saas') }}">
-    <meta name="twitter:title" content="{{ __('Laravel SaaS starter kit with auth, checkout, and admin workflows') }}">
-    <meta name="twitter:description" content="{{ __('Built-in login, checkout, billing, admin, and marketing surfaces so teams can ship production SaaS faster.') }}">
 
     @php
         $brandName = $appBrandName ?? config('app.name', 'SaaS Kit');
@@ -54,6 +50,10 @@
             [
                 'question' => __('Does this starter support multiple languages on marketing pages?'),
                 'answer' => __('Yes. The starter includes localization support and locale-aware content structure for marketing and UI text.'),
+            ],
+            [
+                'question' => __('Does the starter include multi-tenancy out of the box?'),
+                'answer' => __('Not by default. This starter is single-tenant by design so most SaaS teams can ship faster; if you need multi-tenancy later, you can integrate your preferred approach.'),
             ],
             [
                 'question' => __('Is this starter SEO-ready for marketing pages?'),
@@ -313,15 +313,19 @@
                     {{ __('Authentication, billing, admin operations, and growth pages are already integrated so your team can focus on product strategy, not plumbing.') }}
                 </p>
 
+                <p class="mt-4 max-w-2xl text-sm font-medium text-ink/60">
+                    {{ __('Tech stack: Laravel 12, PHP 8.2, Livewire 3, Filament 4, Tailwind CSS, Alpine.js, Vite, Stripe, Paddle.') }}
+                </p>
+
                 <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                     @auth
                         <a href="{{ url('/app') }}" class="btn-primary text-center">{{ __('Open App') }}</a>
                     @else
-                        <a href="{{ route('register') }}" class="btn-primary text-center">{{ __('Start Building') }}</a>
-                        <a href="{{ route('pricing') }}" class="btn-secondary text-center">{{ __('See Pricing') }}</a>
+                        <a href="{{ route('pricing') }}" class="btn-primary text-center">{{ __('See Pricing') }}</a>
+                        <a href="{{ route('features') }}" class="btn-secondary text-center">{{ __('Explore all features') }}</a>
                     @endauth
-                    <a href="{{ route('features') }}" class="text-sm font-semibold text-ink/70 transition hover:text-ink">
-                        {{ __('Explore all features') }} ->
+                    <a href="{{ route('solutions.index') }}" class="text-sm font-semibold text-ink/70 transition hover:text-ink">
+                        {{ __('Open Solution Hub') }} ->
                     </a>
                 </div>
 
@@ -726,8 +730,8 @@
                 @auth
                     <a href="{{ url('/app') }}" class="btn-primary">{{ __('Open App') }}</a>
                 @else
-                    <a href="{{ route('register') }}" class="btn-primary">{{ __('Create Account') }}</a>
-                    <a href="{{ route('pricing') }}" class="btn-secondary">{{ __('Compare Plans') }}</a>
+                    <a href="{{ route('pricing') }}" class="btn-primary">{{ __('See Pricing') }}</a>
+                    <a href="{{ route('features') }}" class="btn-secondary">{{ __('Explore all features') }}</a>
                 @endauth
             </div>
         </div>

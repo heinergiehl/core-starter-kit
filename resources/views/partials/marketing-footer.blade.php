@@ -4,7 +4,7 @@
         <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
             {{-- Brand --}}
             <div class="col-span-2 md:col-span-1">
-                <a href="/" class="flex items-center gap-2 mb-4">
+                <a href="{{ route('home') }}" class="flex items-center gap-2 mb-4">
                     <x-application-logo class="h-10 w-10 text-primary" />
                     <span class="font-display text-lg font-bold text-ink">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
                 </a>
