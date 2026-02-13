@@ -368,10 +368,10 @@
                         <p id="repo-access-modal-status" class="mt-1 text-sm font-semibold text-ink">
                             {{ $repoAccessGrant?->status?->getLabel() ?? __('Awaiting confirmation') }}
                         </p>
-                        <p id="repo-access-modal-error" class="mt-2 text-xs text-rose-600 {{ $repoAccessGrant?->last_error ? '' : 'hidden' }}">
+                        <p id="repo-access-modal-error" role="alert" class="mt-2 text-xs text-rose-600 {{ $repoAccessGrant?->last_error ? '' : 'hidden' }}">
                             {{ $repoAccessGrant?->last_error }}
                         </p>
-                        <p id="repo-access-modal-feedback" class="mt-2 text-xs text-blue-600 hidden"></p>
+                        <p id="repo-access-modal-feedback" aria-live="polite" class="mt-2 text-xs text-blue-600 hidden"></p>
                     </div>
 
                     <div class="mt-6">
@@ -429,20 +429,152 @@
                 let isSyncing = false;
                 let searchDebounce = null;
                 let currentStatus = null;
+                let searchRequestController = null;
+                let autoCloseTimer = null;
+                let hasAutoClosed = false;
+                const syncButtonDefaultText = syncButton?.textContent?.trim() || @json(__('Confirm and Grant Access'));
+                const closeButtonDefaultText = closeButton?.textContent?.trim() || @json(__('Later'));
+                const pollIntervalMs = 3000;
+                const autoCloseAfterSuccessMs = 1400;
 
                 const setFeedback = (message, tone = 'info') => {
                     feedbackElement.textContent = message || '';
                     feedbackElement.classList.toggle('hidden', !message);
-                    feedbackElement.classList.remove('text-blue-600', 'text-emerald-600', 'text-rose-600');
+                    feedbackElement.classList.remove('text-blue-600', 'text-emerald-600', 'text-rose-600', 'text-amber-600');
                     feedbackElement.classList.add(
-                        tone === 'success' ? 'text-emerald-600' : (tone === 'error' ? 'text-rose-600' : 'text-blue-600')
+                        tone === 'success'
+                            ? 'text-emerald-600'
+                            : tone === 'error'
+                                ? 'text-rose-600'
+                                : tone === 'warning'
+                                    ? 'text-amber-600'
+                                    : 'text-blue-600'
                     );
                 };
 
-                const setSyncDisabled = (disabled) => {
+                const setSyncButtonState = (disabled, loading = false) => {
+                    if (!syncButton) {
+                        return;
+                    }
+
                     syncButton.disabled = disabled;
                     syncButton.classList.toggle('opacity-60', disabled);
                     syncButton.classList.toggle('cursor-not-allowed', disabled);
+                    syncButton.textContent = loading
+                        ? @json(__('Granting access...'))
+                        : syncButtonDefaultText;
+                };
+
+                const setCloseButtonText = (text) => {
+                    if (!closeButton) {
+                        return;
+                    }
+
+                    closeButton.textContent = text;
+                };
+
+                const clearPromptQueryParams = () => {
+                    const url = new URL(window.location.href);
+                    let changed = false;
+
+                    ['repo_access', 'checkout_success'].forEach((param) => {
+                        if (url.searchParams.has(param)) {
+                            url.searchParams.delete(param);
+                            changed = true;
+                        }
+                    });
+
+                    if (!changed) {
+                        return;
+                    }
+
+                    const next = `${url.pathname}${url.search}${url.hash}`;
+                    window.history.replaceState({}, '', next);
+                };
+
+                const startPolling = () => {
+                    if (pollTimer) {
+                        return;
+                    }
+
+                    pollTimer = window.setInterval(() => {
+                        fetchStatus().catch(() => {});
+                    }, pollIntervalMs);
+                };
+
+                const stopPolling = () => {
+                    if (!pollTimer) {
+                        return;
+                    }
+
+                    window.clearInterval(pollTimer);
+                    pollTimer = null;
+                };
+
+                const openModal = () => {
+                    modal.classList.remove('hidden');
+                    document.body.classList.add('overflow-hidden');
+                    startPolling();
+                };
+
+                const closeModal = () => {
+                    modal.classList.add('hidden');
+                    document.body.classList.remove('overflow-hidden');
+                    clearPromptQueryParams();
+                    stopPolling();
+
+                    if (autoCloseTimer) {
+                        window.clearTimeout(autoCloseTimer);
+                        autoCloseTimer = null;
+                    }
+                };
+
+                const renderSearchResults = (items, query = '') => {
+                    searchResults.innerHTML = '';
+
+                    if (!Array.isArray(items) || items.length === 0) {
+                        if (query.trim().length >= 2) {
+                            const empty = document.createElement('p');
+                            empty.className = 'rounded-xl border border-ink/10 bg-surface/20 px-3 py-2 text-xs text-ink/60';
+                            empty.textContent = @json(__('No matching GitHub users found. Keep typing to refine.'));
+                            searchResults.appendChild(empty);
+                        }
+
+                        return;
+                    }
+
+                    items.forEach((item) => {
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'w-full text-left rounded-xl border border-ink/10 bg-surface/20 px-3 py-2 hover:bg-surface/30 transition flex items-center gap-3';
+
+                        const avatar = document.createElement('img');
+                        avatar.alt = '';
+                        avatar.src = item.avatar_url || '';
+                        avatar.className = 'h-8 w-8 rounded-full bg-surface/40';
+                        button.appendChild(avatar);
+
+                        const copy = document.createElement('div');
+                        copy.className = 'min-w-0';
+
+                        const login = document.createElement('p');
+                        login.className = 'text-sm font-semibold text-ink';
+                        login.textContent = `@${item.login}`;
+                        copy.appendChild(login);
+
+                        const url = document.createElement('p');
+                        url.className = 'text-xs text-ink/50';
+                        url.textContent = item.html_url || '';
+                        copy.appendChild(url);
+
+                        button.appendChild(copy);
+
+                        button.addEventListener('click', async () => {
+                            await selectUser(item.login, item.id);
+                        });
+
+                        searchResults.appendChild(button);
+                    });
                 };
 
                 const render = (state) => {
@@ -456,26 +588,6 @@
                         ? `@${state.github_username}`
                         : @json(__('Not selected'));
 
-                    if (!state.enabled) {
-                        statusElement.textContent = @json(__('Repository access module is disabled.'));
-                        setSyncDisabled(true);
-                        return;
-                    }
-
-                    if (!state.eligible) {
-                        statusElement.textContent = @json(__('Eligible purchase required.'));
-                        setSyncDisabled(true);
-                        return;
-                    }
-
-                    if (state.grant_label) {
-                        statusElement.textContent = state.grant_label;
-                    } else if (state.github_username) {
-                        statusElement.textContent = @json(__('Ready to grant repository access.'));
-                    } else {
-                        statusElement.textContent = @json(__('Select your GitHub username.'));
-                    }
-
                     if (state.grant_error) {
                         errorElement.textContent = state.grant_error;
                         errorElement.classList.remove('hidden');
@@ -484,21 +596,66 @@
                         errorElement.classList.add('hidden');
                     }
 
-                    if (state.is_in_progress) {
-                        if (state.is_stale) {
-                            setFeedback(@json(__('Still processing longer than expected. If this persists, your queue worker may be offline.')), 'error');
-                        } else {
-                            setFeedback(@json(__('Repository access is processing. This usually finishes within about a minute.')), 'info');
-                        }
-                    } else if (!state.is_granted && !state.grant_error) {
-                        setFeedback('', 'info');
+                    if (!state.enabled) {
+                        statusElement.textContent = @json(__('Repository access module is disabled.'));
+                    } else if (!state.eligible) {
+                        statusElement.textContent = @json(__('Eligible purchase required.'));
+                    } else if (state.grant_label) {
+                        statusElement.textContent = state.grant_label;
+                    } else if (state.github_username) {
+                        statusElement.textContent = @json(__('Ready to grant repository access.'));
+                    } else {
+                        statusElement.textContent = @json(__('Select your GitHub username.'));
                     }
 
-                    setSyncDisabled(isSyncing || !state.can_sync);
+                    let feedbackMessage = '';
+                    let feedbackTone = 'info';
 
-                    if (state.is_granted) {
-                        setFeedback(@json(__('Repository access is confirmed.')), 'success');
-                        setSyncDisabled(true);
+                    if (!state.enabled) {
+                        feedbackMessage = @json(__('Repository access automation is disabled.'));
+                        feedbackTone = 'error';
+                    } else if (!state.eligible) {
+                        feedbackMessage = @json(__('A successful purchase is required before repository access can be granted.'));
+                        feedbackTone = 'error';
+                    } else if (state.grant_error) {
+                        feedbackMessage = @json(__('Access grant failed. Review the error, adjust the selected username if needed, then retry.'));
+                        feedbackTone = 'error';
+                    } else if (state.is_granted) {
+                        feedbackMessage = @json(__('Repository access is confirmed. Closing this dialog...'));
+                        feedbackTone = 'success';
+                    } else if (state.is_in_progress) {
+                        if (state.is_stale) {
+                            feedbackMessage = @json(__('Still processing longer than expected. If this persists, your queue worker may be offline.'));
+                            feedbackTone = 'warning';
+                        } else {
+                            feedbackMessage = @json(__('Repository access is processing. This usually finishes within about a minute.'));
+                            feedbackTone = 'info';
+                        }
+                    } else if (!state.github_username) {
+                        feedbackMessage = @json(__('Type and select your GitHub account to continue.'));
+                        feedbackTone = 'info';
+                    } else if (state.can_sync) {
+                        feedbackMessage = @json(__('Ready. Confirm to grant repository access.'));
+                        feedbackTone = 'info';
+                    }
+
+                    setFeedback(feedbackMessage, feedbackTone);
+
+                    const shouldDisableSync = isSyncing || !state.can_sync;
+                    setSyncButtonState(shouldDisableSync, isSyncing);
+                    setCloseButtonText(state.is_granted ? @json(__('Close')) : closeButtonDefaultText);
+
+                    if (state.is_granted && !hasAutoClosed) {
+                        hasAutoClosed = true;
+                        autoCloseTimer = window.setTimeout(() => {
+                            closeModal();
+                        }, autoCloseAfterSuccessMs);
+                    }
+
+                    if (!state.is_granted && autoCloseTimer) {
+                        window.clearTimeout(autoCloseTimer);
+                        autoCloseTimer = null;
+                        hasAutoClosed = false;
                     }
                 };
 
@@ -517,39 +674,18 @@
                     return data;
                 };
 
-                const renderSearchResults = (items) => {
-                    searchResults.innerHTML = '';
-
-                    if (!Array.isArray(items) || items.length === 0) {
-                        return;
-                    }
-
-                    items.forEach((item) => {
-                        const button = document.createElement('button');
-                        button.type = 'button';
-                        button.className = 'w-full text-left rounded-xl border border-ink/10 bg-surface/20 px-3 py-2 hover:bg-surface/30 transition flex items-center gap-3';
-                        button.innerHTML = `
-                            <img src="${item.avatar_url || ''}" alt="" class="h-8 w-8 rounded-full bg-surface/40">
-                            <div class="min-w-0">
-                                <p class="text-sm font-semibold text-ink">@${item.login}</p>
-                                <p class="text-xs text-ink/50">${item.html_url || ''}</p>
-                            </div>
-                        `;
-
-                        button.addEventListener('click', async () => {
-                            await selectUser(item.login, item.id);
-                        });
-
-                        searchResults.appendChild(button);
-                    });
-                };
-
                 const searchUsers = async (term) => {
                     const query = (term || '').trim();
                     if (query.length < 2) {
                         searchResults.innerHTML = '';
                         return;
                     }
+
+                    if (searchRequestController) {
+                        searchRequestController.abort();
+                    }
+
+                    searchRequestController = new AbortController();
 
                     try {
                         const url = new URL(searchUrl, window.location.origin);
@@ -558,19 +694,23 @@
                         const response = await fetch(url.toString(), {
                             headers: { 'Accept': 'application/json' },
                             credentials: 'same-origin',
+                            signal: searchRequestController.signal,
                         });
                         const data = await response.json().catch(() => ({}));
 
                         if (!response.ok) {
-                            renderSearchResults([]);
+                            renderSearchResults([], query);
                             setFeedback(data.message || @json(__('GitHub search failed.')), 'error');
                             return;
                         }
 
-                        setFeedback('', 'info');
-                        renderSearchResults(data.items || []);
-                    } catch (_error) {
-                        renderSearchResults([]);
+                        renderSearchResults(data.items || [], query);
+                    } catch (error) {
+                        if (error?.name === 'AbortError') {
+                            return;
+                        }
+
+                        renderSearchResults([], query);
                         setFeedback(@json(__('GitHub search failed.')), 'error');
                     }
                 };
@@ -590,7 +730,7 @@
 
                         const data = await response.json().catch(() => ({}));
                         if (!response.ok) {
-                            throw new Error(data.message || 'select_failed');
+                            throw new Error(data.message || @json(__('Could not select GitHub username.')));
                         }
 
                         if (data?.user?.login) {
@@ -611,13 +751,18 @@
                     }
 
                     if (!currentStatus?.can_sync) {
+                        if (currentStatus?.is_granted) {
+                            closeModal();
+                            return;
+                        }
+
                         setFeedback(@json(__('Please select your GitHub username first.')), 'error');
                         return;
                     }
 
                     isSyncing = true;
-                    setFeedback(@json(__('Queuing repository access...')));
-                    setSyncDisabled(true);
+                    setFeedback(@json(__('Queuing repository access...')), 'info');
+                    setSyncButtonState(true, true);
 
                     try {
                         const response = await fetch(syncUrl, {
@@ -633,30 +778,30 @@
 
                         const data = await response.json().catch(() => ({}));
                         if (!response.ok) {
-                            throw new Error(data.message || 'sync_failed');
+                            throw new Error(data.message || @json(__('Could not queue repository access sync.')));
                         }
 
-                        setFeedback(data.message || @json(__('Repository access sync has been queued.')), 'success');
+                        const status = String(data.status || '');
+                        const tone = ['queued', 'processing'].includes(status) ? 'info' : 'success';
+                        setFeedback(data.message || @json(__('Repository access sync has been queued.')), tone);
                         await fetchStatus();
                     } catch (error) {
                         setFeedback(error.message || @json(__('Could not queue repository access sync.')), 'error');
                     } finally {
                         isSyncing = false;
-                        setSyncDisabled(!currentStatus?.can_sync);
+                        setSyncButtonState(!currentStatus?.can_sync, false);
                     }
-                };
-
-                const openModal = () => {
-                    modal.classList.remove('hidden');
-                };
-
-                const closeModal = () => {
-                    modal.classList.add('hidden');
                 };
 
                 closeButton?.addEventListener('click', closeModal);
                 backdrop?.addEventListener('click', closeModal);
                 syncButton?.addEventListener('click', queueSync);
+
+                window.addEventListener('keydown', (event) => {
+                    if (event.key === 'Escape' && !modal.classList.contains('hidden')) {
+                        closeModal();
+                    }
+                });
 
                 searchInput?.addEventListener('input', (event) => {
                     const term = event.target.value;
@@ -673,19 +818,25 @@
 
                 if (shouldPrompt || shouldOpenFromQuery) {
                     openModal();
+                    clearPromptQueryParams();
                 }
 
                 fetchStatus().catch(() => {
                     setFeedback(@json(__('Could not validate GitHub access status yet.')), 'error');
                 });
 
-                pollTimer = window.setInterval(() => {
-                    fetchStatus().catch(() => {});
-                }, 3000);
+                if (!modal.classList.contains('hidden')) {
+                    startPolling();
+                }
 
                 window.addEventListener('beforeunload', () => {
-                    if (pollTimer) {
-                        window.clearInterval(pollTimer);
+                    stopPolling();
+                    if (searchRequestController) {
+                        searchRequestController.abort();
+                    }
+
+                    if (autoCloseTimer) {
+                        window.clearTimeout(autoCloseTimer);
                     }
                 });
             })();

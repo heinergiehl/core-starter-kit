@@ -7,6 +7,8 @@ use App\Enums\OAuthProvider;
 use App\Enums\RepoAccessGrantStatus;
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -41,6 +43,10 @@ class GitHubRepositoryAccessService
         );
 
         $username = $this->repoAccessService->selectedGitHubUsername($user);
+        $token = '';
+        $owner = '';
+        $repository = '';
+        $permission = '';
 
         try {
             $token = trim((string) config('repo_access.github.token'));
@@ -132,9 +138,10 @@ class GitHubRepositoryAccessService
                 return;
             }
 
-            if ($response->status() === 422 && $this->isAlreadyGrantedMessage((string) $response->json('message'))) {
-                $message = (string) $response->json('message', '');
-                $status = str_contains(strtolower($message), 'invited')
+            if ($response->status() === 422 && $this->isAlreadyGrantedResponse($response)) {
+                $message = $this->extractResponseMessage($response);
+                $errors = implode(' ', $this->flattenGithubErrors($response));
+                $status = str_contains(strtolower("{$message} {$errors}"), 'invited')
                     ? RepoAccessGrantStatus::Invited
                     : RepoAccessGrantStatus::Granted;
 
@@ -164,7 +171,8 @@ class GitHubRepositoryAccessService
                 return;
             }
 
-            $message = (string) ($response->json('message') ?: $response->body());
+            $friendlyMessage = $this->formatGrantFailureMessage($response, $owner, $repository, $username);
+            $rawMessage = $this->extractResponseMessage($response);
 
             if ($response->serverError() || $response->status() === 429) {
                 $this->repoAccessService->upsertGrant(
@@ -172,16 +180,17 @@ class GitHubRepositoryAccessService
                     RepoAccessGrantStatus::Failed,
                     [
                         'github_username' => $username,
-                        'last_error' => $message,
+                        'last_error' => $friendlyMessage,
                         'last_attempted_at' => now(),
                         'metadata' => [
                             'source' => $source,
                             'status' => $response->status(),
+                            'github_message' => $rawMessage,
                         ],
                     ]
                 );
 
-                throw new RuntimeException('GitHub repository access request failed: '.$message);
+                throw new RuntimeException($friendlyMessage);
             }
 
             $this->repoAccessService->upsertGrant(
@@ -189,11 +198,12 @@ class GitHubRepositoryAccessService
                 RepoAccessGrantStatus::Failed,
                 [
                     'github_username' => $username,
-                    'last_error' => $message,
+                    'last_error' => $friendlyMessage,
                     'last_attempted_at' => now(),
                     'metadata' => [
                         'source' => $source,
                         'status' => $response->status(),
+                        'github_message' => $rawMessage,
                     ],
                 ]
             );
@@ -203,12 +213,13 @@ class GitHubRepositoryAccessService
                 'github_username' => $username,
                 'repository' => "{$owner}/{$repository}",
                 'status' => $response->status(),
-                'message' => $message,
+                'message' => $friendlyMessage,
+                'raw_message' => $rawMessage,
                 'source' => $source,
             ]);
         } catch (Throwable $exception) {
-            $message = trim($exception->getMessage());
-            $safeMessage = $message !== '' ? $message : 'Unexpected error while granting GitHub repository access.';
+            $safeMessage = $this->formatThrowableMessage($exception, $owner, $repository, $username);
+            $rawExceptionMessage = trim($exception->getMessage());
 
             $this->repoAccessService->upsertGrant(
                 $user,
@@ -220,6 +231,7 @@ class GitHubRepositoryAccessService
                     'metadata' => [
                         'source' => $source,
                         'exception' => $exception::class,
+                        'exception_message' => substr($rawExceptionMessage, 0, 512),
                     ],
                 ]
             );
@@ -230,10 +242,158 @@ class GitHubRepositoryAccessService
                 'source' => $source,
                 'exception' => $exception::class,
                 'message' => $safeMessage,
+                'raw_message' => $rawExceptionMessage,
             ]);
 
             throw $exception;
         }
+    }
+
+    private function extractResponseMessage(Response $response): string
+    {
+        $message = trim((string) $response->json('message', ''));
+        if ($message !== '') {
+            return $message;
+        }
+
+        return trim((string) $response->body());
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function flattenGithubErrors(Response $response): array
+    {
+        $errors = $response->json('errors');
+        if (! is_array($errors)) {
+            return [];
+        }
+
+        $messages = [];
+
+        foreach ($errors as $error) {
+            if (is_string($error)) {
+                $normalized = trim($error);
+                if ($normalized !== '') {
+                    $messages[] = $normalized;
+                }
+
+                continue;
+            }
+
+            if (! is_array($error)) {
+                continue;
+            }
+
+            foreach (['message', 'code', 'field', 'resource'] as $key) {
+                $value = trim((string) ($error[$key] ?? ''));
+                if ($value !== '') {
+                    $messages[] = $value;
+                }
+            }
+        }
+
+        return array_values(array_unique($messages));
+    }
+
+    private function formatGrantFailureMessage(
+        Response $response,
+        string $owner,
+        string $repository,
+        ?string $username,
+    ): string {
+        $status = $response->status();
+        $repositoryLabel = $owner !== '' && $repository !== ''
+            ? "{$owner}/{$repository}"
+            : $this->repoAccessService->repositoryLabel();
+        $message = strtolower($this->extractResponseMessage($response));
+        $errors = strtolower(implode(' ', $this->flattenGithubErrors($response)));
+        $combined = trim("{$message} {$errors}");
+
+        if ($status === 401) {
+            return __('GitHub token is invalid. Please check GH_REPO_ACCESS_TOKEN.');
+        }
+
+        if ($status === 403) {
+            if (str_contains($combined, 'rate limit')) {
+                return __('GitHub rate limit reached. Please try again in about a minute.');
+            }
+
+            return __('GitHub token is missing collaborator permissions for :repo.', ['repo' => $repositoryLabel]);
+        }
+
+        if ($status === 404) {
+            return __('Repository :repo was not found or token has no access.', ['repo' => $repositoryLabel]);
+        }
+
+        if ($status === 422) {
+            if (str_contains($combined, 'repository owner cannot be a collaborator')) {
+                return __('The selected username owns :repo and already has access. Choose the customer GitHub account instead.', ['repo' => $repositoryLabel]);
+            }
+
+            if (str_contains($combined, 'already') && (str_contains($combined, 'collaborator') || str_contains($combined, 'invited'))) {
+                return __('This GitHub account already has access or has a pending invitation.');
+            }
+
+            if (str_contains($combined, 'could not resolve to a user') || str_contains($combined, 'not found')) {
+                if (is_string($username) && trim($username) !== '') {
+                    return __('GitHub could not validate @:username. Choose an account from search results and try again.', ['username' => trim($username)]);
+                }
+
+                return __('GitHub could not validate the selected username. Choose an account from search results and try again.');
+            }
+
+            return __('GitHub rejected this collaborator request. Verify your selected account and repository settings.');
+        }
+
+        if ($status === 429) {
+            return __('GitHub rate limit reached. Please try again in about a minute.');
+        }
+
+        if ($response->serverError()) {
+            return __('GitHub API is temporarily unavailable. Please retry shortly.');
+        }
+
+        return __('Could not grant repository access right now. Please try again.');
+    }
+
+    private function formatThrowableMessage(
+        Throwable $exception,
+        string $owner,
+        string $repository,
+        ?string $username,
+    ): string {
+        if ($exception instanceof RequestException && $exception->response !== null) {
+            return $this->formatGrantFailureMessage($exception->response, $owner, $repository, $username);
+        }
+
+        $message = trim($exception->getMessage());
+        if ($message === '') {
+            return __('Unexpected error while granting GitHub repository access.');
+        }
+
+        $normalized = strtolower($message);
+        if (
+            str_contains($normalized, 'connection refused')
+            || str_contains($normalized, 'curl error')
+            || str_contains($normalized, 'operation timed out')
+            || str_contains($normalized, 'timeout')
+        ) {
+            return __('GitHub API could not be reached. Please try again in a moment.');
+        }
+
+        if (str_starts_with($message, 'HTTP request returned status code')) {
+            return __('GitHub rejected this collaborator request. Verify your selected account and repository settings.');
+        }
+
+        if (str_starts_with($message, 'GitHub repository access request failed:')) {
+            $trimmed = trim(substr($message, strlen('GitHub repository access request failed:')));
+            if ($trimmed !== '') {
+                return $trimmed;
+            }
+        }
+
+        return $message;
     }
 
     private function resolveGitHubUsername(User $user, string $token): ?string
@@ -298,6 +458,8 @@ class GitHubRepositoryAccessService
             ->retry(
                 (int) config('repo_access.github.retries', 2),
                 (int) config('repo_access.github.retry_delay_ms', 400),
+                null,
+                false,
             );
     }
 
@@ -314,15 +476,15 @@ class GitHubRepositoryAccessService
         return preg_match('/^[A-Za-z0-9-]{1,39}$/', $username) === 1;
     }
 
-    private function isAlreadyGrantedMessage(string $message): bool
+    private function isAlreadyGrantedResponse(Response $response): bool
     {
-        $normalized = strtolower(trim($message));
+        $combined = strtolower(trim($this->extractResponseMessage($response).' '.implode(' ', $this->flattenGithubErrors($response))));
 
-        if ($normalized === '') {
+        if ($combined === '') {
             return false;
         }
 
-        return str_contains($normalized, 'already')
-            && (str_contains($normalized, 'collaborator') || str_contains($normalized, 'invited'));
+        return str_contains($combined, 'already')
+            && (str_contains($combined, 'collaborator') || str_contains($combined, 'invited'));
     }
 }

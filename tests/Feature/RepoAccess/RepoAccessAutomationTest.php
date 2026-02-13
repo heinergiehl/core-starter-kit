@@ -6,12 +6,15 @@ use App\Domain\Billing\Events\Subscription\SubscriptionStarted;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Identity\Models\SocialAccount;
+use App\Domain\RepoAccess\Services\GitHubRepositoryAccessService;
+use App\Domain\RepoAccess\Services\RepoAccessService;
 use App\Enums\BillingProvider;
 use App\Enums\OAuthProvider;
 use App\Enums\OrderStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
@@ -124,5 +127,59 @@ class RepoAccessAutomationTest extends TestCase
         config()->set('repo_access.enabled', true);
         event(new SubscriptionStarted($subscription, 2900, 'USD'));
         Http::assertNothingSent();
+    }
+
+    public function test_owner_collaborator_validation_error_is_stored_as_friendly_message(): void
+    {
+        $user = User::factory()->create();
+        app(RepoAccessService::class)->setGitHubUsername($user, 'acme', 1, 'test');
+
+        Http::fake([
+            'https://api.github.com/repos/acme/saas-kit-private/collaborators/acme' => Http::response([
+                'message' => 'Validation Failed',
+                'errors' => [
+                    [
+                        'resource' => 'Repository',
+                        'code' => 'custom',
+                        'message' => 'Repository owner cannot be a collaborator.',
+                    ],
+                ],
+            ], 422),
+        ]);
+
+        app(GitHubRepositoryAccessService::class)->grantReadAccess($user, 'test');
+
+        $this->assertDatabaseHas('repo_access_grants', [
+            'user_id' => $user->id,
+            'provider' => 'github',
+            'repository_owner' => 'acme',
+            'repository_name' => 'saas-kit-private',
+            'status' => 'failed',
+            'last_error' => 'The selected username owns acme/saas-kit-private and already has access. Choose the customer GitHub account instead.',
+        ]);
+    }
+
+    public function test_connection_errors_are_stored_as_friendly_message(): void
+    {
+        $user = User::factory()->create();
+        app(RepoAccessService::class)->setGitHubUsername($user, 'octocat', 1, 'test');
+
+        Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out after 15001 milliseconds'));
+
+        try {
+            app(GitHubRepositoryAccessService::class)->grantReadAccess($user, 'test');
+            $this->fail('Expected repository grant to throw on connection failure.');
+        } catch (ConnectionException) {
+            // Expected. The job should retry while the persisted grant keeps a user-safe error.
+        }
+
+        $this->assertDatabaseHas('repo_access_grants', [
+            'user_id' => $user->id,
+            'provider' => 'github',
+            'repository_owner' => 'acme',
+            'repository_name' => 'saas-kit-private',
+            'status' => 'failed',
+            'last_error' => 'GitHub API could not be reached. Please try again in a moment.',
+        ]);
     }
 }

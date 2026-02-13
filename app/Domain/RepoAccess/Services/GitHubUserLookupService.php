@@ -129,6 +129,8 @@ class GitHubUserLookupService
             ->retry(
                 (int) config('repo_access.github.retries', 2),
                 (int) config('repo_access.github.retry_delay_ms', 400),
+                null,
+                false,
             );
 
         if ($token !== '') {
