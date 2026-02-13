@@ -54,15 +54,9 @@ class RepoAccessActionsTest extends TestCase
             'provider_name' => 'octocat',
         ]);
 
-        Order::query()->create([
+        Subscription::factory()->create([
             'user_id' => $user->id,
-            'provider' => BillingProvider::Stripe,
-            'provider_id' => 'pi_sync_123',
-            'plan_key' => 'lifetime',
-            'status' => OrderStatus::Paid,
-            'amount' => 4900,
-            'currency' => 'USD',
-            'metadata' => [],
+            'status' => SubscriptionStatus::Active,
         ]);
 
         $response = $this->actingAs($user)->from('/profile')->post('/repo-access/sync');

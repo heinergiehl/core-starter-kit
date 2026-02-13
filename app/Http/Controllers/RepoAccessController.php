@@ -47,6 +47,21 @@ class RepoAccessController extends Controller
             return back()->with('error', $message);
         }
 
+        $existingGrant = $repoAccessService->grantForUser($user);
+        $existingStatus = $existingGrant?->status?->value;
+        if (in_array($existingStatus, ['queued', 'processing'], true)) {
+            $message = __('Repository access grant is already in progress. Please wait a moment.');
+
+            if ($isJson) {
+                return response()->json([
+                    'message' => $message,
+                    'status' => $existingStatus,
+                ], 202);
+            }
+
+            return back()->with('info', $message);
+        }
+
         $repoAccessService->queueGrant($user, 'manual_sync');
 
         if ($isJson) {
@@ -167,6 +182,10 @@ class RepoAccessController extends Controller
         $effectiveUsername = $selectedUsername !== '' ? $selectedUsername : $accountUsername;
         $grantStatus = $grant?->status?->value;
         $isGranted = in_array($grantStatus, ['invited', 'granted'], true);
+        $isInProgress = in_array($grantStatus, ['queued', 'processing'], true);
+        $isStale = $isInProgress
+            && $grant?->updated_at !== null
+            && $grant->updated_at->lt(now()->subMinutes(2));
 
         return response()->json([
             'enabled' => $enabled,
@@ -177,9 +196,12 @@ class RepoAccessController extends Controller
             'grant_status' => $grantStatus,
             'grant_label' => $grant?->status?->getLabel(),
             'grant_error' => $grant?->last_error,
+            'last_attempted_at' => $grant?->last_attempted_at?->toIso8601String(),
             'repository' => $repoAccessService->repositoryLabel(),
             'is_granted' => $isGranted,
-            'can_sync' => $enabled && $eligible && $effectiveUsername !== '' && ! $isGranted,
+            'is_in_progress' => $isInProgress,
+            'is_stale' => $isStale,
+            'can_sync' => $enabled && $eligible && $effectiveUsername !== '' && ! $isGranted && ! $isInProgress,
         ]);
     }
 }

@@ -484,6 +484,16 @@
                         errorElement.classList.add('hidden');
                     }
 
+                    if (state.is_in_progress) {
+                        if (state.is_stale) {
+                            setFeedback(@json(__('Still processing longer than expected. If this persists, your queue worker may be offline.')), 'error');
+                        } else {
+                            setFeedback(@json(__('Repository access is processing. This usually finishes within about a minute.')), 'info');
+                        }
+                    } else if (!state.is_granted && !state.grant_error) {
+                        setFeedback('', 'info');
+                    }
+
                     setSyncDisabled(isSyncing || !state.can_sync);
 
                     if (state.is_granted) {
