@@ -3,8 +3,8 @@
 namespace App\Domain\RepoAccess\Services;
 
 use App\Domain\Identity\Models\SocialAccount;
-use App\Enums\RepoAccessGrantStatus;
 use App\Enums\OAuthProvider;
+use App\Enums\RepoAccessGrantStatus;
 use App\Models\User;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\Http;

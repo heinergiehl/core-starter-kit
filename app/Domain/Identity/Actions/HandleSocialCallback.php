@@ -4,9 +4,9 @@ namespace App\Domain\Identity\Actions;
 
 use App\Domain\Identity\Models\SocialAccount;
 use App\Models\User;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Contracts\User as SocialiteUser;
 
 class HandleSocialCallback
