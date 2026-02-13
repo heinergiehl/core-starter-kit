@@ -91,7 +91,7 @@ class SocialAuthController extends Controller
             }
 
             return redirect()
-                ->route('profile.edit')
+                ->intended(route('profile.edit'))
                 ->with('success', __('Your :provider account is now connected.', [
                     'provider' => ucfirst($provider),
                 ]));

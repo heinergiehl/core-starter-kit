@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Billing;
 use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\RepoAccess\Services\RepoAccessService;
 use App\Enums\SubscriptionStatus;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,8 @@ class BillingController
     public function __construct(
         private readonly BillingPlanService $planService,
         private readonly \App\Domain\Billing\Services\BillingDashboardService $dashboardService,
-        private readonly \App\Domain\Billing\Services\SubscriptionService $subscriptionService
+        private readonly \App\Domain\Billing\Services\SubscriptionService $subscriptionService,
+        private readonly RepoAccessService $repoAccessService
     ) {}
 
     /**
@@ -27,6 +29,16 @@ class BillingController
         abort_unless($user, 403);
 
         $data = $this->dashboardService->getData($user);
+        $githubAccount = $this->repoAccessService->githubAccount($user);
+        $repoAccessGrant = $this->repoAccessService->grantForUser($user);
+
+        $data = array_merge($data, [
+            'repoAccessEnabled' => $this->repoAccessService->isEnabled(),
+            'repoAccessGrant' => $repoAccessGrant,
+            'repoAccessGithubAccount' => $githubAccount,
+            'repoAccessRepository' => $this->repoAccessService->repositoryLabel(),
+            'canRequestRepoAccess' => $this->repoAccessService->hasEligiblePurchase($user),
+        ]);
 
         return view('billing.index', $data);
     }

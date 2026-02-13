@@ -25,6 +25,22 @@
                 </div>
             @endif
 
+            @php
+                $repoAccessGrantStatus = $repoAccessGrant?->status?->value;
+                $repoAccessGranted = in_array($repoAccessGrantStatus, ['invited', 'granted'], true);
+                $repoAccessGithubConnected = (bool) $repoAccessGithubAccount;
+                $repoAccessPromptRequested = request()->boolean('checkout_success') || request()->boolean('repo_access');
+                $showRepoAccessModal = $repoAccessEnabled
+                    && $canRequestRepoAccess
+                    && ! $repoAccessGranted
+                    && $repoAccessPromptRequested;
+                $repoAccessConnectUrl = route('social.redirect', [
+                    'provider' => 'github',
+                    'connect' => 1,
+                    'intended' => route('billing.index', ['checkout_success' => 1, 'repo_access' => 1], absolute: false),
+                ]);
+            @endphp
+
             @if ($subscription)
                 @php
                     $statusColors = [
@@ -332,6 +348,234 @@
             @endif
         </div>
     </div>
+
+    @if ($repoAccessEnabled && $canRequestRepoAccess)
+        <div id="repo-access-modal" class="{{ $showRepoAccessModal ? '' : 'hidden' }} fixed inset-0 z-50 overflow-y-auto" aria-labelledby="repo-access-modal-title" role="dialog" aria-modal="true">
+            <div class="flex min-h-screen items-center justify-center px-4 py-12">
+                <div id="repo-access-modal-backdrop" class="fixed inset-0 bg-black/50 backdrop-blur-sm"></div>
+
+                <div class="relative glass-panel rounded-[32px] p-8 max-w-xl w-full">
+                    <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Post-checkout access') }}</p>
+                    <h3 class="mt-2 text-2xl font-display text-ink" id="repo-access-modal-title">{{ __('Connect GitHub to unlock repository access') }}</h3>
+                    <p class="mt-2 text-sm text-ink/60">
+                        {{ __('After payment, we need your GitHub account before we can grant private repository access.') }}
+                    </p>
+
+                    <div class="mt-6 rounded-2xl border border-ink/10 bg-surface/20 p-4">
+                        <p class="text-xs font-medium uppercase tracking-wide text-ink/50">{{ __('Repository') }}</p>
+                        <p id="repo-access-modal-repository" class="mt-1 text-sm font-semibold text-ink">{{ $repoAccessRepository }}</p>
+
+                        <p class="mt-4 text-xs font-medium uppercase tracking-wide text-ink/50">{{ __('Connected account') }}</p>
+                        <p id="repo-access-modal-username" class="mt-1 text-sm font-semibold text-ink">
+                            @if ($repoAccessGithubConnected)
+                                @php
+                                    $initialGithubUsername = trim((string) ($repoAccessGrant?->github_username ?? $repoAccessGithubAccount?->provider_name ?? ''));
+                                @endphp
+                                {{ $initialGithubUsername !== '' ? '@'.$initialGithubUsername : __('Connected') }}
+                            @else
+                                {{ __('Not connected') }}
+                            @endif
+                        </p>
+
+                        <p class="mt-4 text-xs font-medium uppercase tracking-wide text-ink/50">{{ __('Access status') }}</p>
+                        <p id="repo-access-modal-status" class="mt-1 text-sm font-semibold text-ink">
+                            {{ $repoAccessGrant?->status?->getLabel() ?? __('Awaiting confirmation') }}
+                        </p>
+                        <p id="repo-access-modal-error" class="mt-2 text-xs text-rose-600 {{ $repoAccessGrant?->last_error ? '' : 'hidden' }}">
+                            {{ $repoAccessGrant?->last_error }}
+                        </p>
+                        <p id="repo-access-modal-feedback" class="mt-2 text-xs text-blue-600 hidden"></p>
+                    </div>
+
+                    <div class="mt-6 flex flex-wrap items-center gap-3">
+                        <a id="repo-access-connect-button" href="{{ $repoAccessConnectUrl }}" class="btn-secondary">
+                            {{ $repoAccessGithubConnected ? __('Switch GitHub Account') : __('Connect GitHub') }}
+                        </a>
+                        <button id="repo-access-sync-button" type="button" class="btn-primary">
+                            {{ __('Confirm and Grant Access') }}
+                        </button>
+                        <button id="repo-access-modal-close" type="button" class="text-sm font-medium text-ink/60 hover:text-ink">
+                            {{ __('Later') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            (() => {
+                const modal = document.getElementById('repo-access-modal');
+                if (!modal) {
+                    return;
+                }
+
+                const shouldPrompt = @json($showRepoAccessModal);
+                const initialConnected = @json($repoAccessGithubConnected);
+                const initialGranted = @json($repoAccessGranted);
+                const statusUrl = @json(route('repo-access.status'));
+                const syncUrl = @json(route('repo-access.sync', [], false));
+                const csrfToken = @json(csrf_token());
+
+                const backdrop = document.getElementById('repo-access-modal-backdrop');
+                const closeButton = document.getElementById('repo-access-modal-close');
+                const connectButton = document.getElementById('repo-access-connect-button');
+                const syncButton = document.getElementById('repo-access-sync-button');
+                const statusElement = document.getElementById('repo-access-modal-status');
+                const usernameElement = document.getElementById('repo-access-modal-username');
+                const errorElement = document.getElementById('repo-access-modal-error');
+                const feedbackElement = document.getElementById('repo-access-modal-feedback');
+                const repositoryElement = document.getElementById('repo-access-modal-repository');
+
+                let pollTimer = null;
+                let isSyncing = false;
+
+                const setFeedback = (message, tone = 'info') => {
+                    feedbackElement.textContent = message || '';
+                    feedbackElement.classList.toggle('hidden', !message);
+                    feedbackElement.classList.remove('text-blue-600', 'text-emerald-600', 'text-rose-600');
+                    feedbackElement.classList.add(
+                        tone === 'success' ? 'text-emerald-600' : (tone === 'error' ? 'text-rose-600' : 'text-blue-600')
+                    );
+                };
+
+                const render = (state) => {
+                    if (repositoryElement && state.repository) {
+                        repositoryElement.textContent = state.repository;
+                    }
+
+                    const username = state.github_username ? `@${state.github_username}` : @json(__('Not connected'));
+                    usernameElement.textContent = username;
+                    connectButton.textContent = state.github_connected
+                        ? @json(__('Switch GitHub Account'))
+                        : @json(__('Connect GitHub'));
+
+                    if (!state.enabled) {
+                        statusElement.textContent = @json(__('Repository access module is disabled.'));
+                        syncButton.disabled = true;
+                        syncButton.classList.add('opacity-60', 'cursor-not-allowed');
+                        return;
+                    }
+
+                    if (!state.eligible) {
+                        statusElement.textContent = @json(__('Eligible purchase required.'));
+                        syncButton.disabled = true;
+                        syncButton.classList.add('opacity-60', 'cursor-not-allowed');
+                        return;
+                    }
+
+                    if (state.grant_label) {
+                        statusElement.textContent = state.grant_label;
+                    } else if (state.github_connected) {
+                        statusElement.textContent = @json(__('Ready to grant repository access.'));
+                    } else {
+                        statusElement.textContent = @json(__('Connect GitHub to continue.'));
+                    }
+
+                    if (state.grant_error) {
+                        errorElement.textContent = state.grant_error;
+                        errorElement.classList.remove('hidden');
+                    } else {
+                        errorElement.textContent = '';
+                        errorElement.classList.add('hidden');
+                    }
+
+                    syncButton.disabled = isSyncing || !state.can_sync;
+                    syncButton.classList.toggle('opacity-60', syncButton.disabled);
+                    syncButton.classList.toggle('cursor-not-allowed', syncButton.disabled);
+
+                    if (state.is_granted) {
+                        setFeedback(@json(__('Repository access is confirmed.')), 'success');
+                        syncButton.disabled = true;
+                    }
+                };
+
+                const fetchStatus = async () => {
+                    const response = await fetch(statusUrl, {
+                        headers: { 'Accept': 'application/json' },
+                        credentials: 'same-origin',
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('status_fetch_failed');
+                    }
+
+                    const data = await response.json();
+                    render(data);
+                    return data;
+                };
+
+                const queueSync = async () => {
+                    if (isSyncing) {
+                        return;
+                    }
+
+                    isSyncing = true;
+                    setFeedback(@json(__('Queuing repository access...')));
+                    syncButton.disabled = true;
+                    syncButton.classList.add('opacity-60', 'cursor-not-allowed');
+
+                    try {
+                        const response = await fetch(syncUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': csrfToken,
+                            },
+                            credentials: 'same-origin',
+                            body: JSON.stringify({ source: 'billing_modal' }),
+                        });
+
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok) {
+                            throw new Error(data.message || 'sync_failed');
+                        }
+
+                        setFeedback(data.message || @json(__('Repository access sync has been queued.')), 'success');
+                        await fetchStatus();
+                    } catch (error) {
+                        setFeedback(error.message || @json(__('Could not queue repository access sync.')), 'error');
+                    } finally {
+                        isSyncing = false;
+                    }
+                };
+
+                const openModal = () => {
+                    modal.classList.remove('hidden');
+                };
+
+                const closeModal = () => {
+                    modal.classList.add('hidden');
+                };
+
+                closeButton?.addEventListener('click', closeModal);
+                backdrop?.addEventListener('click', closeModal);
+                syncButton?.addEventListener('click', queueSync);
+
+                const shouldOpenFromQuery = new URLSearchParams(window.location.search).get('repo_access') === '1';
+
+                if (shouldPrompt || shouldOpenFromQuery) {
+                    openModal();
+                }
+
+                if (shouldPrompt || shouldOpenFromQuery || initialConnected || initialGranted) {
+                    fetchStatus().catch(() => {
+                        setFeedback(@json(__('Could not validate GitHub access status yet.')), 'error');
+                    });
+
+                    pollTimer = window.setInterval(() => {
+                        fetchStatus().catch(() => {});
+                    }, 3000);
+                }
+
+                window.addEventListener('beforeunload', () => {
+                    if (pollTimer) {
+                        window.clearInterval(pollTimer);
+                    }
+                });
+            })();
+        </script>
+    @endif
 
     <!-- Cancel Modal -->
     @if ($subscription && $canCancel)

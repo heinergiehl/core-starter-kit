@@ -3,11 +3,13 @@
 namespace Tests\Feature\RepoAccess;
 
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Subscription;
 use App\Domain\Identity\Models\SocialAccount;
 use App\Domain\RepoAccess\Jobs\GrantGitHubRepositoryAccessJob;
 use App\Enums\BillingProvider;
 use App\Enums\OAuthProvider;
 use App\Enums\OrderStatus;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -43,6 +45,14 @@ class RepoAccessActionsTest extends TestCase
 
         $user = User::factory()->create();
 
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'provider' => OAuthProvider::GitHub,
+            'provider_id' => '12345',
+            'provider_email' => $user->email,
+            'provider_name' => 'octocat',
+        ]);
+
         Order::query()->create([
             'user_id' => $user->id,
             'provider' => BillingProvider::Stripe,
@@ -70,6 +80,94 @@ class RepoAccessActionsTest extends TestCase
             'repository_name' => 'saas-kit-private',
             'status' => 'queued',
         ]);
+    }
+
+    public function test_manual_repo_access_sync_requires_linked_github_account(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        $response = $this->actingAs($user)->from('/profile')->post('/repo-access/sync');
+
+        $response->assertRedirect('/profile');
+        $response->assertSessionHas('error');
+        Queue::assertNothingPushed();
+    }
+
+    public function test_repo_access_status_endpoint_returns_realtime_state(): void
+    {
+        $user = User::factory()->create();
+
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'provider' => OAuthProvider::GitHub,
+            'provider_id' => '67890',
+            'provider_email' => $user->email,
+            'provider_name' => 'octocat',
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_status_123',
+            'plan_key' => 'lifetime',
+            'status' => OrderStatus::Paid,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'metadata' => [],
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson('/repo-access/status');
+
+        $response->assertOk()
+            ->assertJson([
+                'enabled' => true,
+                'eligible' => true,
+                'github_connected' => true,
+                'github_username' => 'octocat',
+                'repository' => 'acme/saas-kit-private',
+            ]);
+    }
+
+    public function test_manual_repo_access_sync_returns_json_when_requested(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'provider' => OAuthProvider::GitHub,
+            'provider_id' => '22222',
+            'provider_email' => $user->email,
+            'provider_name' => 'octocat',
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_sync_789',
+            'plan_key' => 'lifetime',
+            'status' => OrderStatus::Paid,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'metadata' => [],
+        ]);
+
+        $response = $this->actingAs($user)
+            ->postJson('/repo-access/sync');
+
+        $response->assertStatus(202)
+            ->assertJson([
+                'status' => 'queued',
+            ]);
     }
 
     public function test_disconnect_github_removes_social_account_and_sets_waiting_status(): void

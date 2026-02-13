@@ -168,7 +168,10 @@ For staging subscription rehearsals, seed recurring plans with `php artisan bill
   - a subscription starts (`SubscriptionStarted` event), or
   - a one-time order transitions to `paid`/`completed`.
 - Requirement: the user must have a linked GitHub social account so their GitHub identity can be resolved.
-- UI flow: users can connect/switch/disconnect GitHub and request a sync from `Profile` (`/profile`), where current repo-access status is shown.
+- UI flow:
+  - after successful checkout, users are prompted on `Billing` (`/billing`) with a modal to connect GitHub and confirm access sync,
+  - users can also connect/switch/disconnect GitHub and request sync from `Profile` (`/profile`),
+  - repo-access status is polled in real time via `/repo-access/status`.
 
 ---
 

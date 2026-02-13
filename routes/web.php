@@ -214,6 +214,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/repo-access/status', [RepoAccessController::class, 'status'])->name('repo-access.status');
     Route::post('/repo-access/sync', [RepoAccessController::class, 'sync'])->name('repo-access.sync');
     Route::delete('/repo-access/github', [RepoAccessController::class, 'disconnectGithub'])->name('repo-access.github.disconnect');
     Route::post('/two-factor/enable', [TwoFactorController::class, 'enable'])->name('two-factor.enable');

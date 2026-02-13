@@ -8,7 +8,9 @@
     @php
         $portalUrl = route('billing.portal');
         $isLoggedIn = auth()->check();
-        $successRedirect = $isLoggedIn ? route('billing.index') : route('login');
+        $successRedirect = $isLoggedIn
+            ? route('billing.index', ['checkout_success' => 1, 'repo_access' => 1])
+            : route('login');
     @endphp
 
     <section class="py-16">
