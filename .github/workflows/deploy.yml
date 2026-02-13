@@ -92,6 +92,7 @@ jobs:
 
       - name: Validate required secrets
         env:
+          DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
           APP_KEY: ${{ secrets.APP_KEY || vars.APP_KEY }}
           APP_URL: ${{ secrets.APP_URL || vars.APP_URL }}
           DB_HOST: ${{ secrets.DB_HOST || vars.DB_HOST }}
@@ -118,10 +119,6 @@ jobs:
           required_vars=(
             APP_KEY
             APP_URL
-            DB_HOST
-            DB_DATABASE
-            DB_USERNAME
-            DB_PASSWORD
             STRIPE_KEY
             STRIPE_SECRET
             STRIPE_WEBHOOK_SECRET
@@ -129,12 +126,31 @@ jobs:
             PADDLE_API_KEY
             PADDLE_WEBHOOK_SECRET
           )
+
+          # For staging, DB values may be omitted and docker-compose defaults are used.
+          if [ "${DEPLOY_ENV}" != "staging" ]; then
+            required_vars+=(
+              DB_HOST
+              DB_DATABASE
+              DB_USERNAME
+              DB_PASSWORD
+            )
+          fi
+
           for var in "${required_vars[@]}"; do
             if [ -z "${!var:-}" ]; then
               echo "::error::Missing required secret: ${var}"
               missing=1
             fi
           done
+
+          if [ "${DEPLOY_ENV}" = "staging" ]; then
+            for var in DB_HOST DB_DATABASE DB_USERNAME DB_PASSWORD; do
+              if [ -z "${!var:-}" ]; then
+                echo "::warning::${var} is not set for staging. Falling back to docker-compose defaults."
+              fi
+            done
+          fi
 
           if [ "$missing" -ne 0 ]; then
             exit 1
@@ -186,11 +202,11 @@ jobs:
             LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
             
             DB_CONNECTION=pgsql
-            DB_HOST=${{ secrets.DB_HOST || vars.DB_HOST }}
+            DB_HOST=${{ secrets.DB_HOST || vars.DB_HOST || (github.event_name == 'workflow_run' && '127.0.0.1' || '') }}
             DB_PORT=5432
-            DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE }}
-            DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD }}
+            DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE || (github.event_name == 'workflow_run' && 'laravel' || '') }}
+            DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME || (github.event_name == 'workflow_run' && 'root' || '') }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || (github.event_name == 'workflow_run' && 'secret' || '') }}
             
             SESSION_DRIVER=database
             SESSION_LIFETIME=120
