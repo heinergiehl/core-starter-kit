@@ -59,16 +59,15 @@ Billing is webhook-driven. A successful redirect is not proof of payment until t
 2) Configure webhooks on Stripe/Paddle to hit:
    - `POST /webhooks/stripe`
    - `POST /webhooks/paddle`
-3) Validate everything end-to-end:
+3) Validate runtime + billing end-to-end:
 ```bash
+php artisan app:check-readiness
+php artisan app:check-readiness --strict
 php artisan billing:check-readiness
 php artisan billing:check-readiness --strict
 ```
 
 Next: see `docs/billing.md` and run `docs/billing-go-live-checklist.md` before production billing changes.
-
-## 5) Recommended reading order
-Next: see [Billing](billing.md) and run the [Billing Go-Live Checklist](billing-go-live-checklist.md) before production billing changes.
 
 ## 5) Recommended reading order
 1) [Architecture](architecture.md) (boundaries + entitlements + webhook pipeline)

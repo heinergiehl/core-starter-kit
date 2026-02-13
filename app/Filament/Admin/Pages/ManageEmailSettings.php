@@ -39,13 +39,17 @@ class ManageEmailSettings extends Page implements HasForms
     public function mount(): void
     {
         $settings = app(AppSettingsService::class);
+        $providerOptions = app(MailSettingsService::class)->providerOptions();
+        $selectedProvider = (string) ($settings->get('mail.provider') ?? '');
+
+        if (! array_key_exists($selectedProvider, $providerOptions)) {
+            $selectedProvider = (string) array_key_first($providerOptions);
+        }
 
         $this->form->fill([
-            'mail_provider' => $settings->get('mail.provider'),
+            'mail_provider' => $selectedProvider,
             'from_address' => $settings->get('mail.from.address'),
             'from_name' => $settings->get('mail.from.name'),
-            'mailgun_domain' => $settings->get('mail.mailgun.domain'),
-            'mailgun_endpoint' => $settings->get('mail.mailgun.endpoint'),
             'ses_region' => $settings->get('mail.ses.region'),
         ]);
     }
@@ -76,8 +80,6 @@ class ManageEmailSettings extends Page implements HasForms
                 Section::make('Credential rotation')
                     ->description('Leave secret inputs blank to keep existing credentials. Use these toggles to clear stored secrets.')
                     ->schema([
-                        Toggle::make('clear_mailgun_secret')
-                            ->label('Clear Mailgun secret'),
                         Toggle::make('clear_postmark_token')
                             ->label('Clear Postmark token'),
                         Toggle::make('clear_ses_key')
@@ -85,26 +87,6 @@ class ManageEmailSettings extends Page implements HasForms
                         Toggle::make('clear_ses_secret')
                             ->label('Clear SES secret key'),
                     ])
-                    ->columns(2),
-                Section::make('Mailgun')
-                    ->schema([
-                        TextInput::make('mailgun_domain')
-                            ->label('Domain')
-                            ->required(fn (Get $get): bool => $get('mail_provider') === 'mailgun')
-                            ->maxLength(255),
-                        TextInput::make('mailgun_secret')
-                            ->label('Secret')
-                            ->password()
-                            ->revealable()
-                            ->maxLength(255)
-                            ->helperText('Leave blank to keep the existing secret.'),
-                        TextInput::make('mailgun_endpoint')
-                            ->label('Endpoint')
-                            ->placeholder('api.mailgun.net')
-                            ->required(fn (Get $get): bool => $get('mail_provider') === 'mailgun')
-                            ->maxLength(255),
-                    ])
-                    ->visible(fn (Get $get): bool => $get('mail_provider') === 'mailgun')
                     ->columns(2),
                 Section::make('Postmark')
                     ->schema([
@@ -154,15 +136,6 @@ class ManageEmailSettings extends Page implements HasForms
         $settings->set('mail.from.address', $data['from_address'] ?? null, 'mail');
         $settings->set('mail.from.name', $data['from_name'] ?? null, 'mail');
 
-        $settings->set('mail.mailgun.domain', $data['mailgun_domain'] ?? null, 'mail');
-        $settings->set('mail.mailgun.endpoint', $data['mailgun_endpoint'] ?? null, 'mail');
-
-        $this->storeSecret(
-            $settings,
-            'mail.mailgun.secret',
-            $data['mailgun_secret'] ?? null,
-            (bool) ($data['clear_mailgun_secret'] ?? false)
-        );
         $this->storeSecret(
             $settings,
             'mail.postmark.token',
@@ -241,15 +214,6 @@ class ManageEmailSettings extends Page implements HasForms
 
         if (! in_array($provider, $validProviders, true)) {
             $errors['data.mail_provider'] = 'Please select a valid mail provider.';
-        }
-
-        if ($provider === 'mailgun' && $this->secretMissingForProvider(
-            $settings,
-            'mail.mailgun.secret',
-            $data['mailgun_secret'] ?? null,
-            (bool) ($data['clear_mailgun_secret'] ?? false)
-        )) {
-            $errors['data.mailgun_secret'] = 'Mailgun secret is required when Mailgun is selected.';
         }
 
         if ($provider === 'postmark' && $this->secretMissingForProvider(

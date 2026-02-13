@@ -6,6 +6,7 @@ use App\Domain\Billing\Services\EntitlementService;
 use App\Domain\Settings\Services\AppSettingsService;
 use App\Domain\Settings\Services\BrandingService;
 use App\Domain\Settings\Services\MailSettingsService;
+use App\Enums\OrderStatus;
 use App\Support\Authorization\PermissionGuardrails;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Support\Facades\Event;
@@ -66,6 +67,30 @@ class AppServiceProvider extends ServiceProvider
                 $entitlements = app(EntitlementService::class)->forUser($user);
                 $view->with('entitlements', $entitlements);
             }
+        });
+
+        View::composer(['partials.marketing-nav'], function ($view): void {
+            $user = request()->user();
+            $hasSubscription = false;
+            $hasPurchase = false;
+            $isAdmin = false;
+
+            if ($user) {
+                $hasSubscription = $user->hasActiveSubscription();
+                $isAdmin = (bool) $user->is_admin;
+
+                if (! $hasSubscription && ! $isAdmin) {
+                    $hasPurchase = \App\Domain\Billing\Models\Order::query()
+                        ->where('user_id', $user->id)
+                        ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
+                        ->exists();
+                }
+            }
+
+            $view->with('marketingNavUser', $user);
+            $view->with('marketingNavHasSubscription', $hasSubscription);
+            $view->with('marketingNavHasPurchase', $hasPurchase);
+            $view->with('marketingNavIsAdmin', $isAdmin);
         });
 
         Event::subscribe(\App\Domain\Billing\Listeners\SendSubscriptionNotifications::class);

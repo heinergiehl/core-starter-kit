@@ -13,6 +13,31 @@ class ManageEmailSettingsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_manage_email_settings_rejects_unsupported_provider_ids(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $this->actingAs($admin);
+
+        Livewire::test(ManageEmailSettings::class)
+            ->set('data.mail_provider', 'mailgun')
+            ->set('data.from_address', 'noreply@example.com')
+            ->set('data.from_name', 'Example')
+            ->call('save')
+            ->assertHasErrors(['data.mail_provider']);
+    }
+
+    public function test_manage_email_settings_mounts_with_default_supported_provider_when_stored_provider_is_unsupported(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        app(AppSettingsService::class)->set('mail.provider', 'mailgun', 'mail');
+
+        $this->actingAs($admin);
+
+        Livewire::test(ManageEmailSettings::class)
+            ->assertSet('data.mail_provider', 'postmark');
+    }
+
     public function test_manage_email_settings_requires_postmark_token_when_missing(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

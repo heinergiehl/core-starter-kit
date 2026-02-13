@@ -73,7 +73,9 @@ class SetLocale
 
             // Extract base language code (e.g., "de-DE" -> "de")
             $langCode = strtolower(explode('-', $lang)[0]);
-            $languages[$langCode] = $quality;
+            $languages[$langCode] = isset($languages[$langCode])
+                ? max($languages[$langCode], $quality)
+                : $quality;
         }
 
         // Sort by quality descending

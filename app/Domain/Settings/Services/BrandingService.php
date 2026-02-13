@@ -11,7 +11,9 @@ use Illuminate\Support\Str;
 class BrandingService
 {
     private const CACHE_TTL_MINUTES = 5;
+
     private const DEFAULT_EMAIL_PRIMARY = '#4F46E5';
+
     private const DEFAULT_EMAIL_SECONDARY = '#A855F7';
 
     public function appName(): string

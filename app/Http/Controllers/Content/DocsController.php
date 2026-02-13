@@ -130,6 +130,7 @@ class DocsController
             'testing',
             'security',
             'billing-go-live-checklist',
+            'customer-release-checklist',
             'email-client-qa',
             'versions',
         ];

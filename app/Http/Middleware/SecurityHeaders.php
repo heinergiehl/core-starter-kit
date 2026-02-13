@@ -88,8 +88,10 @@ class SecurityHeaders
         $viteDevServer = '';
         $viteWss = '';
         // This starter currently relies on Alpine/Livewire runtime expression evaluation.
-        // Keep unsafe-eval enabled until the frontend is fully migrated to CSP-safe evaluators.
-        $unsafeEval = " 'unsafe-eval'";
+        // Toggle unsafe-eval from config/env so hardening can be rolled out safely per environment.
+        $unsafeEval = (bool) config('saas.security.allow_unsafe_eval', true)
+            ? " 'unsafe-eval'"
+            : '';
         // Allow https: for form actions to prevent blocking seemingly valid secure submissions
         $formAction = "'self' https:";
 

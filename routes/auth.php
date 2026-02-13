@@ -34,6 +34,9 @@ Route::middleware('guest')->group(function () {
     Route::post('login', [AuthenticatedSessionController::class, 'store'])
         ->name('login.store');
 
+    Route::view('two-factor/challenge', 'auth.two-factor-challenge')
+        ->name('two-factor.challenge');
+
     // Social Authentication
     Route::get('auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
         ->name('social.redirect');

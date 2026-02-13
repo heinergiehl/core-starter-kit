@@ -2,7 +2,6 @@
 
 namespace App\Domain\Settings\Services;
 
-use App\Domain\Settings\Mail\MailgunProvider;
 use App\Domain\Settings\Mail\MailProvider;
 use App\Domain\Settings\Mail\PostmarkProvider;
 use App\Domain\Settings\Mail\SesProvider;
@@ -15,7 +14,6 @@ class MailSettingsService
     public function providers(): array
     {
         return [
-            new MailgunProvider,
             new PostmarkProvider,
             new SesProvider,
         ];
@@ -31,10 +29,6 @@ class MailSettingsService
 
         $providerId = $settings->get('mail.provider');
 
-        if ($providerId) {
-            config(['mail.default' => $providerId]);
-        }
-
         $fromAddress = $settings->get('mail.from.address');
         $fromName = $settings->get('mail.from.name');
 
@@ -48,6 +42,7 @@ class MailSettingsService
 
         $provider = $this->resolveProvider((string) $providerId);
         if ($provider) {
+            config(['mail.default' => $provider->id()]);
             $provider->apply($settings->all());
         }
     }

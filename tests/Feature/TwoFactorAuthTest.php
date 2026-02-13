@@ -76,6 +76,39 @@ class TwoFactorAuthTest extends TestCase
         ]);
     }
 
+    public function test_login_redirects_to_two_factor_challenge_when_enabled(): void
+    {
+        $user = $this->createUser([
+            'password' => bcrypt('password'),
+        ]);
+
+        TwoFactorAuth::create([
+            'user_id' => $user->id,
+            'secret' => Crypt::encryptString(TwoFactorAuth::generateSecret()),
+            'enabled_at' => now(),
+            'confirmed_at' => now(),
+        ]);
+
+        $response = $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('two-factor.challenge'));
+        $this->assertGuest();
+        $this->assertSame($user->id, session('2fa_user_id'));
+    }
+
+    public function test_two_factor_challenge_route_can_be_rendered_for_pending_challenge(): void
+    {
+        $user = $this->createUser();
+
+        $response = $this->withSession(['2fa_user_id' => $user->id])
+            ->get(route('two-factor.challenge'));
+
+        $response->assertOk();
+    }
+
     public function test_two_factor_model_verifies_code(): void
     {
         $user = $this->createUser();

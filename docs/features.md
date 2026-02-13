@@ -47,7 +47,7 @@ Status legend:
 ## 6) DevOps
 | Feature | Status | Notes |
 | --- | --- | --- |
-| One-command deploy | Planned | No Deployer/Forge script included yet. |
+| Deploy workflow template | Partial | `.github/workflows/deploy.yml` ships as a VPS template; infra-specific customization is required. |
 | Upgrade guide | Done | `UPGRADING.md` present. |
 
 ---
@@ -55,4 +55,4 @@ Status legend:
 ## Next targets (recommended)
 1) Harden webhook verification for Paddle.
 2) Expand branded email templates + fixtures.
-3) Add a one-command deploy workflow/runbook.
+3) Add an optional one-command deploy script/runbook for common hosts.

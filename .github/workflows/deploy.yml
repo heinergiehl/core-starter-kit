@@ -1,4 +1,4 @@
-name: Deploy Shipsolid
+name: Deploy SaaS Kit
 
 on:
   workflow_run:
@@ -13,7 +13,7 @@ on:
         default: "main"
 
 concurrency:
-  group: shipsolid-deploy-${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
+  group: saas-kit-deploy-${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
   cancel-in-progress: false
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
       DEPLOY_ENV: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
       DEPLOY_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.ref || 'main' }}
       PADDLE_ENV_DEFAULT: ${{ github.event_name == 'workflow_run' && 'sandbox' || 'production' }}
-      VPS_PATH: ${{ vars.VPS_PATH || (github.event_name == 'workflow_run' && '/var/www/myapps/shipsolid-staging' || '/var/www/myapps/shipsolid') }}
+      VPS_PATH: ${{ vars.VPS_PATH || (github.event_name == 'workflow_run' && '/var/www/saas-kit-staging' || '/var/www/saas-kit') }}
       WEB_GROUP: ${{ vars.WEB_GROUP || 'www-data' }}
       RUN_BILLING_BOOTSTRAP: ${{ vars.RUN_BILLING_BOOTSTRAP || 'false' }}
 
@@ -109,18 +109,13 @@ jobs:
           set -Eeuo pipefail
           missing=0
 
-          warn_if_default() {
-            local var="$1"
-            local default_value="$2"
-
-            if [ -z "${!var:-}" ]; then
-              echo "::warning::${var} is not set. Using workflow default: ${default_value}"
-            fi
-          }
-
           required_vars=(
             APP_KEY
             APP_URL
+            DB_HOST
+            DB_DATABASE
+            DB_USERNAME
+            DB_PASSWORD
             STRIPE_KEY
             STRIPE_SECRET
             STRIPE_WEBHOOK_SECRET
@@ -143,15 +138,10 @@ jobs:
             echo "::warning::PADDLE_CLIENT_SIDE_TOKEN is not set. Paddle inline checkout UI token is optional."
           fi
 
-          warn_if_default DB_HOST 172.17.0.1
-          warn_if_default DB_DATABASE laravel
-          warn_if_default DB_USERNAME root
-          warn_if_default DB_PASSWORD secret
-
       - name: Generate .env
         env:
           ENV_FILE: |
-            APP_NAME="Matador"
+            APP_NAME="${{ vars.APP_NAME || 'SaaS Kit' }}"
             APP_ENV=${{ env.DEPLOY_ENV }}
             APP_KEY=${{ secrets.APP_KEY || vars.APP_KEY }}
             APP_DEBUG=false
@@ -170,15 +160,16 @@ jobs:
             LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
             
             DB_CONNECTION=pgsql
-            DB_HOST=${{ secrets.DB_HOST || vars.DB_HOST || '172.17.0.1' }}
+            DB_HOST=${{ secrets.DB_HOST || vars.DB_HOST }}
             DB_PORT=5432
-            DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE || 'laravel' }}
-            DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME || 'root' }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || 'secret' }}
+            DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE }}
+            DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD }}
             
             SESSION_DRIVER=database
             SESSION_LIFETIME=120
             SESSION_ENCRYPT=false
+            SESSION_SECURE_COOKIE=true
             SESSION_PATH=/
             SESSION_DOMAIN=null
             
@@ -212,8 +203,6 @@ jobs:
             VITE_APP_NAME="${APP_NAME}"
             
             BILLING_CATALOG=database
-            BILLING_CATALOG_CONFIG=billing-catalog
-            BILLING_CATALOG_REQUIRE_METADATA=true
             BILLING_CANCEL_URL=${{ secrets.APP_URL || vars.APP_URL }}/pricing
             
             STRIPE_KEY=${{ secrets.STRIPE_KEY || vars.STRIPE_KEY }}
@@ -229,11 +218,6 @@ jobs:
             
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
-            BRAND_COLOR_PRIMARY="14 116 144"
-            BRAND_COLOR_SECONDARY="245 158 11"
-            BRAND_COLOR_ACCENT="239 68 68"
-            BRAND_COLOR_BG="250 250 249"
-            BRAND_COLOR_FG="15 23 42"
         run: |
           printf "%s" "$ENV_FILE" | ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cat > ${{ env.VPS_PATH }}/.env"
 
@@ -276,7 +260,8 @@ jobs:
 
             php artisan storage:link --force
             php artisan optimize:clear
-            php artisan billing:check-readiness
+            php artisan app:check-readiness --strict
+            php artisan billing:check-readiness --strict
 
             php artisan down --retry=60 || true
             app_is_down=1
@@ -288,6 +273,7 @@ jobs:
               php artisan billing:publish-catalog stripe --apply --update
               php artisan billing:publish-catalog paddle --apply --update
             fi
+            php artisan app:check-readiness --strict
             php artisan billing:check-readiness --strict
             php artisan filament:upgrade
             php artisan optimize

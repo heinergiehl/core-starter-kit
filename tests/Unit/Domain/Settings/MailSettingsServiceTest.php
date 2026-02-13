@@ -11,6 +11,26 @@ class MailSettingsServiceTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_it_exposes_only_supported_provider_options(): void
+    {
+        $this->assertSame([
+            'postmark' => 'Postmark',
+            'ses' => 'Amazon SES',
+        ], app(MailSettingsService::class)->providerOptions());
+    }
+
+    public function test_it_ignores_unsupported_stored_provider(): void
+    {
+        config(['mail.default' => 'log']);
+
+        $settings = app(AppSettingsService::class);
+        $settings->set('mail.provider', 'mailgun', 'mail');
+
+        app(MailSettingsService::class)->applyConfig();
+
+        $this->assertSame('log', config('mail.default'));
+    }
+
     public function test_it_applies_mail_provider_config(): void
     {
         $settings = app(AppSettingsService::class);

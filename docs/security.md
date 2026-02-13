@@ -86,6 +86,8 @@ This document is a practical checklist for securing the SaaS kit in production.
 - DB backups configured
 - Webhook endpoints accessible and verified
 - Admin access restricted (IP allowlist optional)
+- `php artisan app:check-readiness --strict` passes
+- `php artisan billing:check-readiness --strict` passes
 
 ---
 
@@ -115,7 +117,8 @@ If disabled too early, browser console will show `Alpine Expression Error` with 
   - Ensure `storage/framework/*`, `storage/logs`, `storage/app/public/branding`, and `bootstrap/cache` exist.
   - Ensure `storage/logs/laravel.log` exists and is writable.
 - Align permissions with your web server group (for example `www-data`) and use setgid directories so new files remain group-writable.
-- Run `php artisan billing:check-readiness` during deploy to fail fast on missing critical secrets.
+- Run `php artisan app:check-readiness` during deploy to fail fast on runtime misconfiguration.
+- Run `php artisan billing:check-readiness` during deploy to fail fast on missing critical billing secrets.
 - Set CSP behavior explicitly per environment:
   - `CSP_ALLOW_UNSAFE_EVAL=true|false` in deployment env vars.
   - After changing CSP/env values, run `php artisan optimize:clear` and rebuild config cache.

@@ -3,6 +3,7 @@
 namespace App\Livewire\Auth;
 
 use App\Models\User;
+use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 
@@ -74,7 +75,11 @@ class TwoFactorChallenge extends Component
         session()->forget('2fa_user_id');
         Auth::login($user, session()->pull('2fa_remember', false));
 
-        $this->redirect(route('dashboard'));
+        $redirectTo = $user->canAccessAdminPanel()
+            ? route(PermissionGuardrails::ADMIN_DASHBOARD_ROUTE)
+            : route('dashboard');
+
+        $this->redirect($redirectTo);
     }
 
     public function render()

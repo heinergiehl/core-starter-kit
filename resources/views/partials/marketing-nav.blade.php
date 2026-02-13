@@ -1,11 +1,9 @@
 {{-- Shared Marketing Navigation --}}
 @php
-    $user = auth()->user();
-    $hasSubscription = $user?->hasActiveSubscription() ?? false;
-    $hasPurchase = $user
-        ? app(\App\Domain\Billing\Services\CheckoutService::class)->hasAnyPurchase($user)
-        : false;
-    $isAdmin = $user?->is_admin ?? false;
+    $user = $marketingNavUser ?? auth()->user();
+    $hasSubscription = $marketingNavHasSubscription ?? ($user?->hasActiveSubscription() ?? false);
+    $hasPurchase = $marketingNavHasPurchase ?? false;
+    $isAdmin = $marketingNavIsAdmin ?? ($user?->is_admin ?? false);
 @endphp
 <header class="flex items-center justify-between max-w-6xl px-6 py-6 mx-auto">
     <a href="{{ route('home') }}" class="group flex items-center gap-2.5">
@@ -34,22 +32,37 @@
         <x-locale-switcher class="hidden md:block" />
         
         @auth
-            <div class="relative hidden sm:block">
-                <button 
-                    onclick="toggleUserDropdown(event)" 
+            <div
+                class="relative hidden sm:block"
+                x-data="{ open: false }"
+                x-on:keydown.escape.window="open = false"
+            >
+                <button
+                    type="button"
+                    x-on:click.stop="open = !open"
+                    x-bind:aria-expanded="open.toString()"
+                    aria-haspopup="menu"
                     class="inline-flex items-center gap-2 rounded-full border border-ink/15 px-3 py-1.5 text-sm font-medium text-ink/80 transition hover:border-ink/30 hover:text-ink">
                     <span class="h-6 w-6 rounded-full {{ $isAdmin ? 'bg-amber-500/20 text-amber-600' : 'bg-primary/20 text-primary' }} flex items-center justify-center text-xs font-bold">
                         {{ strtoupper(substr($user->name, 0, 1)) }}
                     </span>
                     <span class="max-w-[100px] truncate">{{ $user->name }}</span>
-                    <svg class="w-4 h-4 transition-transform" id="user-dropdown-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg
+                        class="w-4 h-4 transition-transform"
+                        x-bind:class="{ 'rotate-180': open }"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                    >
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                 </button>
-                
-                <div 
-                    id="user-dropdown" 
-                    style="display: none;"
+
+                <div
+                    x-cloak
+                    x-show="open"
+                    x-on:click.outside="open = false"
+                    x-transition.opacity.duration.100ms
                     class="absolute right-0 z-50 w-48 py-2 mt-2 border shadow-xl rounded-xl border-ink/10 bg-surface shadow-ink/5">
                     <div class="px-4 py-2 border-b border-ink/10">
                         <p class="text-sm font-medium truncate text-ink">{{ $user->name }}</p>
@@ -88,27 +101,6 @@
                     </form>
                 </div>
             </div>
-            
-            <script>
-                function toggleUserDropdown(event) {
-                    event.stopPropagation();
-                    const dropdown = document.getElementById('user-dropdown');
-                    const arrow = document.getElementById('user-dropdown-arrow');
-                    const isHidden = dropdown.style.display === 'none';
-                    
-                    dropdown.style.display = isHidden ? 'block' : 'none';
-                    arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
-                }
-                
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function(event) {
-                    const dropdown = document.getElementById('user-dropdown');
-                    if (dropdown && dropdown.style.display === 'block') {
-                        dropdown.style.display = 'none';
-                        document.getElementById('user-dropdown-arrow').style.transform = 'rotate(0deg)';
-                    }
-                });
-            </script>
             @if($isAdmin)
                 <a href="{{ url('/admin') }}" class="inline-flex items-center px-5 py-2 text-sm font-semibold text-amber-950 transition rounded-full shadow-lg bg-amber-400 shadow-amber-500/20 hover:bg-amber-500 whitespace-nowrap">{{ __('Admin Panel') }}</a>
             @elseif($hasSubscription)

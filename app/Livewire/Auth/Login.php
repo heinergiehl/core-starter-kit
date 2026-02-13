@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -62,7 +63,8 @@ class Login extends Component
             session()->put('2fa_user_id', $user->id);
             session()->put('2fa_remember', $this->remember);
 
-            Auth::guard('web')->logout();
+            Auth::guard(PermissionGuardrails::guardName())->logout();
+            session()->regenerate();
             session()->regenerateToken();
 
             Log::channel('auth')->info('login_requires_2fa', [
@@ -77,14 +79,18 @@ class Login extends Component
 
         session()->regenerate();
 
+        $redirectTo = $user->canAccessAdminPanel()
+            ? route(PermissionGuardrails::ADMIN_DASHBOARD_ROUTE)
+            : route('dashboard');
+
         Log::channel('auth')->info('login_redirect', [
             'user_id' => $user->id,
             'email' => $user->email,
             'session_id' => session()->getId(),
-            'redirect' => route('dashboard'),
+            'redirect' => $redirectTo,
         ]);
 
-        $this->redirect(route('dashboard'));
+        $this->redirect($redirectTo);
     }
 
     protected function ensureIsNotRateLimited(): void

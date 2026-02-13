@@ -14,6 +14,7 @@
     "license": "MIT",
     "require": {
         "php": "^8.2",
+        "aws/aws-sdk-php": "^3.322.9",
         "bacon/bacon-qr-code": "^3.0",
         "barryvdh/laravel-dompdf": "^3.1",
         "filament/filament": "^4.4",
@@ -23,7 +24,8 @@
         "pragmarx/google2fa-laravel": "^2.3",
         "spatie/laravel-data": "^4.19",
         "spatie/laravel-permission": "^6.24",
-        "stripe/stripe-php": "^19.1"
+        "stripe/stripe-php": "^19.1",
+        "symfony/postmark-mailer": "^7.2"
     },
     "require-dev": {
         "barryvdh/laravel-debugbar": "^3.16",
@@ -76,6 +78,7 @@
             "php artisan queue:listen --tries=1"
         ],
         "test": [
+            "Composer\\Config::disableProcessTimeout",
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],

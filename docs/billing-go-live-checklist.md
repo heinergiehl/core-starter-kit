@@ -7,6 +7,7 @@ Use this checklist before promoting billing changes to production.
 - [ ] `php artisan config:cache` and `php artisan route:cache` succeed on release build.
 - [ ] Queue workers are running and supervised (`php artisan queue:work`).
 - [ ] Failed jobs storage is configured (`QUEUE_FAILED_DRIVER` not null).
+- [ ] `php artisan app:check-readiness --strict` passes.
 - [ ] `php artisan billing:check-readiness --strict` passes.
 
 ## 2) Catalog and Provider Mapping

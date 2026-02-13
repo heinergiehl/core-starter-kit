@@ -106,21 +106,16 @@ Discount providers are controlled via `saas.billing.discounts.providers`.
 ## 5) Environment variables (template)
 Keep provider secrets in `.env` only. Never store secrets in DB.
 
-### 5.0 Billing plan IDs
-Billing price IDs are keyed per provider and plan:
+### 5.0 Core billing keys
 ```dotenv
 BILLING_DEFAULT_PROVIDER=stripe
-BILLING_CATALOG=config
+BILLING_CATALOG=database
 BILLING_SUCCESS_URL=
 BILLING_CANCEL_URL=
-
-BILLING_STARTER_MONTHLY_STRIPE_ID=
-BILLING_STARTER_MONTHLY_PADDLE_ID=
-BILLING_STARTER_YEARLY_STRIPE_ID=
-BILLING_STARTER_YEARLY_PADDLE_ID=
 ```
-Add the `BILLING_GROWTH_*` and `BILLING_LIFETIME_*` IDs from `.env.example` for subscription and one-time plans.
-When using the database catalog, provider IDs live on `price_provider_mappings.provider_id` (linked from `prices`), not `.env`.
+When using the default database catalog, provider price IDs are stored in
+`price_provider_mappings.provider_id` (linked from `prices`), not `.env`.
+If you run a custom legacy config catalog, document those keys in your own config file.
 
 ### 5.1 Stripe
 Typical keys:

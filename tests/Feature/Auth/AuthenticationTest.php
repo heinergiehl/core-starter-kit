@@ -6,6 +6,7 @@ use App\Enums\PermissionName;
 use App\Models\User;
 use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -66,6 +67,17 @@ class AuthenticationTest extends TestCase
 
         $this->assertAuthenticated();
         $response->assertRedirect(route(PermissionGuardrails::ADMIN_DASHBOARD_ROUTE, absolute: false));
+    }
+
+    public function test_admin_users_are_redirected_to_admin_dashboard_via_livewire_login_component(): void
+    {
+        $user = User::factory()->create(['is_admin' => true]);
+
+        Livewire::test(\App\Livewire\Auth\Login::class)
+            ->set('email', $user->email)
+            ->set('password', 'password')
+            ->call('login')
+            ->assertRedirect(route(PermissionGuardrails::ADMIN_DASHBOARD_ROUTE));
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void
