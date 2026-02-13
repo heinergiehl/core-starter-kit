@@ -106,12 +106,12 @@ jobs:
           PADDLE_API_KEY: ${{ secrets.PADDLE_API_KEY || vars.PADDLE_API_KEY }}
           PADDLE_CLIENT_SIDE_TOKEN: ${{ secrets.PADDLE_CLIENT_SIDE_TOKEN || vars.PADDLE_CLIENT_SIDE_TOKEN }}
           PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET || vars.PADDLE_WEBHOOK_SECRET }}
-          REPO_ACCESS_ENABLED: ${{ vars.REPO_ACCESS_ENABLED || 'false' }}
-          GH_OAUTH_CLIENT_ID: ${{ vars.GH_OAUTH_CLIENT_ID || vars.GITHUB_CLIENT_ID || secrets.GITHUB_CLIENT_ID }}
+          REPO_ACCESS_ENABLED: ${{ secrets.REPO_ACCESS_ENABLED || vars.REPO_ACCESS_ENABLED || 'false' }}
+          GH_OAUTH_CLIENT_ID: ${{ vars.GH_OAUTH_CLIENT_ID || secrets.GH_OAUTH_CLIENT_ID || vars.GITHUB_CLIENT_ID || secrets.GITHUB_CLIENT_ID }}
           GH_OAUTH_CLIENT_SECRET: ${{ secrets.GH_OAUTH_CLIENT_SECRET || secrets.GITHUB_CLIENT_SECRET }}
           GH_REPO_ACCESS_TOKEN: ${{ secrets.GH_REPO_ACCESS_TOKEN || secrets.GITHUB_REPO_ACCESS_TOKEN }}
-          GH_REPO_OWNER: ${{ vars.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER }}
-          GH_REPO_NAME: ${{ vars.GH_REPO_NAME || vars.GITHUB_REPO_NAME }}
+          GH_REPO_OWNER: ${{ vars.GH_REPO_OWNER || secrets.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER || secrets.GITHUB_REPO_OWNER }}
+          GH_REPO_NAME: ${{ vars.GH_REPO_NAME || secrets.GH_REPO_NAME || vars.GITHUB_REPO_NAME || secrets.GITHUB_REPO_NAME }}
         run: |
           set -Eeuo pipefail
           missing=0
@@ -170,8 +170,12 @@ jobs:
             )
             for var in "${repo_required_vars[@]}"; do
               if [ -z "${!var:-}" ]; then
-                echo "::error::REPO_ACCESS_ENABLED=true but missing required repo-access value: ${var}"
-                missing=1
+                if [ "${DEPLOY_ENV}" = "staging" ]; then
+                  echo "::warning::REPO_ACCESS_ENABLED=true but missing repo-access value for staging: ${var}. Feature may not work until this is set."
+                else
+                  echo "::error::REPO_ACCESS_ENABLED=true but missing required repo-access value: ${var}"
+                  missing=1
+                fi
               fi
             done
           fi
@@ -239,9 +243,9 @@ jobs:
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
             GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
             
-            GITHUB_CLIENT_ID=${{ vars.GH_OAUTH_CLIENT_ID || vars.GITHUB_CLIENT_ID || secrets.GITHUB_CLIENT_ID || '' }}
+            GITHUB_CLIENT_ID=${{ vars.GH_OAUTH_CLIENT_ID || secrets.GH_OAUTH_CLIENT_ID || vars.GITHUB_CLIENT_ID || secrets.GITHUB_CLIENT_ID || '' }}
             GITHUB_CLIENT_SECRET=${{ secrets.GH_OAUTH_CLIENT_SECRET || secrets.GITHUB_CLIENT_SECRET || '' }}
-            GITHUB_REDIRECT_URI=${{ vars.GH_OAUTH_REDIRECT_URI || vars.GITHUB_REDIRECT_URI || '' }}
+            GITHUB_REDIRECT_URI=${{ vars.GH_OAUTH_REDIRECT_URI || secrets.GH_OAUTH_REDIRECT_URI || vars.GITHUB_REDIRECT_URI || secrets.GITHUB_REDIRECT_URI || '' }}
             
             VITE_APP_NAME="${APP_NAME}"
             
@@ -259,14 +263,14 @@ jobs:
             PADDLE_WEBHOOK_TOLERANCE_SECONDS=${{ vars.PADDLE_WEBHOOK_TOLERANCE_SECONDS || '300' }}
             PADDLE_ENV=${{ secrets.PADDLE_ENV || vars.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
 
-            REPO_ACCESS_ENABLED=${{ vars.REPO_ACCESS_ENABLED || 'false' }}
-            REPO_ACCESS_PROVIDER=${{ vars.REPO_ACCESS_PROVIDER || 'github' }}
-            REPO_ACCESS_QUEUE=${{ vars.REPO_ACCESS_QUEUE || '' }}
+            REPO_ACCESS_ENABLED=${{ secrets.REPO_ACCESS_ENABLED || vars.REPO_ACCESS_ENABLED || 'false' }}
+            REPO_ACCESS_PROVIDER=${{ secrets.REPO_ACCESS_PROVIDER || vars.REPO_ACCESS_PROVIDER || 'github' }}
+            REPO_ACCESS_QUEUE=${{ secrets.REPO_ACCESS_QUEUE || vars.REPO_ACCESS_QUEUE || '' }}
             GITHUB_REPO_ACCESS_TOKEN=${{ secrets.GH_REPO_ACCESS_TOKEN || secrets.GITHUB_REPO_ACCESS_TOKEN || '' }}
-            GITHUB_REPO_OWNER=${{ vars.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER || '' }}
-            GITHUB_REPO_NAME=${{ vars.GH_REPO_NAME || vars.GITHUB_REPO_NAME || '' }}
-            GITHUB_REPO_PERMISSION=${{ vars.GH_REPO_PERMISSION || vars.GITHUB_REPO_PERMISSION || 'pull' }}
-            GITHUB_API_URL=${{ vars.GH_API_URL || vars.GITHUB_API_URL || 'https://api.github.com' }}
+            GITHUB_REPO_OWNER=${{ vars.GH_REPO_OWNER || secrets.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER || secrets.GITHUB_REPO_OWNER || '' }}
+            GITHUB_REPO_NAME=${{ vars.GH_REPO_NAME || secrets.GH_REPO_NAME || vars.GITHUB_REPO_NAME || secrets.GITHUB_REPO_NAME || '' }}
+            GITHUB_REPO_PERMISSION=${{ vars.GH_REPO_PERMISSION || secrets.GH_REPO_PERMISSION || vars.GITHUB_REPO_PERMISSION || secrets.GITHUB_REPO_PERMISSION || 'pull' }}
+            GITHUB_API_URL=${{ vars.GH_API_URL || secrets.GH_API_URL || vars.GITHUB_API_URL || secrets.GITHUB_API_URL || 'https://api.github.com' }}
             
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
