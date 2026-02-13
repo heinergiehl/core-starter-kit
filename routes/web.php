@@ -23,6 +23,7 @@ use App\Http\Controllers\Feedback\RoadmapController;
 use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RepoAccessController;
 use App\Http\Controllers\TwoFactorController;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -213,6 +214,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::post('/repo-access/sync', [RepoAccessController::class, 'sync'])->name('repo-access.sync');
+    Route::delete('/repo-access/github', [RepoAccessController::class, 'disconnectGithub'])->name('repo-access.github.disconnect');
     Route::post('/two-factor/enable', [TwoFactorController::class, 'enable'])->name('two-factor.enable');
     Route::delete('/two-factor/disable', [TwoFactorController::class, 'disable'])->name('two-factor.disable');
 });

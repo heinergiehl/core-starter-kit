@@ -7,6 +7,7 @@ use App\Domain\Billing\Traits\HasEntitlements;
 use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
 use App\Domain\Identity\Models\SocialAccount;
+use App\Domain\RepoAccess\Models\RepoAccessGrant;
 use App\Domain\Identity\Models\TwoFactorAuth;
 use App\Enums\PermissionName;
 use App\Support\Authorization\PermissionGuardrails;
@@ -108,6 +109,11 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function socialAccounts(): HasMany
     {
         return $this->hasMany(SocialAccount::class);
+    }
+
+    public function repoAccessGrants(): HasMany
+    {
+        return $this->hasMany(RepoAccessGrant::class);
     }
 
     public function subscriptions(): HasMany

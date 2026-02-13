@@ -37,13 +37,14 @@ Route::middleware('guest')->group(function () {
     Route::view('two-factor/challenge', 'auth.two-factor-challenge')
         ->name('two-factor.challenge');
 
-    // Social Authentication
-    Route::get('auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
-        ->name('social.redirect');
-
-    Route::get('auth/{provider}/callback', [SocialAuthController::class, 'callback'])
-        ->name('social.callback');
 });
+
+// Social Authentication (guest login and authenticated account-link flows)
+Route::get('auth/{provider}/redirect', [SocialAuthController::class, 'redirect'])
+    ->name('social.redirect');
+
+Route::get('auth/{provider}/callback', [SocialAuthController::class, 'callback'])
+    ->name('social.callback');
 
 // Password Reset - Accessible by Guest AND Auth users (for checkout flow)
 Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])

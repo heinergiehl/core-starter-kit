@@ -2,20 +2,25 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Domain\RepoAccess\Services\RepoAccessService;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 use Laravel\Socialite\Facades\Socialite;
 use Laravel\Socialite\Two\InvalidStateException;
 use Throwable;
 
 class SocialAuthController extends Controller
 {
+    private const CONNECT_USER_SESSION_KEY = 'social_connect_user_id';
+
     public function redirect(Request $request, string $provider): RedirectResponse
     {
         $provider = $this->normalizeProvider($provider);
 
+        $this->prepareConnectMode($request, $provider);
         $this->storeIntendedRedirect($request);
 
         try {
@@ -25,8 +30,11 @@ class SocialAuthController extends Controller
         }
     }
 
-    public function callback(string $provider, \App\Domain\Identity\Actions\HandleSocialCallback $handler): RedirectResponse
-    {
+    public function callback(
+        string $provider,
+        \App\Domain\Identity\Actions\HandleSocialCallback $handler,
+        RepoAccessService $repoAccessService
+    ): RedirectResponse {
         $provider = $this->normalizeProvider($provider);
 
         try {
@@ -47,6 +55,46 @@ class SocialAuthController extends Controller
             }
         } catch (Throwable $exception) {
             return $this->handleSocialAuthFailure($provider, $exception);
+        }
+
+        $connectUserId = session()->pull(self::CONNECT_USER_SESSION_KEY);
+
+        if ($connectUserId) {
+            $connectUser = \App\Models\User::query()->find($connectUserId);
+
+            if (! $connectUser) {
+                return redirect()
+                    ->route('login')
+                    ->withErrors(['social' => __('The account linking session expired. Please try again.')]);
+            }
+
+            try {
+                $user = $handler->connectToUser($connectUser, $provider, $socialUser);
+            } catch (ValidationException $exception) {
+                return redirect()
+                    ->route('profile.edit')
+                    ->withErrors($exception->errors());
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return redirect()
+                    ->route('profile.edit')
+                    ->withErrors(['social' => __('Unable to connect your :provider account. Please try again.', [
+                        'provider' => ucfirst($provider),
+                    ])]);
+            }
+
+            Auth::login($user, true);
+
+            if ($repoAccessService->isEnabled() && $repoAccessService->hasEligiblePurchase($user)) {
+                $repoAccessService->queueGrant($user, 'github_connected');
+            }
+
+            return redirect()
+                ->route('profile.edit')
+                ->with('success', __('Your :provider account is now connected.', [
+                    'provider' => ucfirst($provider),
+                ]));
         }
 
         $email = $socialUser->getEmail();
@@ -98,6 +146,23 @@ class SocialAuthController extends Controller
         $request->session()->put('url.intended', $intended);
     }
 
+    private function prepareConnectMode(Request $request, string $provider): void
+    {
+        if ($provider !== 'github') {
+            $request->session()->forget(self::CONNECT_USER_SESSION_KEY);
+
+            return;
+        }
+
+        if (! $request->boolean('connect') || ! Auth::check()) {
+            $request->session()->forget(self::CONNECT_USER_SESSION_KEY);
+
+            return;
+        }
+
+        $request->session()->put(self::CONNECT_USER_SESSION_KEY, (int) Auth::id());
+    }
+
     private function isSafeRedirectTarget(string $target): bool
     {
         if (str_starts_with($target, '/')) {
@@ -137,6 +202,14 @@ class SocialAuthController extends Controller
 
         if (app()->environment('local')) {
             $message .= ' '.$exception->getMessage();
+        }
+
+        if (session()->has(self::CONNECT_USER_SESSION_KEY)) {
+            session()->forget(self::CONNECT_USER_SESSION_KEY);
+
+            return redirect()
+                ->route('profile.edit')
+                ->withErrors(['social' => $message]);
         }
 
         return redirect()

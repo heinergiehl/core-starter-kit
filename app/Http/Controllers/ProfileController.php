@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\RepoAccess\Services\RepoAccessService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -9,6 +10,10 @@ use Illuminate\View\View;
 
 class ProfileController extends Controller
 {
+    public function __construct(
+        private readonly RepoAccessService $repoAccessService,
+    ) {}
+
     /**
      * Display the user's profile form.
      *
@@ -16,8 +21,18 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): View
     {
+        $user = $request->user();
+        $githubAccount = $user ? $this->repoAccessService->githubAccount($user) : null;
+        $repoAccessGrant = $user ? $this->repoAccessService->grantForUser($user) : null;
+        $canRequestRepoAccess = $user ? $this->repoAccessService->hasEligiblePurchase($user) : false;
+
         return view('profile.edit', [
-            'user' => $request->user(),
+            'user' => $user,
+            'repoAccessEnabled' => $this->repoAccessService->isEnabled(),
+            'repoAccessGrant' => $repoAccessGrant,
+            'githubAccount' => $githubAccount,
+            'repoAccessRepository' => $this->repoAccessService->repositoryLabel(),
+            'canRequestRepoAccess' => $canRequestRepoAccess,
         ]);
     }
 

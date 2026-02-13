@@ -160,6 +160,16 @@ Set plan price IDs in `.env` (see `.env.example`) to enable checkout on the pric
 Use `BILLING_CATALOG=database` to manage plans via `products` + `prices` in the Admin Panel.
 For staging subscription rehearsals, seed recurring plans with `php artisan billing:seed-subscription-plans --force`.
 
+### Optional: Private GitHub Repo Access After Purchase
+- This starter includes an optional, removable module that can invite buyers to a private GitHub repository after successful purchase.
+- It is disabled by default (`REPO_ACCESS_ENABLED=false`).
+- Configure `GITHUB_REPO_ACCESS_TOKEN`, `GITHUB_REPO_OWNER`, and `GITHUB_REPO_NAME` to enable.
+- Access is granted when:
+  - a subscription starts (`SubscriptionStarted` event), or
+  - a one-time order transitions to `paid`/`completed`.
+- Requirement: the user must have a linked GitHub social account so their GitHub identity can be resolved.
+- UI flow: users can connect/switch/disconnect GitHub and request a sync from `Profile` (`/profile`), where current repo-access status is shown.
+
 ---
 
 ## Theming

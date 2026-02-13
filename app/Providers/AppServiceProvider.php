@@ -94,11 +94,13 @@ class AppServiceProvider extends ServiceProvider
         });
 
         Event::subscribe(\App\Domain\Billing\Listeners\SendSubscriptionNotifications::class);
+        Event::subscribe(\App\Domain\RepoAccess\Listeners\GrantRepoAccessOnPurchase::class);
 
         \Filament\Livewire\DatabaseNotifications::pollingInterval('30s');
 
         \App\Domain\Billing\Models\Product::observe(\App\Domain\Billing\Observers\ProductObserver::class);
         \App\Domain\Billing\Models\Price::observe(\App\Domain\Billing\Observers\PriceObserver::class);
+        \App\Domain\Billing\Models\Order::observe(\App\Domain\RepoAccess\Observers\OrderRepoAccessObserver::class);
 
         Role::saving(function (Role $role): void {
             if (! $role->exists || ! $role->isDirty('name')) {
