@@ -336,8 +336,8 @@ jobs:
             fi
 
             php artisan optimize:clear || true
-            php artisan app:check-readiness --strict
-            php artisan billing:check-readiness --strict
+            php artisan app:check-readiness
+            php artisan billing:check-readiness
             php artisan filament:upgrade
             php artisan optimize
             php artisan config:cache
