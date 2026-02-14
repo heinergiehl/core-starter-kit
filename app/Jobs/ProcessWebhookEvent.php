@@ -63,6 +63,8 @@ class ProcessWebhookEvent implements ShouldBeUnique, ShouldQueue
         $event = $this->claimEventForProcessing();
 
         if (! $event) {
+            $this->deferIfFreshProcessing();
+
             return;
         }
 
@@ -86,7 +88,7 @@ class ProcessWebhookEvent implements ShouldBeUnique, ShouldQueue
 
     private function claimEventForProcessing(): ?WebhookEvent
     {
-        $staleCutoff = now()->subMinutes((int) config('saas.billing.webhooks.processing_stale_after_minutes', 15));
+        $staleCutoff = now()->subMinutes($this->processingStaleAfterMinutes());
 
         return DB::transaction(function () use ($staleCutoff): ?WebhookEvent {
             $event = WebhookEvent::query()
@@ -116,5 +118,38 @@ class ProcessWebhookEvent implements ShouldBeUnique, ShouldQueue
 
             return $event->fresh();
         });
+    }
+
+    private function deferIfFreshProcessing(): void
+    {
+        $event = WebhookEvent::query()->find($this->eventId);
+
+        if (! $event || $event->status !== 'processing') {
+            return;
+        }
+
+        $delaySeconds = $this->secondsUntilProcessingCanBeReclaimed($event);
+        $this->release($delaySeconds);
+    }
+
+    private function processingStaleAfterMinutes(): int
+    {
+        return max(1, (int) config('saas.billing.webhooks.processing_stale_after_minutes', 15));
+    }
+
+    private function secondsUntilProcessingCanBeReclaimed(WebhookEvent $event): int
+    {
+        if (! $event->updated_at) {
+            return 5;
+        }
+
+        $eligibleAt = $event->updated_at->copy()->addMinutes($this->processingStaleAfterMinutes());
+        $seconds = now()->diffInSeconds($eligibleAt, false);
+
+        if ($seconds <= 0) {
+            return 5;
+        }
+
+        return min($seconds + 1, 3600);
     }
 }

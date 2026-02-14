@@ -65,6 +65,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
 
         $status = (string) (data_get($data, 'status') ?? 'paid');
         $normalizedStatus = $this->normalizeOrderStatus($status);
+        $isPaidOrderStatus = in_array($normalizedStatus, [OrderStatus::Paid->value, OrderStatus::Completed->value], true);
         $amount = (int) (data_get($data, 'amount')
             ?? data_get($data, 'amount_total')
             ?? data_get($data, 'details.totals.grand_total')
@@ -86,12 +87,13 @@ class PaddleOrderHandler implements PaddleWebhookHandler
                 'status' => $normalizedStatus,
                 'amount' => $amount,
                 'currency' => $currency,
-                'paid_at' => in_array($normalizedStatus, [OrderStatus::Paid->value, OrderStatus::Completed->value], true)
-                    ? now()
-                    : null,
                 'metadata' => Arr::only($data, ['id', 'status', 'items', 'custom_data', 'subscription_id']),
             ]
         );
+
+        if ($isPaidOrderStatus && ! $order->paid_at) {
+            $order->forceFill(['paid_at' => now()])->save();
+        }
 
         $invoice = $this->syncInvoiceFromOrder($data, $userId, $order, $normalizedStatus, $amount, $currency);
 
@@ -105,17 +107,23 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             (string) $orderId
         );
 
-        if (in_array($normalizedStatus, [OrderStatus::Paid->value, OrderStatus::Completed->value], true)) {
+        if ($isPaidOrderStatus) {
             $user = User::find($userId);
             $isSubscription = ! empty(data_get($data, 'subscription_id'));
 
-            if ($user && ! $isSubscription) {
-                $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
-                    planName: $this->resolvePlanName($order->plan_key),
-                    amount: $order->amount,
-                    currency: $order->currency,
-                    receiptUrl: $invoice->hosted_invoice_url,
-                ));
+            if ($user && ! $isSubscription && $this->claimPaymentSuccessNotification($order)) {
+                try {
+                    $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
+                        planName: $this->resolvePlanName($order->plan_key),
+                        amount: $order->amount,
+                        currency: $order->currency,
+                        receiptUrl: $invoice->hosted_invoice_url,
+                    ));
+                } catch (\Throwable $exception) {
+                    Order::query()->whereKey($order->id)->update(['payment_success_email_sent_at' => null]);
+
+                    throw $exception;
+                }
             }
 
             $this->checkoutService->verifyUserAfterPayment($userId);
@@ -381,5 +389,13 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             'refunded' => OrderStatus::Refunded->value,
             default => OrderStatus::Pending->value,
         };
+    }
+
+    private function claimPaymentSuccessNotification(Order $order): bool
+    {
+        return Order::query()
+            ->whereKey($order->id)
+            ->whereNull('payment_success_email_sent_at')
+            ->update(['payment_success_email_sent_at' => now()]) === 1;
     }
 }

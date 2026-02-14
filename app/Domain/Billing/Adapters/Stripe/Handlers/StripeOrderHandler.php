@@ -12,6 +12,7 @@ use App\Domain\Billing\Models\WebhookEvent;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
+use App\Enums\OrderStatus;
 use App\Models\User;
 use Illuminate\Support\Arr;
 
@@ -38,6 +39,8 @@ class StripeOrderHandler implements StripeWebhookHandler
     {
         return [
             'checkout.session.completed',
+            'checkout.session.async_payment_succeeded',
+            'checkout.session.async_payment_failed',
             'charge.refunded',
         ];
     }
@@ -49,6 +52,12 @@ class StripeOrderHandler implements StripeWebhookHandler
     {
         $payload = $event->payload ?? [];
         $eventType = $payload['type'] ?? $event->type;
+
+        if ($eventType === 'checkout.session.async_payment_failed') {
+            $this->handleCheckoutSessionAsyncPaymentFailed($object);
+
+            return;
+        }
 
         if ($eventType === 'charge.refunded') {
             $this->handleChargeRefunded($object);
@@ -156,6 +165,7 @@ class StripeOrderHandler implements StripeWebhookHandler
         $amount = (int) (data_get($object, 'amount_total') ?? 0);
         $currency = strtoupper((string) data_get($object, 'currency', 'USD'));
         $paymentStatus = data_get($object, 'payment_status');
+        $isPaid = $paymentStatus === 'paid';
 
         $order = Order::query()->updateOrCreate(
             [
@@ -165,10 +175,9 @@ class StripeOrderHandler implements StripeWebhookHandler
             [
                 'user_id' => $userId,
                 'plan_key' => $planKey,
-                'status' => $paymentStatus === 'paid' ? \App\Enums\OrderStatus::Paid : \App\Enums\OrderStatus::Pending,
+                'status' => $isPaid ? OrderStatus::Paid : OrderStatus::Pending,
                 'amount' => $amount,
                 'currency' => $currency,
-                'paid_at' => $paymentStatus === 'paid' ? now() : null,
                 'metadata' => [
                     'session_id' => data_get($object, 'id'),
                     'payment_intent' => data_get($object, 'payment_intent'),
@@ -176,6 +185,10 @@ class StripeOrderHandler implements StripeWebhookHandler
                 ],
             ]
         );
+
+        if ($isPaid && ! $order->paid_at) {
+            $order->forceFill(['paid_at' => now()])->save();
+        }
 
         $this->recordDiscountRedemption(
             $object,
@@ -186,21 +199,31 @@ class StripeOrderHandler implements StripeWebhookHandler
         );
 
         // Send payment success notification for one-time purchases (consistent with Paddle)
-        if ($paymentStatus === 'paid' && ! $order->payment_success_email_sent_at) {
+        if ($isPaid && $this->claimPaymentSuccessNotification($order)) {
             $user = \App\Models\User::find($userId);
-            if ($user) {
+
+            if (! $user) {
+                Order::query()->whereKey($order->id)->update(['payment_success_email_sent_at' => null]);
+
+                return;
+            }
+
+            try {
                 $user->notify(new \App\Notifications\PaymentSuccessfulNotification(
                     planName: $this->resolvePlanName($planKey),
                     amount: $amount,
                     currency: $currency,
                     receiptUrl: null, // Invoice URL arrives via invoice.paid webhook
                 ));
-                $order->forceFill(['payment_success_email_sent_at' => now()])->save();
+            } catch (\Throwable $exception) {
+                Order::query()->whereKey($order->id)->update(['payment_success_email_sent_at' => null]);
+
+                throw $exception;
             }
         }
 
         // Verify user email after successful payment
-        if ($paymentStatus === 'paid') {
+        if ($isPaid) {
             $this->checkoutService->verifyUserAfterPayment($userId);
         }
     }
@@ -288,8 +311,55 @@ class StripeOrderHandler implements StripeWebhookHandler
             ->where('provider', $this->provider())
             ->where('provider_id', $providerId)
             ->update([
-                'status' => 'refunded',
+                'status' => OrderStatus::Refunded->value,
                 'refunded_at' => now(),
             ]);
+    }
+
+    private function handleCheckoutSessionAsyncPaymentFailed(array $object): void
+    {
+        $userId = $this->resolveUserIdFromMetadata($object);
+        $providerId = data_get($object, 'payment_intent') ?: data_get($object, 'id');
+
+        if (! $providerId || ! $userId) {
+            return;
+        }
+
+        $existingOrder = Order::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $providerId)
+            ->first();
+
+        if ($existingOrder && in_array($existingOrder->status, [OrderStatus::Paid, OrderStatus::Completed], true)) {
+            return;
+        }
+
+        Order::query()->updateOrCreate(
+            [
+                'provider' => $this->provider(),
+                'provider_id' => $providerId,
+            ],
+            [
+                'user_id' => $userId,
+                'plan_key' => $this->resolvePlanKey($object),
+                'status' => OrderStatus::Failed,
+                'amount' => (int) (data_get($object, 'amount_total') ?? 0),
+                'currency' => strtoupper((string) data_get($object, 'currency', 'USD')),
+                'metadata' => [
+                    'session_id' => data_get($object, 'id'),
+                    'payment_intent' => data_get($object, 'payment_intent'),
+                    'metadata' => data_get($object, 'metadata', []),
+                    'async_status' => 'failed',
+                ],
+            ]
+        );
+    }
+
+    private function claimPaymentSuccessNotification(Order $order): bool
+    {
+        return Order::query()
+            ->whereKey($order->id)
+            ->whereNull('payment_success_email_sent_at')
+            ->update(['payment_success_email_sent_at' => now()]) === 1;
     }
 }

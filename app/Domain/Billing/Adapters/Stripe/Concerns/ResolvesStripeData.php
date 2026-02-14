@@ -6,6 +6,7 @@ use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Shared helper methods for Stripe webhook handlers.
@@ -143,24 +144,44 @@ trait ResolvesStripeData
      */
     protected function syncBillingCustomer(int $userId, ?string $providerId, ?string $email): void
     {
-        $payload = [
-            'user_id' => $userId,
-            'provider' => $this->provider(),
-            'provider_id' => $providerId,
-            'email' => $email,
-        ];
+        if ($providerId) {
+            $existing = BillingCustomer::query()
+                ->where('provider', $this->provider())
+                ->where('provider_id', $providerId)
+                ->first();
 
-        $customer = BillingCustomer::query()
-            ->where('user_id', $userId)
-            ->where('provider', $this->provider())
-            ->first();
+            if ($existing && $existing->user_id !== $userId) {
+                Log::warning('Stripe webhook customer id already mapped', [
+                    'provider_id' => $providerId,
+                    'existing_user_id' => $existing->user_id,
+                    'incoming_user_id' => $userId,
+                ]);
 
-        if ($customer) {
-            $customer->update(array_filter($payload, fn ($value) => $value !== null));
+                return;
+            }
+
+            BillingCustomer::query()->updateOrCreate(
+                [
+                    'provider' => $this->provider(),
+                    'provider_id' => $providerId,
+                ],
+                [
+                    'user_id' => $userId,
+                    'email' => $email,
+                ]
+            );
 
             return;
         }
 
-        BillingCustomer::query()->create($payload);
+        BillingCustomer::query()->updateOrCreate(
+            [
+                'user_id' => $userId,
+                'provider' => $this->provider(),
+            ],
+            [
+                'email' => $email,
+            ]
+        );
     }
 }
