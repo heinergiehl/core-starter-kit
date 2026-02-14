@@ -433,10 +433,14 @@
                 let autoCloseTimer = null;
                 let hasAutoClosed = false;
                 let announcedGrantStatus = null;
+                let hasRenderedStatusOnce = false;
                 const syncButtonDefaultText = syncButton?.textContent?.trim() || @json(__('Confirm and Grant Access'));
                 const closeButtonDefaultText = closeButton?.textContent?.trim() || @json(__('Later'));
                 const pollIntervalMs = 3000;
                 const autoCloseAfterSuccessMs = 1400;
+                const shouldOpenFromQuery = new URLSearchParams(window.location.search).get('repo_access') === '1';
+                const shouldAnnounceFirstGrantStatus = shouldPrompt || shouldOpenFromQuery;
+                const grantToastStorageKey = 'repo-access:last-grant-toast';
 
                 const notify = (message, type = 'info') => {
                     if (!message) {
@@ -446,6 +450,39 @@
                     window.dispatchEvent(new CustomEvent('notify', {
                         detail: { message, type },
                     }));
+                };
+
+                const readLastGrantToast = () => {
+                    try {
+                        return window.localStorage.getItem(grantToastStorageKey);
+                    } catch (_error) {
+                        return null;
+                    }
+                };
+
+                const writeLastGrantToast = (fingerprint) => {
+                    if (!fingerprint) {
+                        return;
+                    }
+
+                    try {
+                        window.localStorage.setItem(grantToastStorageKey, fingerprint);
+                    } catch (_error) {
+                        // Ignore storage write failures (private mode / browser policy).
+                    }
+                };
+
+                const grantToastFingerprint = (state) => {
+                    const status = String(state?.grant_status || '');
+                    if (status !== 'invited' && status !== 'granted') {
+                        return null;
+                    }
+
+                    const repository = String(state?.repository || '');
+                    const username = String(state?.github_username || '');
+                    const marker = String(state?.last_attempted_at || '');
+
+                    return [status, repository, username, marker].join('|');
                 };
 
                 const setFeedback = (message, tone = 'info') => {
@@ -674,17 +711,30 @@
                     }
 
                     const grantStatus = String(state.grant_status || '');
-                    if (grantStatus !== announcedGrantStatus) {
-                        if (grantStatus === 'invited') {
-                            notify(
-                                @json(__('GitHub invitation sent. Ask the customer to check email or GitHub notifications and accept the invitation.')),
-                                'success'
-                            );
-                        } else if (grantStatus === 'granted') {
-                            notify(
-                                @json(__('Repository access has been granted successfully.')),
-                                'success'
-                            );
+                    const isFirstStatusRender = !hasRenderedStatusOnce;
+                    hasRenderedStatusOnce = true;
+
+                    const statusChangedInPage = grantStatus !== announcedGrantStatus;
+                    const mayAnnounceThisRender = statusChangedInPage && (!isFirstStatusRender || shouldAnnounceFirstGrantStatus);
+
+                    if (mayAnnounceThisRender && (grantStatus === 'invited' || grantStatus === 'granted')) {
+                        const fingerprint = grantToastFingerprint(state);
+                        const alreadyAnnounced = fingerprint !== null && readLastGrantToast() === fingerprint;
+
+                        if (!alreadyAnnounced) {
+                            if (grantStatus === 'invited') {
+                                notify(
+                                    @json(__('GitHub invitation sent. Ask the customer to check email or GitHub notifications and accept the invitation.')),
+                                    'success'
+                                );
+                            } else {
+                                notify(
+                                    @json(__('Repository access has been granted successfully.')),
+                                    'success'
+                                );
+                            }
+
+                            writeLastGrantToast(fingerprint);
                         }
                     }
 
@@ -847,8 +897,6 @@
                         searchUsers(term);
                     }, 280);
                 });
-
-                const shouldOpenFromQuery = new URLSearchParams(window.location.search).get('repo_access') === '1';
 
                 if (shouldPrompt || shouldOpenFromQuery) {
                     openModal();
