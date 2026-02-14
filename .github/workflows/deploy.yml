@@ -321,13 +321,12 @@ jobs:
             find storage bootstrap/cache -type f -exec chmod 664 {} \;
 
             php artisan storage:link --force
-            php artisan optimize:clear
-            php artisan app:check-readiness --strict
-            php artisan billing:check-readiness --strict
 
             php artisan down --retry=60 || true
             app_is_down=1
 
+            # Migrate first — fresh databases (e.g. Neon) have no tables yet,
+            # so optimize:clear and readiness checks would fail without them.
             php artisan migrate --force
             if [ "${{ env.RUN_BILLING_BOOTSTRAP }}" = "true" ]; then
               php artisan db:seed --class=PaymentProviderSeeder --force
@@ -335,6 +334,8 @@ jobs:
               php artisan billing:publish-catalog stripe --apply --update
               php artisan billing:publish-catalog paddle --apply --update
             fi
+
+            php artisan optimize:clear || true
             php artisan app:check-readiness --strict
             php artisan billing:check-readiness --strict
             php artisan filament:upgrade
