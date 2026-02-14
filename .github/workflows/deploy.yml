@@ -211,6 +211,7 @@ jobs:
             DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE || (github.event_name == 'workflow_run' && 'laravel' || '') }}
             DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME || (github.event_name == 'workflow_run' && 'root' || '') }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || (github.event_name == 'workflow_run' && 'secret' || '') }}
+            DB_SSLMODE=${{ vars.DB_SSLMODE || (github.event_name == 'workflow_run' && 'prefer' || 'require') }}
             
             SESSION_DRIVER=database
             SESSION_LIFETIME=120
