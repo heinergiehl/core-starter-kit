@@ -6,11 +6,7 @@
 @foreach($announcements as $announcement)
     @if(!in_array($announcement->id, $dismissedIds))
         <div 
-            x-data="{ show: true }" 
-            x-show="show" 
-            x-transition:leave="transition ease-in duration-200"
-            x-transition:leave-start="opacity-100"
-            x-transition:leave-end="opacity-0"
+            data-announcement-banner
             class="border-b {{ $announcement->getTypeClasses() }}"
         >
             <div class="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
@@ -45,7 +41,6 @@
                                 <button 
                                     type="submit" 
                                     class="rounded-full p-1 hover:bg-white/20 transition"
-                                    @click.prevent="show = false; fetch('{{ route('announcements.dismiss', $announcement) }}', { method: 'POST', headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' } })"
                                 >
                                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

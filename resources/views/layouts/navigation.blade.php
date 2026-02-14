@@ -4,7 +4,7 @@
     $isAdmin = (bool) ($user?->is_admin ?? false);
 @endphp
 
-<nav x-data="{ open: false }" class="sticky top-0 z-50 border-b glass-panel border-ink/5">
+<nav class="sticky top-0 z-50 border-b glass-panel border-ink/5" data-mobile-nav>
     <!-- Primary Navigation Menu -->
     <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
@@ -95,10 +95,16 @@
 
             <!-- Hamburger -->
             <div class="flex items-center -me-2 sm:hidden">
-                <button @click="open = ! open" class="inline-flex items-center justify-center p-2 transition duration-150 ease-in-out rounded-md text-ink/60 hover:text-ink hover:bg-surface/10 focus:outline-none focus:bg-surface/10 focus:text-ink">
+                <button
+                    type="button"
+                    data-mobile-nav-toggle
+                    aria-expanded="false"
+                    aria-controls="mobile-navigation-menu"
+                    class="inline-flex items-center justify-center p-2 transition duration-150 ease-in-out rounded-md text-ink/60 hover:text-ink hover:bg-surface/10 focus:outline-none focus:bg-surface/10 focus:text-ink"
+                >
                     <svg class="w-6 h-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
-                        <path :class="{'hidden': open, 'inline-flex': ! open }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-                        <path :class="{'hidden': ! open, 'inline-flex': open }" class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        <path data-mobile-nav-icon-open class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        <path data-mobile-nav-icon-close class="hidden" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                     </svg>
                 </button>
             </div>
@@ -106,7 +112,7 @@
     </div>
 
     <!-- Responsive Navigation Menu -->
-    <div :class="{'block': open, 'hidden': ! open}" class="hidden border-b sm:hidden bg-surface/95 backdrop-blur-xl border-ink/10">
+    <div id="mobile-navigation-menu" data-mobile-nav-panel class="hidden border-b sm:hidden bg-surface/95 backdrop-blur-xl border-ink/10">
         <div class="pt-2 pb-3 space-y-1">
             <x-responsive-nav-link :href="route('home')" :active="request()->routeIs('home')" class="text-ink/70 hover:text-ink hover:bg-surface/5">
                 {{ __('Home') }}
@@ -171,3 +177,73 @@
         </div>
     </div>
 </nav>
+
+@once
+    <script>
+        (() => {
+            const navRoots = () => Array.from(document.querySelectorAll('[data-mobile-nav]'));
+
+            const setOpenState = (root, isOpen) => {
+                const toggle = root.querySelector('[data-mobile-nav-toggle]');
+                const panel = root.querySelector('[data-mobile-nav-panel]');
+                const openIcon = root.querySelector('[data-mobile-nav-icon-open]');
+                const closeIcon = root.querySelector('[data-mobile-nav-icon-close]');
+                if (!toggle || !panel) {
+                    return;
+                }
+
+                toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                panel.classList.toggle('hidden', !isOpen);
+                panel.classList.toggle('block', isOpen);
+
+                if (openIcon) {
+                    openIcon.classList.toggle('hidden', isOpen);
+                    openIcon.classList.toggle('inline-flex', !isOpen);
+                }
+
+                if (closeIcon) {
+                    closeIcon.classList.toggle('hidden', !isOpen);
+                    closeIcon.classList.toggle('inline-flex', isOpen);
+                }
+            };
+
+            const setupNav = (root) => {
+                if (root.dataset.mobileNavReady === '1') {
+                    return;
+                }
+
+                const toggle = root.querySelector('[data-mobile-nav-toggle]');
+                const panel = root.querySelector('[data-mobile-nav-panel]');
+                if (!toggle || !panel) {
+                    return;
+                }
+
+                root.dataset.mobileNavReady = '1';
+                setOpenState(root, false);
+
+                toggle.addEventListener('click', () => {
+                    const isOpen = toggle.getAttribute('aria-expanded') === 'true';
+                    setOpenState(root, !isOpen);
+                });
+
+                panel.addEventListener('click', (event) => {
+                    if (event.target.closest('a, button, select')) {
+                        setOpenState(root, false);
+                    }
+                });
+            };
+
+            const setupAll = () => {
+                navRoots().forEach(setupNav);
+            };
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setupAll);
+            } else {
+                setupAll();
+            }
+
+            document.addEventListener('livewire:navigated', setupAll);
+        })();
+    </script>
+@endonce
