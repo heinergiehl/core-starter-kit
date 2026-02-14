@@ -91,6 +91,6 @@ class RepoAccessProfileUiTest extends TestCase
         $response->assertOk();
         $response->assertSee('@octocat');
         $response->assertSee('Access Granted');
-        $response->assertSee('Sync Repo Access Now');
+        $response->assertSee('Refresh Status');
     }
 }
