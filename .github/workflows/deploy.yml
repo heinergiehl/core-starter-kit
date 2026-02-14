@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: ["CI"]
     branches: [main]
+    tags: ['v*']
     types: [completed]
   workflow_dispatch:
     inputs:
@@ -12,22 +13,26 @@ on:
         required: false
         default: "main"
 
+# A tag-triggered CI run has head_branch = tag name (e.g. "v1.0.0")
+# and the branch array will NOT match, so we detect it via startsWith.
+
 concurrency:
-  group: saas-kit-deploy-${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
+  group: saas-kit-deploy-${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'staging' || 'production' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to ${{ github.event_name == 'workflow_run' && 'Staging' || 'Production' }}
+    name: Deploy to ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'Staging' || 'Production' }}
     if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
-    environment: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
+    environment: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'staging' || 'production' }}
 
     env:
-      DEPLOY_ENV: ${{ github.event_name == 'workflow_run' && 'staging' || 'production' }}
+      IS_STAGING: ${{ github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v') }}
+      DEPLOY_ENV: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'staging' || 'production' }}
       DEPLOY_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.ref || 'main' }}
-      PADDLE_ENV_DEFAULT: ${{ github.event_name == 'workflow_run' && 'sandbox' || 'production' }}
-      VPS_PATH: ${{ vars.VPS_PATH || (github.event_name == 'workflow_run' && '/var/www/saas-kit-staging' || '/var/www/saas-kit') }}
+      PADDLE_ENV_DEFAULT: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'sandbox' || 'production' }}
+      VPS_PATH: ${{ vars.VPS_PATH || ((github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && '/var/www/saas-kit-staging' || '/var/www/saas-kit') }}
       WEB_GROUP: ${{ vars.WEB_GROUP || 'www-data' }}
       RUN_BILLING_BOOTSTRAP: ${{ vars.RUN_BILLING_BOOTSTRAP || 'false' }}
 
