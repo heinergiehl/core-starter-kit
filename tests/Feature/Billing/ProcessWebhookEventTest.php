@@ -45,4 +45,3 @@ class ProcessWebhookEventTest extends TestCase
         ]);
     }
 }
-

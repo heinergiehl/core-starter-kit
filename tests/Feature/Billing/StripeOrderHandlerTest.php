@@ -68,4 +68,3 @@ class StripeOrderHandlerTest extends TestCase
         $this->assertCount(1, Notification::sent($user, PaymentSuccessfulNotification::class));
     }
 }
-
