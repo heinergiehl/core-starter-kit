@@ -1,3 +1,3 @@
 User-agent: *
 Disallow:
-Sitemap: /sitemap.xml
+Sitemap: https://shipsolid.heinerdevelops.tech/sitemap.xml
