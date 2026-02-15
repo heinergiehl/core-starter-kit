@@ -80,7 +80,7 @@ class CreateAdmin extends Command
             $admin = $existing;
             $this->info("Existing user [{$email}] promoted to admin.");
         } else {
-            $admin = new User();
+            $admin = new User;
             $admin->forceFill([
                 'name' => $name,
                 'email' => $email,
