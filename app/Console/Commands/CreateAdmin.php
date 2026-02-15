@@ -5,7 +5,6 @@ namespace App\Console\Commands;
 use App\Enums\SystemRoleName;
 use App\Models\User;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
 
@@ -72,7 +71,7 @@ class CreateAdmin extends Command
         if ($existing) {
             $existing->forceFill([
                 'name' => $name,
-                'password' => Hash::make($pw),
+                'password' => $pw,
                 'is_admin' => true,
                 'email_verified_at' => $existing->email_verified_at ?? now(),
                 'onboarding_completed_at' => $existing->onboarding_completed_at ?? now(),
@@ -85,7 +84,7 @@ class CreateAdmin extends Command
             $admin->forceFill([
                 'name' => $name,
                 'email' => $email,
-                'password' => Hash::make($pw),
+                'password' => $pw,
                 'is_admin' => true,
                 'email_verified_at' => now(),
                 'onboarding_completed_at' => now(),
