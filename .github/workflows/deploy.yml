@@ -130,6 +130,8 @@ jobs:
             PADDLE_VENDOR_ID
             PADDLE_API_KEY
             PADDLE_WEBHOOK_SECRET
+            MAILGUN_DOMAIN
+            MAILGUN_SECRET
           )
 
           # For staging, DB values may be omitted and docker-compose defaults are used.
@@ -238,11 +240,10 @@ jobs:
             REDIS_PASSWORD=null
             REDIS_PORT=6379
             
-            MAIL_MAILER=smtp
-            MAIL_HOST=${{ secrets.MAIL_HOST || '127.0.0.1' }}
-            MAIL_PORT=${{ secrets.MAIL_PORT || '1025' }}
-            MAIL_USERNAME=${{ secrets.MAIL_USERNAME || 'null' }}
-            MAIL_PASSWORD=${{ secrets.MAIL_PASSWORD || 'null' }}
+            MAIL_MAILER=mailgun
+            MAILGUN_DOMAIN=${{ secrets.MAILGUN_DOMAIN }}
+            MAILGUN_SECRET=${{ secrets.MAILGUN_SECRET }}
+            MAILGUN_ENDPOINT=${{ vars.MAILGUN_ENDPOINT || 'api.eu.mailgun.net' }}
             MAIL_FROM_ADDRESS="${{ secrets.MAIL_FROM_ADDRESS || 'hello@example.com' }}"
             MAIL_FROM_NAME="${APP_NAME}"
             
@@ -339,6 +340,7 @@ jobs:
             php artisan app:check-readiness
             php artisan billing:check-readiness
             php artisan filament:upgrade
+            php artisan livewire:publish --assets
             php artisan optimize
             php artisan config:cache
             php artisan route:cache
