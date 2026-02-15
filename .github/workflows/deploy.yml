@@ -117,6 +117,8 @@ jobs:
           GH_REPO_ACCESS_TOKEN: ${{ secrets.GH_REPO_ACCESS_TOKEN || secrets.GITHUB_REPO_ACCESS_TOKEN }}
           GH_REPO_OWNER: ${{ vars.GH_REPO_OWNER || secrets.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER || secrets.GITHUB_REPO_OWNER }}
           GH_REPO_NAME: ${{ vars.GH_REPO_NAME || secrets.GH_REPO_NAME || vars.GITHUB_REPO_NAME || secrets.GITHUB_REPO_NAME }}
+          MAILGUN_DOMAIN: ${{ vars.MAILGUN_DOMAIN }}
+          MAILGUN_SECRET: ${{ secrets.MAILGUN_SECRET }}
         run: |
           set -Eeuo pipefail
           missing=0
