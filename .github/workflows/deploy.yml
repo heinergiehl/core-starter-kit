@@ -246,7 +246,7 @@ jobs:
             MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN || secrets.MAILGUN_DOMAIN }}
             MAILGUN_SECRET=${{ secrets.MAILGUN_SECRET }}
             MAILGUN_ENDPOINT=${{ vars.MAILGUN_ENDPOINT || 'api.eu.mailgun.net' }}
-            MAIL_FROM_ADDRESS="${{ secrets.MAIL_FROM_ADDRESS || 'hello@example.com' }}"
+            MAIL_FROM_ADDRESS="${{ secrets.MAIL_FROM_ADDRESS || 'hello@shipsolid.heinerdevelops.tech' }}"
             MAIL_FROM_NAME="${APP_NAME}"
             
             GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
