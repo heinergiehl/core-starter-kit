@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+/* Fonts are loaded via <link> tags in layout templates — no CSS @import needed */
 
 /* Template CSS - Must be imported at top for Vite/PostCSS to process */
 @import 'templates/_void.css';

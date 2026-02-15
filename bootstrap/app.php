@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->web(append: [
+            \App\Http\Middleware\CacheStaticAssets::class,
             \App\Http\Middleware\SecurityHeaders::class,
             \App\Http\Middleware\SetLocale::class,
             \App\Http\Middleware\EnsureOnboardingComplete::class,

@@ -2,7 +2,7 @@
 
 @section('title', __('SaaS features: auth, checkout, billing, and admin workflows') . ' - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', __('Explore production-ready SaaS features: authentication, provider-aware checkout, product and user administration, branding controls, and content operations.'))
-@section('og_image', asset('marketing/checkout-provider-select-focus.png'))
+@section('og_image', asset('marketing/checkout-provider-select-focus.webp'))
 
 @push('meta')
     <meta name="keywords" content="{{ __('laravel saas features, laravel stripe paddle billing starter, filament admin panel saas operations, laravel blog seo starter, onboarding localization saas') }}">
@@ -61,7 +61,7 @@
 @endpush
 
 @push('preloads')
-    <link rel="preload" as="image" href="{{ asset('marketing/checkout-provider-select-focus.png') }}" fetchpriority="high">
+    <link rel="preload" as="image" href="{{ asset('marketing/checkout-provider-select-focus.webp') }}" fetchpriority="high">
 @endpush
 
 @section('content')
@@ -71,8 +71,8 @@
                 'eyebrow' => __('Authentication'),
                 'title' => __('Clean login flow with social sign-in support'),
                 'description' => __('Reduce onboarding friction with a focused auth screen and built-in social continuation options.'),
-                'image' => asset('marketing/auth-login.png'),
-                'preview' => asset('marketing/auth-login-focus.png'),
+                'image' => asset('marketing/auth-login.webp'),
+                'preview' => asset('marketing/auth-login-focus.webp'),
                 'alt' => __('Login experience with email and social login options'),
                 'callout' => __('Email + social sign-in'),
             ],
@@ -80,8 +80,8 @@
                 'eyebrow' => __('Checkout Routing'),
                 'title' => __('Customer chooses billing provider before payment'),
                 'description' => __('Present Stripe or Paddle clearly, with plan context and transparent next action before charge.'),
-                'image' => asset('marketing/checkout-provider-select.png'),
-                'preview' => asset('marketing/checkout-provider-select-focus.png'),
+                'image' => asset('marketing/checkout-provider-select.webp'),
+                'preview' => asset('marketing/checkout-provider-select-focus.webp'),
                 'alt' => __('Checkout screen displaying available payment provider options'),
                 'callout' => __('Stripe or Paddle routing'),
             ],
@@ -89,8 +89,8 @@
                 'eyebrow' => __('Payment Completion'),
                 'title' => __('Structured checkout form for high-intent buyers'),
                 'description' => __('Collect core customer details, promo input, and payment handoff in one polished subscription flow.'),
-                'image' => asset('marketing/checkout-form-stripe.png'),
-                'preview' => asset('marketing/checkout-form-stripe-focus.png'),
+                'image' => asset('marketing/checkout-form-stripe.webp'),
+                'preview' => asset('marketing/checkout-form-stripe-focus.webp'),
                 'alt' => __('Checkout form with customer details and continue to payment action'),
                 'callout' => __('Profile data before payment'),
             ],
@@ -101,8 +101,8 @@
                 'eyebrow' => __('Catalog Ops'),
                 'title' => __('Product and price governance in one place'),
                 'description' => __('Handle product states, provider mappings, and rollout controls from a single operational table.'),
-                'image' => asset('marketing/admin-products.png'),
-                'preview' => asset('marketing/admin-products-focus.png'),
+                'image' => asset('marketing/admin-products.webp'),
+                'preview' => asset('marketing/admin-products-focus.webp'),
                 'alt' => __('Admin products listing with status and provider columns'),
                 'callout' => __('Product + provider status'),
             ],
@@ -110,8 +110,8 @@
                 'eyebrow' => __('User Ops'),
                 'title' => __('User administration with role-aware actions'),
                 'description' => __('Review accounts, roles, and support actions quickly with operational clarity for your team.'),
-                'image' => asset('marketing/admin-users.png'),
-                'preview' => asset('marketing/admin-users-focus.png'),
+                'image' => asset('marketing/admin-users.webp'),
+                'preview' => asset('marketing/admin-users-focus.webp'),
                 'alt' => __('User administration table with role and action columns'),
                 'callout' => __('Roles and support actions'),
             ],
@@ -119,8 +119,8 @@
                 'eyebrow' => __('Content Ops'),
                 'title' => __('Deep blog editing and publishing workflow'),
                 'description' => __('Move from post list to rich long-form editing without adopting an external CMS stack.'),
-                'image' => asset('marketing/admin-blog-editor.png'),
-                'preview' => asset('marketing/admin-blog-editor-focus.png'),
+                'image' => asset('marketing/admin-blog-editor.webp'),
+                'preview' => asset('marketing/admin-blog-editor-focus.webp'),
                 'alt' => __('Blog editor interface with long-form article content and controls'),
                 'callout' => __('Long-form editor built-in'),
             ],
@@ -128,8 +128,8 @@
                 'eyebrow' => __('Branding'),
                 'title' => __('Control identity and theme from admin settings'),
                 'description' => __('Adjust logos, templates, and brand defaults centrally so marketing and product stay aligned.'),
-                'image' => asset('marketing/localhost_8000_admin_manage-branding.png'),
-                'preview' => asset('marketing/admin-manage-branding-focus.png'),
+                'image' => asset('marketing/localhost_8000_admin_manage-branding.webp'),
+                'preview' => asset('marketing/admin-manage-branding-focus.webp'),
                 'alt' => __('Brand management settings with template and identity controls'),
                 'callout' => __('Theme + brand governance'),
             ],
@@ -198,42 +198,42 @@
             [
                 'title' => __('Payment provider operations'),
                 'copy' => __('Enable and manage Stripe/Paddle providers with clear operational controls.'),
-                'image' => asset('marketing/localhost_8000_admin_payment-providers.png'),
+                'image' => asset('marketing/localhost_8000_admin_payment-providers.webp'),
                 'alt' => __('Admin payment providers listing and activation controls'),
                 'size' => 'featured',
             ],
             [
                 'title' => __('Catalog management'),
                 'copy' => __('Operate products, statuses, and provider mapping from one table.'),
-                'image' => asset('marketing/admin-products-focus.png'),
+                'image' => asset('marketing/admin-products-focus.webp'),
                 'alt' => __('Products admin table with status and provider columns'),
                 'size' => 'compact',
             ],
             [
                 'title' => __('Customer support workflows'),
                 'copy' => __('User list with roles and support actions for operational response.'),
-                'image' => asset('marketing/admin-users-focus.png'),
+                'image' => asset('marketing/admin-users-focus.webp'),
                 'alt' => __('Users admin table with roles and actions'),
                 'size' => 'compact',
             ],
             [
                 'title' => __('Editorial execution'),
                 'copy' => __('Long-form post editing with structured content and metadata support.'),
-                'image' => asset('marketing/admin-blog-editor-focus.png'),
+                'image' => asset('marketing/admin-blog-editor-focus.webp'),
                 'alt' => __('Blog editor interface with rich content'),
                 'size' => 'wide',
             ],
             [
                 'title' => __('Brand governance'),
                 'copy' => __('Centralized controls for identity, theme template, and defaults.'),
-                'image' => asset('marketing/admin-manage-branding-focus.png'),
+                'image' => asset('marketing/admin-manage-branding-focus.webp'),
                 'alt' => __('Brand settings and template management screen'),
                 'size' => 'compact',
             ],
             [
                 'title' => __('Metrics visibility'),
                 'copy' => __('Operational stats dashboard for SaaS performance monitoring.'),
-                'image' => asset('marketing/localhost_8000_admin_stats.png'),
+                'image' => asset('marketing/localhost_8000_admin_stats.webp'),
                 'alt' => __('Admin dashboard with SaaS metrics cards and charts'),
                 'size' => 'compact',
             ],
@@ -289,7 +289,7 @@
 
             <figure class="glass-panel rounded-3xl p-3 shadow-xl shadow-ink/10">
                 <img
-                    src="{{ asset('marketing/checkout-form-stripe-focus.png') }}"
+                    src="{{ asset('marketing/checkout-form-stripe-focus.webp') }}"
                     alt="{{ __('Checkout form with plan details and payment continuation') }}"
                     class="h-full w-full rounded-2xl border border-ink/10 bg-white/95 p-2 object-contain"
                     loading="eager"

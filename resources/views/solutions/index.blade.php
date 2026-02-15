@@ -2,7 +2,7 @@
 
 @section('title', __('Laravel SaaS solution pages for billing, admin operations, and SEO growth') . ' - ' . ($appBrandName ?? config('app.name', 'SaaS Kit')))
 @section('meta_description', __('Explore long-tail Laravel SaaS solution pages: Stripe and Paddle billing, Filament admin operations, blog SEO workflows, and onboarding localization implementation.'))
-@section('og_image', asset('marketing/localhost_8000_admin.png'))
+@section('og_image', asset('marketing/localhost_8000_admin.webp'))
 
 @push('meta')
     <meta name="keywords" content="{{ __('laravel saas use cases, laravel stripe paddle billing starter, filament admin saas operations, laravel blog seo starter, laravel onboarding localization') }}">
@@ -28,7 +28,7 @@
 @endpush
 
 @push('preloads')
-    <link rel="preload" as="image" href="{{ asset('marketing/localhost_8000_admin.png') }}" fetchpriority="high">
+    <link rel="preload" as="image" href="{{ asset('marketing/localhost_8000_admin.webp') }}" fetchpriority="high">
 @endpush
 
 @section('content')
@@ -52,7 +52,7 @@
 
             <figure class="glass-panel rounded-3xl p-3 shadow-xl shadow-ink/10">
                 <img
-                    src="{{ asset('marketing/localhost_8000_admin.png') }}"
+                    src="{{ asset('marketing/localhost_8000_admin.webp') }}"
                     alt="{{ __('Admin dashboard with operations and billing controls') }}"
                     class="h-full w-full rounded-2xl border border-ink/10 object-cover"
                     loading="eager"
