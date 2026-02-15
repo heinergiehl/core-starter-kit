@@ -25,42 +25,7 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        $adminData = User::factory()->make([
-            'name' => 'Admin User',
-            'email' => 'admin@example.com',
-            'is_admin' => true,
-            'email_verified_at' => now(),
-        ])->toArray();
-
-        $admin = User::firstOrCreate(
-            ['email' => $adminData['email']],
-            Arr::only($adminData, ['name', 'email', 'password', 'locale', 'onboarding_completed_at'])
-        );
-        $admin->forceFill([
-            'is_admin' => true,
-            'email_verified_at' => $adminData['email_verified_at'] ?? now(),
-        ])->save();
-        if (! $admin->password) {
-            $admin->update(['password' => 'password']);
-        }
-
-        $customerData = User::factory()->make([
-            'name' => 'Test Customer',
-            'email' => 'test@example.com',
-            'email_verified_at' => now(),
-        ])->toArray();
-
-        $customer = User::firstOrCreate(
-            ['email' => $customerData['email']],
-            Arr::only($customerData, ['name', 'email', 'password', 'locale', 'onboarding_completed_at'])
-        );
-        $customer->forceFill([
-            'email_verified_at' => $customerData['email_verified_at'] ?? now(),
-        ])->save();
-        if (! $customer->password) {
-            $customer->update(['password' => 'password']);
-        }
-
+        // ── Permissions & Roles (always seeded) ─────────────────────────
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
         $guard = PermissionGuardrails::guardName();
@@ -79,8 +44,52 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $adminRole->syncPermissions($permissions);
-        $admin->syncRoles([$adminRole]);
 
+        // ── Demo users (local / testing only) ───────────────────────────
+        // In production, create your admin via: php artisan app:create-admin
+        $admin = null;
+
+        if (app()->environment(['local', 'testing'])) {
+            $adminData = User::factory()->make([
+                'name' => 'Admin User',
+                'email' => 'admin@example.com',
+                'is_admin' => true,
+                'email_verified_at' => now(),
+            ])->toArray();
+
+            $admin = User::firstOrCreate(
+                ['email' => $adminData['email']],
+                Arr::only($adminData, ['name', 'email', 'password', 'locale', 'onboarding_completed_at'])
+            );
+            $admin->forceFill([
+                'is_admin' => true,
+                'email_verified_at' => $adminData['email_verified_at'] ?? now(),
+            ])->save();
+            if (! $admin->password) {
+                $admin->update(['password' => 'password']);
+            }
+
+            $admin->syncRoles([$adminRole]);
+
+            $customerData = User::factory()->make([
+                'name' => 'Test Customer',
+                'email' => 'test@example.com',
+                'email_verified_at' => now(),
+            ])->toArray();
+
+            $customer = User::firstOrCreate(
+                ['email' => $customerData['email']],
+                Arr::only($customerData, ['name', 'email', 'password', 'locale', 'onboarding_completed_at'])
+            );
+            $customer->forceFill([
+                'email_verified_at' => $customerData['email_verified_at'] ?? now(),
+            ])->save();
+            if (! $customer->password) {
+                $customer->update(['password' => 'password']);
+            }
+        }
+
+        // ── Blog content (always seeded) ────────────────────────────────
         $category = BlogCategory::firstOrCreate([
             'slug' => Str::slug('Product Updates'),
         ], [
@@ -93,12 +102,14 @@ class DatabaseSeeder extends Seeder
             'name' => 'Release',
         ]);
 
-        $post = BlogPost::firstOrCreate([
-            'slug' => 'welcome-to-saas-kit',
-        ], [
-            'title' => 'Welcome to SaaS Kit',
-            'excerpt' => 'A quick tour of the architecture, billing model, and the admin experience.',
-            'body_markdown' => <<<'MD'
+        // Seed the welcome post only when an author exists (author_id is required)
+        if ($admin) {
+            $post = BlogPost::firstOrCreate(
+                ['slug' => 'welcome-to-saas-kit'],
+                [
+                    'title' => 'Welcome to SaaS Kit',
+                    'excerpt' => 'A quick tour of the architecture, billing model, and the admin experience.',
+                    'body_markdown' => <<<'MD'
 # Shipping faster
 
 This starter ships with B2C billing, auth, and a clear domain map.
@@ -111,13 +122,15 @@ This starter ships with B2C billing, auth, and a clear domain map.
 ## Next steps
 Wire in your billing provider IDs and start building.
 MD,
-            'status' => \App\Enums\PostStatus::Published,
-            'published_at' => now(),
-            'author_id' => $admin->id,
-            'category_id' => $category->id,
-        ]);
+                    'status' => \App\Enums\PostStatus::Published,
+                    'published_at' => now(),
+                    'author_id' => $admin->id,
+                    'category_id' => $category->id,
+                ],
+            );
 
-        $post->tags()->syncWithoutDetaching([$tag->id]);
+            $post->tags()->syncWithoutDetaching([$tag->id]);
+        }
 
         $this->call(BlogPostSeeder::class);
 
