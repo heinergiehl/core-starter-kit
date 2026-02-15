@@ -75,18 +75,21 @@ class CreateAdmin extends Command
                 'password' => Hash::make($pw),
                 'is_admin' => true,
                 'email_verified_at' => $existing->email_verified_at ?? now(),
+                'onboarding_completed_at' => $existing->onboarding_completed_at ?? now(),
             ])->save();
 
             $admin = $existing;
             $this->info("Existing user [{$email}] promoted to admin.");
         } else {
-            $admin = User::create([
+            $admin = new User();
+            $admin->forceFill([
                 'name' => $name,
                 'email' => $email,
                 'password' => Hash::make($pw),
                 'is_admin' => true,
                 'email_verified_at' => now(),
-            ]);
+                'onboarding_completed_at' => now(),
+            ])->save();
 
             $this->info("Admin user [{$email}] created.");
         }
