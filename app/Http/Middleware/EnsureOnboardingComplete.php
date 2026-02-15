@@ -26,6 +26,11 @@ class EnsureOnboardingComplete
             return $next($request);
         }
 
+        // Admin users bypass onboarding
+        if ($user->is_admin) {
+            return $next($request);
+        }
+
         // Skip if onboarding is completed
         if ($user->onboarding_completed_at) {
             return $next($request);
@@ -36,6 +41,11 @@ class EnsureOnboardingComplete
             'onboarding.*',
             'logout',
             'locale.update',
+            // Auth routes - don't interrupt verification/password flows
+            'verification.*',
+            'password.*',
+            // Filament admin panel routes
+            'filament.*',
             // Checkout routes - don't interrupt payment flow
             'checkout.*',
             'billing.checkout',
