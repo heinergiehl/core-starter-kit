@@ -243,7 +243,7 @@ jobs:
             REDIS_PORT=6379
             
             MAIL_MAILER=mailgun
-            MAILGUN_DOMAIN=${{ secrets.MAILGUN_DOMAIN }}
+            MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN || secrets.MAILGUN_DOMAIN }}
             MAILGUN_SECRET=${{ secrets.MAILGUN_SECRET }}
             MAILGUN_ENDPOINT=${{ vars.MAILGUN_ENDPOINT || 'api.eu.mailgun.net' }}
             MAIL_FROM_ADDRESS="${{ secrets.MAIL_FROM_ADDRESS || 'hello@example.com' }}"
