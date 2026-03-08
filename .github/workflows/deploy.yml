@@ -68,36 +68,12 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Setup SSH Agent
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-
-      - name: Add VPS to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Prepare Remote Directory
-        run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "mkdir -p '${VPS_PATH}'"
-
-      - name: Sync
-        run: |
-          rsync -avz --delete \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='.env' \
-            --exclude='node_modules/' \
-            --exclude='storage/' \
-            --exclude='tests/' \
-            --exclude='phpunit.xml' \
-            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
-
       - name: Validate required secrets
         env:
           DEPLOY_ENV: ${{ env.DEPLOY_ENV }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           APP_KEY: ${{ secrets.APP_KEY || vars.APP_KEY }}
           APP_URL: ${{ secrets.APP_URL || vars.APP_URL }}
           DB_HOST: ${{ secrets.DB_HOST || vars.DB_HOST }}
@@ -124,6 +100,9 @@ jobs:
           missing=0
 
           required_vars=(
+            DEPLOY_HOST
+            DEPLOY_USER
+            SSH_PRIVATE_KEY
             APP_KEY
             APP_URL
             STRIPE_KEY
@@ -192,6 +171,35 @@ jobs:
           if [ "$missing" -ne 0 ]; then
             exit 1
           fi
+
+      - name: Setup SSH Agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Prepare Remote Directory
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "mkdir -p '${VPS_PATH}'"
+
+      - name: Sync
+        run: |
+          rsync -avz --delete \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='.env' \
+            --exclude='node_modules/' \
+            --exclude='storage/' \
+            --exclude='tests/' \
+            --exclude='phpunit.xml' \
+            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
+
+
 
       - name: Generate .env
         env:
