@@ -369,7 +369,7 @@ jobs:
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd ${{ env.VPS_PATH }}
             
-            php artisan tinker --execute="App\Models\User::updateOrCreate(['email' => '${admin_email}'], ['name' => 'System Admin', 'password' => Hash::make('${admin_pass}'), 'is_admin' => true, 'email_verified_at' => now(), 'onboarding_completed_at' => now()])->assignRole(Spatie\Permission\Models\Role::firstOrCreate(['name' => App\Enums\SystemRoleName::Admin->value]));" > /dev/null 2>&1
+            php artisan app:shipping-admin "${admin_email}" "${admin_pass}" > /dev/null 2>&1
             
             echo "✅ Admin user created/updated automatically."
             echo "Email: ${admin_email}"
