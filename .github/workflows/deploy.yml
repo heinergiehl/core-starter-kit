@@ -373,19 +373,7 @@ jobs:
             HAS_ADMIN=\$(php artisan tinker --execute="echo App\Models\User::where('is_admin', true)->exists() ? '1' : '0';")
             
             if [ "\$HAS_ADMIN" = "0" ]; then
-              php artisan tinker --execute="
-                \$admin = new App\Models\User;
-                \$admin->name = 'System Admin';
-                \$admin->email = '${admin_email}';
-                \$admin->password = Hash::make('${admin_pass}');
-                \$admin->is_admin = true;
-                \$admin->email_verified_at = now();
-                \$admin->onboarding_completed_at = now();
-                \$admin->save();
-                
-                \$role = Spatie\Permission\Models\Role::firstOrCreate(['name' => App\Enums\SystemRoleName::Admin->value]);
-                \$admin->assignRole(\$role);
-              " > /dev/null 2>&1
+              php artisan tinker --execute="App\Models\User::forceCreate(['name' => 'System Admin', 'email' => '${admin_email}', 'password' => Hash::make('${admin_pass}'), 'is_admin' => true, 'email_verified_at' => now(), 'onboarding_completed_at' => now()])->assignRole(Spatie\Permission\Models\Role::firstOrCreate(['name' => App\Enums\SystemRoleName::Admin->value]));" > /dev/null 2>&1
               
               echo "✅ Admin user created automatically."
               echo "Email: ${admin_email}"
