@@ -32,15 +32,14 @@ class AdminSetup extends Command
         $email = $this->argument('email');
         $password = $this->argument('password');
 
-        $user = User::updateOrCreate(
-            ['email' => $email],
-            [
-                'name' => 'System Admin',
-                'password' => Hash::make($password),
-                'is_admin' => true,
-                'onboarding_completed_at' => now(),
-            ]
-        );
+        $user = User::firstOrNew(['email' => $email]);
+        
+        $user->forceFill([
+            'name' => 'System Admin',
+            'password' => Hash::make($password),
+            'is_admin' => true,
+            'onboarding_completed_at' => now(),
+        ])->save();
 
         if (!$user->hasVerifiedEmail()) {
             $user->markEmailAsVerified();
