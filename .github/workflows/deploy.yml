@@ -359,3 +359,39 @@ jobs:
             php artisan up || true
             app_is_down=0
           EOF
+
+      - name: Initialize Admin User
+        if: ${{ env.DEPLOY_ENV == 'production' || env.DEPLOY_ENV == 'staging' }}
+        run: |
+          admin_email="admin@$(echo ${{ secrets.APP_URL || vars.APP_URL }} | awk -F/ '{print $3}')"
+          admin_pass=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+          
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
+            cd ${{ env.VPS_PATH }}
+            
+            # Check if any admin exists
+            HAS_ADMIN=\$(php artisan tinker --execute="echo App\Models\User::where('is_admin', true)->exists() ? '1' : '0';")
+            
+            if [ "\$HAS_ADMIN" = "0" ]; then
+              php artisan tinker --execute="
+                \$admin = new App\Models\User;
+                \$admin->name = 'System Admin';
+                \$admin->email = '${admin_email}';
+                \$admin->password = Hash::make('${admin_pass}');
+                \$admin->is_admin = true;
+                \$admin->email_verified_at = now();
+                \$admin->onboarding_completed_at = now();
+                \$admin->save();
+                
+                \$role = Spatie\Permission\Models\Role::firstOrCreate(['name' => App\Enums\SystemRoleName::Admin->value]);
+                \$admin->assignRole(\$role);
+              " > /dev/null 2>&1
+              
+              echo "✅ Admin user created automatically."
+              echo "Email: ${admin_email}"
+              echo "Password: ${admin_pass}"
+              echo "::warning title=Admin Credentials::Email: ${admin_email} | Password: ${admin_pass}"
+            else
+              echo "Admin user already exists. Skipping creation."
+            fi
+          EOF
