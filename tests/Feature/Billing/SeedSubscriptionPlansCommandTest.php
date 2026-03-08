@@ -25,13 +25,13 @@ class SeedSubscriptionPlansCommandTest extends TestCase
 
         Price::query()->create([
             'product_id' => $hobbyist->id,
-            'key' => 'lifetime',
-            'label' => 'One-time',
-            'interval' => 'once',
+            'key' => 'monthly',
+            'label' => 'Monthly',
+            'interval' => 'month',
             'interval_count' => 1,
             'currency' => 'USD',
-            'amount' => 4999,
-            'type' => PriceType::OneTime->value,
+            'amount' => 4900,
+            'type' => PriceType::Recurring->value,
             'is_active' => true,
         ]);
 
@@ -42,7 +42,7 @@ class SeedSubscriptionPlansCommandTest extends TestCase
         foreach (['hobbyist', 'indie', 'agency'] as $key) {
             $this->assertDatabaseHas('products', [
                 'key' => $key,
-                'type' => PriceType::Recurring->value,
+                'type' => PriceType::OneTime->value,
                 'is_active' => true,
             ]);
 
@@ -50,23 +50,16 @@ class SeedSubscriptionPlansCommandTest extends TestCase
 
             $this->assertDatabaseHas('prices', [
                 'product_id' => $product->id,
-                'key' => 'monthly',
-                'interval' => 'month',
-                'type' => PriceType::Recurring->value,
-                'is_active' => true,
-            ]);
-            $this->assertDatabaseHas('prices', [
-                'product_id' => $product->id,
-                'key' => 'yearly',
-                'interval' => 'year',
-                'type' => PriceType::Recurring->value,
+                'key' => 'once',
+                'interval' => 'once',
+                'type' => PriceType::OneTime->value,
                 'is_active' => true,
             ]);
         }
 
         $this->assertDatabaseHas('prices', [
             'product_id' => $hobbyist->id,
-            'key' => 'lifetime',
+            'key' => 'monthly',
             'is_active' => false,
         ]);
     }
@@ -81,7 +74,7 @@ class SeedSubscriptionPlansCommandTest extends TestCase
         foreach (['starter', 'pro', 'growth'] as $key) {
             $this->assertDatabaseHas('products', [
                 'key' => $key,
-                'type' => PriceType::Recurring->value,
+                'type' => PriceType::OneTime->value,
                 'is_active' => true,
             ]);
         }

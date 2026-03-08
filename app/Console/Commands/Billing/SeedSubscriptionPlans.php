@@ -42,13 +42,19 @@ class SeedSubscriptionPlans extends Command
 
         Model::withoutEvents(function () use (&$products, $planDefinitions, $priceDefinitions): void {
             foreach ($planDefinitions as $planKey => $definition) {
+                // Determine if this plan has any recurring prices
+                $isRecurring = collect($priceDefinitions)
+                    ->where('plan', $planKey)
+                    ->where('interval', '!=', 'once')
+                    ->isNotEmpty();
+
                 $products[$planKey] = Product::query()->updateOrCreate(
                     ['key' => $planKey],
                     [
                         'name' => $definition['name'],
                         'summary' => $definition['summary'],
                         'description' => $definition['description'],
-                        'type' => PriceType::Recurring->value,
+                        'type' => $isRecurring ? PriceType::Recurring->value : PriceType::OneTime->value,
                         'is_featured' => $definition['is_featured'],
                         'features' => $definition['features'],
                         'entitlements' => $definition['entitlements'],
@@ -60,9 +66,14 @@ class SeedSubscriptionPlans extends Command
             foreach ($products as $product) {
                 Price::query()
                     ->where('product_id', $product->id)
-                    ->where(function ($query): void {
-                        $query->where('type', PriceType::OneTime->value)
-                            ->orWhere('interval', 'once');
+                    ->where(function ($query) use ($product): void {
+                        if ($product->type === PriceType::OneTime->value) {
+                            $query->where('type', PriceType::Recurring->value)
+                                  ->orWhere('interval', '!=', 'once');
+                        } else {
+                            $query->where('type', PriceType::OneTime->value)
+                                  ->orWhere('interval', 'once');
+                        }
                     })
                     ->update(['is_active' => false]);
             }
@@ -85,7 +96,7 @@ class SeedSubscriptionPlans extends Command
                         'interval_count' => 1,
                         'currency' => 'USD',
                         'amount' => $definition['amount'],
-                        'type' => PriceType::Recurring->value,
+                        'type' => $definition['interval'] === 'once' ? PriceType::OneTime->value : PriceType::Recurring->value,
                         'has_trial' => false,
                         'trial_interval' => null,
                         'trial_interval_count' => null,
