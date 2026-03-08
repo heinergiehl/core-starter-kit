@@ -363,7 +363,7 @@ jobs:
       - name: Initialize Admin User
         if: ${{ env.DEPLOY_ENV == 'production' || env.DEPLOY_ENV == 'staging' }}
         run: |
-          admin_email="admin@$(echo ${{ secrets.APP_URL || vars.APP_URL }} | awk -F/ '{print $3}')"
+          admin_email="admin@test.com"
           admin_pass="Gopro12386@"
           
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
