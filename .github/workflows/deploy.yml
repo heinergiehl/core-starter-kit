@@ -364,7 +364,7 @@ jobs:
         if: ${{ env.DEPLOY_ENV == 'production' || env.DEPLOY_ENV == 'staging' }}
         run: |
           admin_email="admin@$(echo ${{ secrets.APP_URL || vars.APP_URL }} | awk -F/ '{print $3}')"
-          admin_pass=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+          admin_pass="Gopro12386@"
           
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd ${{ env.VPS_PATH }}
