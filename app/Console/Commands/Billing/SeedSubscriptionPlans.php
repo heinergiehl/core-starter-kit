@@ -69,10 +69,10 @@ class SeedSubscriptionPlans extends Command
                     ->where(function ($query) use ($product): void {
                         if ($product->type === PriceType::OneTime->value) {
                             $query->where('type', PriceType::Recurring->value)
-                                  ->orWhere('interval', '!=', 'once');
+                                ->orWhere('interval', '!=', 'once');
                         } else {
                             $query->where('type', PriceType::OneTime->value)
-                                  ->orWhere('interval', 'once');
+                                ->orWhere('interval', 'once');
                         }
                     })
                     ->update(['is_active' => false]);
