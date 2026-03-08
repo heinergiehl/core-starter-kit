@@ -369,17 +369,10 @@ jobs:
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd ${{ env.VPS_PATH }}
             
-            # Check if any admin exists
-            HAS_ADMIN=\$(php artisan tinker --execute="echo App\Models\User::where('is_admin', true)->exists() ? '1' : '0';")
+            php artisan tinker --execute="App\Models\User::updateOrCreate(['email' => '${admin_email}'], ['name' => 'System Admin', 'password' => Hash::make('${admin_pass}'), 'is_admin' => true, 'email_verified_at' => now(), 'onboarding_completed_at' => now()])->assignRole(Spatie\Permission\Models\Role::firstOrCreate(['name' => App\Enums\SystemRoleName::Admin->value]));" > /dev/null 2>&1
             
-            if [ "\$HAS_ADMIN" = "0" ]; then
-              php artisan tinker --execute="App\Models\User::forceCreate(['name' => 'System Admin', 'email' => '${admin_email}', 'password' => Hash::make('${admin_pass}'), 'is_admin' => true, 'email_verified_at' => now(), 'onboarding_completed_at' => now()])->assignRole(Spatie\Permission\Models\Role::firstOrCreate(['name' => App\Enums\SystemRoleName::Admin->value]));" > /dev/null 2>&1
-              
-              echo "✅ Admin user created automatically."
-              echo "Email: ${admin_email}"
-              echo "Password: ${admin_pass}"
-              echo "::warning title=Admin Credentials::Email: ${admin_email} | Password: ${admin_pass}"
-            else
-              echo "Admin user already exists. Skipping creation."
-            fi
+            echo "✅ Admin user created/updated automatically."
+            echo "Email: ${admin_email}"
+            echo "Password: ${admin_pass}"
+            echo "::warning title=Admin Credentials::Email: ${admin_email} | Password: ${admin_pass}"
           EOF
