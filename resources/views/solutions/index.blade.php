@@ -83,7 +83,7 @@
                                 <span class="rounded-full border border-ink/10 bg-white/80 px-2.5 py-1 text-[11px] font-medium text-ink/65 dark:bg-white/[0.04]">{{ $keyword }}</span>
                             @endforeach
                         </div>
-                        <span class="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.14em] text-primary">{{ __('Open solution page') }}</span>
+                        <span class="mt-4 inline-flex text-xs font-semibold uppercase tracking-[0.14em] text-primary">{{ __('View use case') }}</span>
                     </a>
                 </article>
             @endforeach

@@ -118,6 +118,7 @@
                 $isHighlighted = !empty($plan->highlight);
                 $isOneTime = $plan->isOneTime();
                 $planTypeLabel = $isOneTime ? __('One-time') : __('Subscription');
+                $isComingSoon = (bool) ($plan->entitlements['coming_soon'] ?? false);
                 
                 // Calculate available intervals for this plan
                 $planIntervals = collect($plan->prices)->pluck('interval')->filter()->unique()->values()->all();
@@ -126,9 +127,13 @@
             <!-- Plan Card -->
             <div 
                 x-show="@js($planIntervals).includes(interval)"
-                class="glass-panel rounded-[32px] p-8 flex flex-col relative group transition-all duration-300 {{ $isHighlighted ? 'border-primary shadow-[0_0_50px_-12px_rgba(var(--primary-500-rgb),0.3)] ring-1 ring-primary/50 md:scale-110 z-10 bg-primary/5' : 'hover:border-primary/30 hover:shadow-lg' }}"
+                class="glass-panel rounded-[32px] p-8 flex flex-col relative group transition-all duration-300 {{ $isComingSoon ? 'opacity-75' : '' }} {{ $isHighlighted && !$isComingSoon ? 'border-primary shadow-[0_0_50px_-12px_rgba(var(--primary-500-rgb),0.3)] ring-1 ring-primary/50 md:scale-110 z-10 bg-primary/5' : 'hover:border-primary/30 hover:shadow-lg' }}"
             >
-                @if ($isHighlighted)
+                @if ($isComingSoon)
+                    <div class="absolute -translate-x-1/2 -top-4 left-1/2">
+                        <span class="px-4 py-1 text-xs font-bold text-white rounded-full shadow-lg bg-gradient-to-r from-amber-500 to-orange-500">{{ __('Coming Soon') }}</span>
+                    </div>
+                @elseif ($isHighlighted)
                     <div class="absolute -translate-x-1/2 -top-4 left-1/2">
                         <span class="px-4 py-1 text-xs font-bold text-white rounded-full shadow-lg bg-gradient-to-r from-primary to-secondary">{{ __('Most Popular') }}</span>
                     </div>
@@ -183,6 +188,7 @@
                                     </div>
                                 </div>
 
+                                @if (!$isComingSoon)
                                 <div>
                                     @php
                                         $priceState = data_get($priceStates, "{$plan->key}.{$price->key}", []);
@@ -309,8 +315,16 @@
                                         </div>
                                     @endif
                                 </div>
+                                @endif
                             </div>
                         @endforeach
+                    @endif
+
+                    @if ($isComingSoon)
+                        <div class="px-6 py-5 text-center border border-dashed rounded-2xl border-amber-400/30 bg-amber-500/5">
+                            <p class="text-sm font-semibold text-amber-500">{{ __('Coming Soon') }}</p>
+                            <p class="mt-1 text-xs text-ink/50">{{ __('This plan is not yet available for purchase.') }}</p>
+                        </div>
                     @endif
                 </div>
 

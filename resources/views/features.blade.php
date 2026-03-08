@@ -242,22 +242,22 @@
         $solutionClusters = [
             [
                 'title' => __('Laravel Stripe and Paddle billing starter'),
-                'copy' => __('Targeting billing-intent keywords around multi-provider checkout, subscriptions, and invoice operations.'),
+                'copy' => __('Handle Stripe + Paddle checkout, subscriptions, and invoice operations.'),
                 'url' => route('solutions.show', ['slug' => 'laravel-stripe-paddle-billing-starter']),
             ],
             [
                 'title' => __('Filament admin operations for SaaS'),
-                'copy' => __('Targeting operations-intent keywords around user governance, product catalog, and admin execution.'),
+                'copy' => __('Manage users, products, and admin operations from one Filament panel.'),
                 'url' => route('solutions.show', ['slug' => 'filament-admin-operations-for-saas']),
             ],
             [
                 'title' => __('Laravel SaaS blog and SEO starter'),
-                'copy' => __('Targeting organic growth keywords around blog workflows, metadata, sitemap, RSS, and OG routes.'),
+                'copy' => __('Publish SEO-optimized blog posts with sitemap, RSS, and Open Graph support.'),
                 'url' => route('solutions.show', ['slug' => 'laravel-saas-blog-and-seo-starter']),
             ],
             [
                 'title' => __('Laravel onboarding and localization starter'),
-                'copy' => __('Targeting activation and internationalization keywords around sign-in, onboarding, and locale switching.'),
+                'copy' => __('Ship onboarding flows and locale-aware pages for international users.'),
                 'url' => route('solutions.show', ['slug' => 'laravel-saas-onboarding-and-localization']),
             ],
         ];
@@ -374,9 +374,9 @@
         <div class="glass-panel rounded-[32px] p-8 sm:p-10">
             <div class="mb-8">
                 <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Complete Feature Inventory') }}</p>
-                <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Everything currently shipped in this SaaS starter') }}</h2>
+                <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Everything you get out of the box') }}</h2>
                 <p class="mt-3 max-w-4xl text-sm leading-7 text-ink/70 sm:text-base">
-                    {{ __('This inventory maps the production feature set across billing, admin operations, publishing, and SEO infrastructure so teams can evaluate technical coverage before implementation begins.') }}
+                    {{ __('Billing, admin, content publishing, and SEO — all production-ready and waiting for your product logic.') }}
                 </p>
             </div>
 
@@ -405,10 +405,10 @@
     <section class="py-6 sm:py-10">
         <div class="rounded-[32px] border border-ink/10 bg-gradient-to-br from-white/85 via-white/70 to-primary/5 p-8 shadow-lg shadow-ink/5 dark:from-white/[0.04] dark:via-white/[0.03] dark:to-primary/15 sm:p-10">
             <div class="mb-8">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Real Screen Library') }}</p>
-                <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Visual proof across operations, billing, and growth workflows') }}</h2>
+                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Screenshots') }}</p>
+                <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('See the admin panel, checkout, billing, and content features in action') }}</h2>
                 <p class="mt-3 max-w-4xl text-sm leading-7 text-ink/70 sm:text-base">
-                    {{ __('Adding more images helps when each image proves a distinct workflow. These screenshots are selected to show coverage breadth and reduce ambiguity for technical buyers.') }}
+                    {{ __('Real screenshots from the starter kit — what you see is what you ship.') }}
                 </p>
             </div>
 
@@ -453,10 +453,10 @@
         <div class="glass-panel rounded-[30px] p-8 sm:p-10">
             <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
                 <div class="max-w-3xl">
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Long-tail SEO Clusters') }}</p>
-                    <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Dedicated landing pages for high-intent search topics') }}</h2>
+                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Use Cases') }}</p>
+                    <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Explore specific features in detail') }}</h2>
                     <p class="mt-3 text-sm leading-7 text-ink/70 sm:text-base">
-                        {{ __('Use these focused pages to rank for specific buying-intent queries while keeping internal links connected to pricing, docs, and core feature content.') }}
+                        {{ __('Each page covers a specific feature area with screenshots and details to help you evaluate the kit.') }}
                     </p>
                 </div>
                 <a href="{{ route('solutions.index') }}" class="rounded-full border border-ink/15 px-5 py-2 text-sm font-semibold text-ink/70 transition hover:border-primary/40 hover:text-ink">

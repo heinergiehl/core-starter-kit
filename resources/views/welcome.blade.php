@@ -234,43 +234,26 @@
             ],
         ];
 
-        $proofChips = [
-            [
-                'value' => (string) (count($journeyCards) + count($opsHighlights)),
-                'label' => __('Verified workflow previews'),
-                'detail' => __('All screenshots shown are captured from this starter.'),
-            ],
-            [
-                'value' => '2',
-                'label' => __('Billing providers built-in'),
-                'detail' => __('Stripe and Paddle flows are already wired.'),
-            ],
-            [
-                'value' => '1',
-                'label' => __('Unified stack'),
-                'detail' => __('Marketing, app, and admin live in one codebase.'),
-            ],
-        ];
 
         $solutionLandingLinks = [
             [
                 'title' => __('Laravel Stripe and Paddle billing starter'),
-                'copy' => __('Dual-provider checkout, subscriptions, invoicing, and billing lifecycle operations.'),
+                'copy' => __('Handle Stripe + Paddle subscriptions, one-time purchases, invoicing, and billing lifecycle in one flow.'),
                 'url' => route('solutions.show', ['slug' => 'laravel-stripe-paddle-billing-starter']),
             ],
             [
                 'title' => __('Filament admin operations for SaaS'),
-                'copy' => __('User governance, catalog management, and day-to-day operations in one admin panel.'),
+                'copy' => __('Manage users, products, prices, roles, and day-to-day SaaS operations from a Filament admin panel.'),
                 'url' => route('solutions.show', ['slug' => 'filament-admin-operations-for-saas']),
             ],
             [
                 'title' => __('Laravel SaaS blog and SEO starter'),
-                'copy' => __('Editorial workflow with metadata controls, sitemap, RSS, and Open Graph support.'),
+                'copy' => __('Publish blog posts with SEO fields, maintain docs, and get sitemap, RSS, and Open Graph out of the box.'),
                 'url' => route('solutions.show', ['slug' => 'laravel-saas-blog-and-seo-starter']),
             ],
             [
                 'title' => __('Onboarding and localization for SaaS'),
-                'copy' => __('Activation flow, social login, onboarding routes, and locale-aware UX surfaces.'),
+                'copy' => __('Ship onboarding flows, social login, and locale-aware pages to serve international users.'),
                 'url' => route('solutions.show', ['slug' => 'laravel-saas-onboarding-and-localization']),
             ],
         ];
@@ -288,8 +271,8 @@
             ],
             [
                 'topic' => __('Marketing readiness'),
-                'generic' => __('SEO and proof sections are often postponed until after launch pressure.'),
-                'starter' => __('Metadata, discoverability routes, and workflow proof screens are launch-ready from day one.'),
+                'generic' => __('SEO and marketing pages are often postponed until after launch pressure.'),
+                'starter' => __('Metadata, sitemap, blog, and marketing pages are launch-ready from day one.'),
             ],
         ];
 
@@ -324,7 +307,7 @@
                         <a href="{{ route('pricing') }}" class="btn-primary text-center">{{ __('See Pricing') }}</a>
                         <a href="{{ route('features') }}" class="btn-secondary text-center">{{ __('Explore all features') }}</a>
                     @endauth
-                    <a href="{{ route('solutions.index') }}" class="text-sm font-semibold text-ink/70 transition hover:text-ink">
+                    <a href="{{ route('solutions.index') }}" class="text-sm font-semibold whitespace-nowrap text-ink/70 transition hover:text-ink">
                         {{ __('Open Solution Hub') }} ->
                     </a>
                 </div>
@@ -369,47 +352,13 @@
         </div>
     </section>
 
-    <section class="py-8 sm:py-10">
-        <div class="rounded-[28px] border border-ink/10 bg-white/75 p-6 shadow-sm backdrop-blur-md dark:bg-white/5 sm:p-8">
-            <div class="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-                <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Proof Layer') }}</p>
-                    <h2 class="mt-3 font-display text-2xl font-bold text-ink sm:text-3xl">
-                        {{ __('Real product surfaces, not decorative mockups.') }}
-                    </h2>
-                    <p class="mt-3 max-w-2xl text-sm leading-7 text-ink/70 sm:text-base">
-                        {{ __('A strong SaaS landing page should prove execution quality quickly. These previews are pulled from working authentication, checkout, billing, and admin screens.') }}
-                    </p>
-
-                    <div class="mt-5 flex items-center gap-4">
-                        <div class="flex -space-x-3">
-                            <img src="{{ asset('marketing/auth-login-focus.webp') }}" alt="{{ __('Authentication screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
-                            <img src="{{ asset('marketing/checkout-provider-select-focus.webp') }}" alt="{{ __('Checkout screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
-                            <img src="{{ asset('marketing/admin-products-focus.webp') }}" alt="{{ __('Operations screenshot preview') }}" class="h-11 w-11 rounded-full border-2 border-white object-cover dark:border-ink/40">
-                        </div>
-                        <p class="text-sm font-medium text-ink/75">{{ __('Each card links to its full screenshot for inspection.') }}</p>
-                    </div>
-                </div>
-
-                <div class="grid gap-3 sm:grid-cols-3">
-                    @foreach ($proofChips as $chip)
-                        <article class="rounded-2xl border border-ink/10 bg-white/85 p-4 dark:bg-white/5">
-                            <p class="font-display text-3xl font-bold text-ink">{{ $chip['value'] }}</p>
-                            <p class="mt-1 text-sm font-semibold text-ink">{{ $chip['label'] }}</p>
-                            <p class="mt-1 text-xs leading-5 text-ink/60">{{ $chip['detail'] }}</p>
-                        </article>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-    </section>
 
     <section class="py-8 sm:py-10">
         <div class="glass-panel rounded-[30px] p-6 sm:p-8">
             <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
                 <div class="max-w-3xl">
                     <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('SEO Solution Pages') }}</p>
-                    <h2 class="mt-3 font-display text-2xl font-bold text-ink sm:text-3xl">{{ __('Long-tail landing pages for high-intent SaaS keywords') }}</h2>
+                    <h2 class="mt-3 font-display text-2xl font-bold text-ink sm:text-3xl">{{ __('See how this starter kit handles real SaaS workflows') }}</h2>
                     <p class="mt-3 text-sm leading-7 text-ink/70 sm:text-base">
                         {{ __('These pages target specific implementation intents and route traffic into pricing, docs, and feature workflows through focused content clusters.') }}
                     </p>
@@ -441,7 +390,7 @@
                     {{ __('From first sign-in to paid customer, every critical step is already designed.') }}
                 </h2>
                 <p class="mt-4 text-ink/70">
-                    {{ __('Switch between steps to inspect details in a larger proof view instead of tiny screenshot grids.') }}
+                    {{ __('Click each step to see how the flow works with real screenshots.') }}
                 </p>
             </div>
             <a href="{{ route('features') }}" class="rounded-full border border-ink/15 px-5 py-2 text-sm font-semibold text-ink/70 transition hover:border-primary/40 hover:text-ink">

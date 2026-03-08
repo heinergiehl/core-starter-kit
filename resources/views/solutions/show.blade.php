@@ -90,7 +90,7 @@
 
     <section class="py-8 sm:py-12">
         <div class="glass-panel rounded-[30px] p-8 sm:p-10">
-            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Workflow proof with real screens') }}</h2>
+            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('See it in action') }}</h2>
             <p class="mt-3 max-w-3xl text-sm leading-7 text-ink/70 sm:text-base">
                 {{ __('Each screenshot below maps to an existing workflow in this starter. Click any card to inspect the full-resolution screen.') }}
             </p>
@@ -171,7 +171,7 @@
     @if (! empty($relatedSolutions))
         <section class="py-8 sm:py-12">
             <div class="rounded-[30px] border border-ink/10 bg-gradient-to-br from-white/85 via-white/70 to-primary/10 p-8 shadow-lg shadow-ink/5 dark:from-white/[0.04] dark:via-white/[0.03] dark:to-primary/15 sm:p-10">
-                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{{ __('Related Long-tail Pages') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{{ __('Related Use Cases') }}</p>
                 <h2 class="mt-2 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Explore adjacent solution clusters') }}</h2>
                 <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     @foreach ($relatedSolutions as $related)

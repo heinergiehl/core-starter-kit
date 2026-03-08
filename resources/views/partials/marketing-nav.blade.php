@@ -13,17 +13,17 @@
 
     {{-- Desktop Navigation --}}
     <nav class="items-center hidden gap-1 p-1 border rounded-full md:flex border-ink/5 bg-surface-highlight/30 backdrop-blur-lg">
-        <a href="{{ route('home') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('home') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
-        <a href="{{ route('features') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('features') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Features') }}</a>
-        <a href="{{ route('solutions.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('solutions.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Solutions') }}</a>
-        <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
+        <a href="{{ route('home') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('home') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
+        <a href="{{ route('features') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('features') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Features') }}</a>
+        <a href="{{ route('solutions.index') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('solutions.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Solutions') }}</a>
+        <a href="{{ route('pricing') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
         @if (config('saas.features.roadmap', true))
-            <a href="{{ route('roadmap') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
+            <a href="{{ route('roadmap') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
         @endif
         @if (config('saas.features.blog', true))
-            <a href="{{ route('blog.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
+            <a href="{{ route('blog.index') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
         @endif
-        <a href="{{ route('docs.index') }}" class="px-4 py-2 text-sm font-medium text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('docs.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Docs') }}</a>
+        <a href="{{ route('docs.index') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('docs.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Docs') }}</a>
     </nav>
 
     {{-- Right Side Actions --}}
@@ -111,7 +111,7 @@
                 <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Choose a Plan') }}</a>
             @endif
         @else
-            <a href="{{ route('login') }}" class="hidden text-sm font-medium transition sm:inline-flex text-ink/70 hover:text-ink">{{ __('Sign In') }}</a>
+            <a href="{{ route('login') }}" class="hidden text-sm font-medium whitespace-nowrap transition sm:inline-flex text-ink/70 hover:text-ink">{{ __('Sign In') }}</a>
             <a href="{{ route('pricing') }}" class="px-4 py-2 text-sm font-semibold text-white transition rounded-full shadow-lg bg-primary shadow-primary/20 hover:bg-primary/90 whitespace-nowrap">{{ __('Get Started') }}</a>
         @endauth
 
