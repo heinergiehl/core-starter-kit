@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Domain\Audit\Services\ActivityLogService;
 use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Support\Facades\Auth;
@@ -72,6 +73,19 @@ class Login extends Component
                 'email' => $user->email,
             ]);
 
+            app(ActivityLogService::class)->log(
+                category: 'auth',
+                event: 'auth.login_challenged',
+                subject: $user,
+                actor: $user,
+                description: 'User passed password authentication and was challenged for two-factor verification.',
+                metadata: [
+                    'two_factor' => true,
+                    'remember' => $this->remember,
+                    'flow' => 'livewire',
+                ],
+            );
+
             $this->redirect(route('two-factor.challenge'));
 
             return;
@@ -89,6 +103,20 @@ class Login extends Component
             'session_id' => session()->getId(),
             'redirect' => $redirectTo,
         ]);
+
+        app(ActivityLogService::class)->log(
+            category: 'auth',
+            event: 'auth.login_succeeded',
+            subject: $user,
+            actor: $user,
+            description: 'User signed in successfully.',
+            metadata: [
+                'two_factor' => false,
+                'remember' => $this->remember,
+                'flow' => 'livewire',
+                'redirect' => $redirectTo,
+            ],
+        );
 
         $this->redirect($redirectTo);
     }

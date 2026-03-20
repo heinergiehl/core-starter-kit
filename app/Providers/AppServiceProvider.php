@@ -101,6 +101,8 @@ class AppServiceProvider extends ServiceProvider
         \App\Domain\Billing\Models\Product::observe(\App\Domain\Billing\Observers\ProductObserver::class);
         \App\Domain\Billing\Models\Price::observe(\App\Domain\Billing\Observers\PriceObserver::class);
         \App\Domain\Billing\Models\Order::observe(\App\Domain\RepoAccess\Observers\OrderRepoAccessObserver::class);
+        \App\Domain\Billing\Models\Order::observe(\App\Domain\Audit\Observers\OrderActivityObserver::class);
+        \App\Domain\Billing\Models\Subscription::observe(\App\Domain\Audit\Observers\SubscriptionActivityObserver::class);
 
         Role::saving(function (Role $role): void {
             if (! $role->exists || ! $role->isDirty('name')) {

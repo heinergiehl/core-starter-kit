@@ -2,6 +2,7 @@
 
 namespace App\Domain\Identity\Services;
 
+use App\Domain\Audit\Services\ActivityLogService;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -9,6 +10,10 @@ use Illuminate\Support\Facades\Session;
 
 class ImpersonationService
 {
+    public function __construct(
+        private readonly ActivityLogService $activityLogService,
+    ) {}
+
     public const SESSION_KEY = 'impersonator_id';
 
     public const IMPERSONATED_KEY = 'impersonated_user_id';
@@ -47,6 +52,20 @@ class ImpersonationService
             'impersonated_id' => $target->id,
         ]);
 
+        $this->activityLogService->log(
+            category: 'admin',
+            event: 'admin.impersonation_started',
+            subject: $target,
+            actor: $impersonator,
+            description: "Started impersonating {$target->email}.",
+            metadata: [
+                'impersonator_id' => $impersonator->id,
+                'impersonator_email' => $impersonator->email,
+                'impersonated_id' => $target->id,
+                'impersonated_email' => $target->email,
+            ],
+        );
+
         return true;
     }
 
@@ -79,6 +98,20 @@ class ImpersonationService
                 'impersonator_email' => $impersonator->email,
                 'impersonated_id' => $impersonated->id,
             ]);
+
+            $this->activityLogService->log(
+                category: 'admin',
+                event: 'admin.impersonation_ended',
+                subject: $impersonated,
+                actor: $impersonator,
+                description: "Stopped impersonating {$impersonated->email}.",
+                metadata: [
+                    'impersonator_id' => $impersonator->id,
+                    'impersonator_email' => $impersonator->email,
+                    'impersonated_id' => $impersonated->id,
+                    'impersonated_email' => $impersonated->email,
+                ],
+            );
         }
 
         // Clear session and log back in as original user

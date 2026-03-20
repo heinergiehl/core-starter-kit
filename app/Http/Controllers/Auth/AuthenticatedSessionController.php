@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Domain\Audit\Services\ActivityLogService;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Support\Authorization\PermissionGuardrails;
@@ -67,6 +68,19 @@ class AuthenticatedSessionController extends Controller
                 ]);
             }
 
+            app(ActivityLogService::class)->log(
+                category: 'auth',
+                event: 'auth.login_challenged',
+                subject: $user,
+                actor: $user,
+                description: 'User passed password authentication and was challenged for two-factor verification.',
+                metadata: [
+                    'two_factor' => true,
+                    'remember' => $request->boolean('remember'),
+                    'flow' => 'controller',
+                ],
+            );
+
             return redirect()->route('two-factor.challenge');
         }
 
@@ -84,6 +98,20 @@ class AuthenticatedSessionController extends Controller
                 'redirect' => $redirectTo,
             ]);
         }
+
+        app(ActivityLogService::class)->log(
+            category: 'auth',
+            event: 'auth.login_succeeded',
+            subject: $user,
+            actor: $user,
+            description: 'User signed in successfully.',
+            metadata: [
+                'two_factor' => false,
+                'remember' => $request->boolean('remember'),
+                'flow' => 'controller',
+                'redirect' => $redirectTo,
+            ],
+        );
 
         return redirect()->intended($redirectTo);
     }

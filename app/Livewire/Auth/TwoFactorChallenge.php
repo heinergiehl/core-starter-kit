@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Auth;
 
+use App\Domain\Audit\Services\ActivityLogService;
 use App\Models\User;
 use App\Support\Authorization\PermissionGuardrails;
 use Illuminate\Support\Facades\Auth;
@@ -78,6 +79,20 @@ class TwoFactorChallenge extends Component
         $redirectTo = $user->canAccessAdminPanel()
             ? route(PermissionGuardrails::ADMIN_DASHBOARD_ROUTE)
             : route('dashboard');
+
+        app(ActivityLogService::class)->log(
+            category: 'auth',
+            event: 'auth.login_succeeded',
+            subject: $user,
+            actor: $user,
+            description: 'User completed sign in with two-factor verification.',
+            metadata: [
+                'two_factor' => true,
+                'flow' => 'two_factor_challenge',
+                'method' => $this->useRecoveryCode ? 'recovery_code' : 'app_code',
+                'redirect' => $redirectTo,
+            ],
+        );
 
         $this->redirect($redirectTo);
     }
