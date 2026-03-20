@@ -179,9 +179,13 @@ class BillingProductSeeder extends Seeder
 
     private function syncToProviders(): void
     {
-        // Only run sync in local dev or if explicitly requested in CI/Prod
-        // to avoid accidental spamming of production accounts from a seeder in wrong env
         if (! App::environment('local') && ! App::environment('testing')) {
+            return;
+        }
+
+        if (! config('saas.billing.seed.publish_to_providers', false)) {
+            $this->command?->line('Skipping provider publish during seeding. Run billing:publish-catalog explicitly when needed.');
+
             return;
         }
 

@@ -55,6 +55,9 @@ return [
                 'paddle' => 'Paddle',
             ],
         ],
+        'seed' => [
+            'publish_to_providers' => env('BILLING_SEED_PUBLISH_TO_PROVIDERS', false),
+        ],
     ],
     'support' => [
         'email' => env('SUPPORT_EMAIL'),
