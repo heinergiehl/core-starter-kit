@@ -121,6 +121,7 @@ foreach ($marketingRouteDefinitions as $definition) {
 
 Route::prefix('{locale}')
     ->where(['locale' => $localePattern])
+    ->middleware('cache_guest_marketing')
     ->group(function () use ($defaultLocale, $marketingRouteDefinitions) {
         foreach ($marketingRouteDefinitions as $definition) {
             $localizedRoute = Route::get($definition['uri'], $definition['action'])

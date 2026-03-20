@@ -44,7 +44,7 @@ class PriceResource extends Resource
                     ->helperText('Use keys like monthly, yearly, lifetime.'),
                 TextInput::make('label')
                     ->maxLength(100),
-                // Provider selection removed for agnostic pricing
+                // Provider selection removed for agnostic pricing.
                 // Select::make('provider')
                 //     ->options(self::providerOptions())
                 //     ->required(),
@@ -75,7 +75,7 @@ class PriceResource extends Resource
                     ->minValue(0)
                     ->required()
                     ->readOnly()
-                    ->helperText('Stored in minor units (e.g. 2900 for €29.00).'),
+                    ->helperText('Stored in minor units (e.g. 2900 for EUR 29.00).'),
                 Select::make('type')
                     ->options([
                         'flat' => 'Flat',
@@ -140,15 +140,15 @@ class PriceResource extends Resource
                     ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
             ])
             ->headerActions([
-                // Sync moved to ProductResource - prices are synced together with products
+                // Sync moved to ProductResource because prices are synced together with products.
             ])
             ->defaultSort('product_id')
             ->actions([
                 EditAction::make(),
-                // Delete removed: Prices are managed on provider side (Paddle/Stripe)
+                // Delete is intentionally disabled until provider-side archival is modeled.
             ])
             ->bulkActions([
-                // Bulk delete removed: Prices are managed on provider side
+                // Bulk delete is intentionally disabled until provider-side archival is modeled.
             ]);
     }
 

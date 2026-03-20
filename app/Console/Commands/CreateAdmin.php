@@ -35,7 +35,6 @@ class CreateAdmin extends Command
             required: true,
         );
 
-        // Check if user already exists
         $existing = User::where('email', $email)->first();
 
         if ($existing && $existing->is_admin) {
@@ -67,7 +66,6 @@ class CreateAdmin extends Command
             return self::FAILURE;
         }
 
-        // Create or promote the user
         if ($existing) {
             $existing->forceFill([
                 'name' => $name,
@@ -93,18 +91,17 @@ class CreateAdmin extends Command
             $this->info("Admin user [{$email}] created.");
         }
 
-        // Assign admin role
         $adminRole = Role::where('name', SystemRoleName::Admin->value)->first();
 
         if ($adminRole) {
             $admin->syncRoles([$adminRole]);
             $this->info('Admin role assigned.');
         } else {
-            $this->warn('Admin role not found — run db:seed first to create roles.');
+            $this->warn('Admin role not found. Run db:seed first to create roles.');
         }
 
         $this->newLine();
-        $this->info('✅ Done! You can now log in at your app URL.');
+        $this->info('Done. You can now log in at your app URL.');
 
         return self::SUCCESS;
     }

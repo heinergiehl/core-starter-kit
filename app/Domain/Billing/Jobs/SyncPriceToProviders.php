@@ -13,6 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class SyncPriceToProviders implements ShouldQueue
 {
@@ -20,10 +21,14 @@ class SyncPriceToProviders implements ShouldQueue
 
     public function __construct(
         public Price $price
-    ) {}
+    ) {
+        $this->afterCommit = true;
+    }
 
     public function handle(BillingProviderManager $manager): void
     {
+        $failures = [];
+
         // Get configured providers
         $providers = PaymentProvider::where('is_active', true)
             ->pluck('slug')
@@ -36,7 +41,16 @@ class SyncPriceToProviders implements ShouldQueue
                 $this->syncToProvider($client, $provider, $manager);
             } catch (\Throwable $e) {
                 Log::error("Failed to sync price {$this->price->id} to {$provider}: ".$e->getMessage());
+                $failures[$provider] = $e->getMessage();
             }
+        }
+
+        if ($failures !== []) {
+            throw new RuntimeException(
+                'Price sync failed for provider(s): '.collect($failures)
+                    ->map(fn (string $message, string $provider): string => "{$provider} ({$message})")
+                    ->implode(', ')
+            );
         }
     }
 

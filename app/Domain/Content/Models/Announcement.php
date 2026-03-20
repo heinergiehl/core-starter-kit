@@ -5,6 +5,7 @@ namespace App\Domain\Content\Models;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Site-wide announcement model.
@@ -14,6 +15,10 @@ use Illuminate\Database\Eloquent\Model;
 class Announcement extends Model
 {
     use HasFactory;
+
+    private const CURRENT_CACHE_KEY = 'announcements.current';
+
+    private const ALL_ACTIVE_CACHE_KEY = 'announcements.all_active';
 
     protected static function newFactory()
     {
@@ -39,6 +44,12 @@ class Announcement extends Model
         'ends_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saved(fn (): bool => self::flushCachedAnnouncements());
+        static::deleted(fn (): bool => self::flushCachedAnnouncements());
+    }
+
     /**
      * Scope to active announcements.
      */
@@ -61,9 +72,13 @@ class Announcement extends Model
      */
     public static function current(): ?self
     {
-        return static::active()
-            ->orderBy('created_at', 'desc')
-            ->first();
+        return Cache::remember(
+            self::CURRENT_CACHE_KEY,
+            now()->addSeconds((int) config('saas.performance.announcements_cache_seconds', 60)),
+            fn (): ?self => static::active()
+                ->orderBy('created_at', 'desc')
+                ->first()
+        );
     }
 
     /**
@@ -71,9 +86,13 @@ class Announcement extends Model
      */
     public static function allActive(): \Illuminate\Database\Eloquent\Collection
     {
-        return static::active()
-            ->orderBy('created_at', 'desc')
-            ->get();
+        return Cache::remember(
+            self::ALL_ACTIVE_CACHE_KEY,
+            now()->addSeconds((int) config('saas.performance.announcements_cache_seconds', 60)),
+            fn (): \Illuminate\Database\Eloquent\Collection => static::active()
+                ->orderBy('created_at', 'desc')
+                ->get()
+        );
     }
 
     /**
@@ -100,5 +119,13 @@ class Announcement extends Model
             'danger' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />',
             default => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />',
         };
+    }
+
+    private static function flushCachedAnnouncements(): bool
+    {
+        Cache::forget(self::CURRENT_CACHE_KEY);
+        Cache::forget(self::ALL_ACTIVE_CACHE_KEY);
+
+        return true;
     }
 }

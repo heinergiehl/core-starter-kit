@@ -132,7 +132,6 @@ class BillingProductSeeder extends Seeder
                     continue;
                 }
 
-                // Create Price (agnostic)
                 $price = Price::updateOrCreate(
                     [
                         'product_id' => $product->id,
@@ -152,13 +151,10 @@ class BillingProductSeeder extends Seeder
                     ]
                 );
 
-                // Handle Provider Mappings
                 foreach ($providers as $provider) {
                     $hasApiKey = $this->hasApiConfig($provider);
                     $placeholderId = sprintf('%s_%s_%s', $provider, $definition['plan'], $definition['key']);
 
-                    // If we have an API key, we should NOT use placeholders.
-                    // We delete any existing placeholder so that the Sync service can create/link the real ID.
                     if ($hasApiKey) {
                         $price->mappings()
                             ->where('provider', $provider)
@@ -168,7 +164,6 @@ class BillingProductSeeder extends Seeder
                         continue;
                     }
 
-                    // If we DON'T have an API key, we need a placeholder for the UI to work (even if checkout fails)
                     if (! $price->mappings()->where('provider', $provider)->exists()) {
                         $price->mappings()->create([
                             'provider' => $provider,
@@ -179,7 +174,6 @@ class BillingProductSeeder extends Seeder
             }
         });
 
-        // Attempt to sync to providers if keys are present
         $this->syncToProviders();
     }
 
@@ -196,19 +190,18 @@ class BillingProductSeeder extends Seeder
 
         foreach ($enabledProviders as $provider) {
             try {
-                // Simple check if API keys exist to avoid mostly-error logs
                 if ($this->hasApiConfig($provider)) {
-                    $this->command->info("🔄 Auto-publishing catalog to {$provider}...");
+                    $this->command->info("Auto-publishing catalog to {$provider}...");
 
-                    $result = $publishService->apply($provider, true); // true = ensure existing are updated
+                    $result = $publishService->apply($provider, true);
 
                     $created = $result['summary']['products']['create'] ?? 0;
                     $updated = $result['summary']['products']['update'] ?? 0;
 
-                    $this->command->info("   ✓ {$created} created, {$updated} updated.");
+                    $this->command->info("   OK: {$created} created, {$updated} updated.");
                 }
             } catch (\Throwable $e) {
-                $this->command->warn("   ⚠️ Failed to publish to {$provider}: {$e->getMessage()}");
+                $this->command->warn("   Warning: failed to publish to {$provider}: {$e->getMessage()}");
             }
         }
     }

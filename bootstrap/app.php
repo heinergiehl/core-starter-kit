@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'subscribed' => \App\Http\Middleware\EnsureSubscription::class,
             'redirect_if_subscribed' => \App\Http\Middleware\RedirectIfSubscribed::class,
+            'cache_guest_marketing' => \App\Http\Middleware\CacheGuestMarketingResponse::class,
         ]);
 
         $middleware->web(append: [

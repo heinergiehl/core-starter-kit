@@ -21,6 +21,8 @@ use Illuminate\Support\Str;
  */
 class SetupWizard extends Command
 {
+    private const CATALOG_SYNC_COMMAND = 'billing:publish-catalog';
+
     protected $signature = 'setup:wizard
         {--force : Run full setup wizard even if already configured}
         {--skip-db : Skip database migration}
@@ -39,7 +41,7 @@ class SetupWizard extends Command
         $this->envPath = base_path('.env');
 
         $this->newLine();
-        $this->components->info('🚀 Welcome to SaaS Kit Setup Wizard!');
+        $this->components->info('Welcome to the SaaS Kit Setup Wizard.');
         $this->newLine();
 
         if (! File::exists($this->envPath)) {
@@ -48,24 +50,16 @@ class SetupWizard extends Command
             return self::FAILURE;
         }
 
-        // Load current env values
         $this->loadEnv();
-
-        // Detect current configuration status
         $this->detectStatus();
 
-        // If already configured and not forced, show menu
         if ($this->isConfigured() && ! $this->option('force')) {
             return $this->showConfiguredMenu();
         }
 
-        // Run full setup wizard
         return $this->runFullSetup();
     }
 
-    /**
-     * Detect current configuration status.
-     */
     private function detectStatus(): void
     {
         $this->status = [
@@ -81,9 +75,6 @@ class SetupWizard extends Command
         ];
     }
 
-    /**
-     * Check if the app is already configured.
-     */
     private function isConfigured(): bool
     {
         return $this->status['app_key']
@@ -91,12 +82,8 @@ class SetupWizard extends Command
             && $this->status['admin_exists'];
     }
 
-    /**
-     * Show menu for already configured apps.
-     */
     private function showConfiguredMenu(): int
     {
-        // Show current status
         $this->showStatus();
 
         $this->newLine();
@@ -104,11 +91,11 @@ class SetupWizard extends Command
         $action = $this->choice(
             'What would you like to do?',
             [
-                'billing' => '💳 Change billing provider',
-                'admin' => '👤 Create another admin user',
-                'sync' => '🔄 Sync products from provider',
-                'full' => '🔧 Run full setup wizard',
-                'exit' => '👋 Exit',
+                'billing' => 'Change billing provider',
+                'admin' => 'Create another admin user',
+                'sync' => 'Publish catalog to provider',
+                'full' => 'Run full setup wizard',
+                'exit' => 'Exit',
             ],
             'exit'
         );
@@ -122,103 +109,83 @@ class SetupWizard extends Command
         };
     }
 
-    /**
-     * Show current configuration status.
-     */
     private function showStatus(): void
     {
         $appName = trim((string) ($this->status['app_name'] ?? 'Not set'), '"');
         $provider = ucfirst((string) ($this->status['provider'] ?? 'None'));
-        $providerStatus = $this->status['provider_configured'] ? '✓' : '⚠️ Not configured';
+        $providerStatus = $this->status['provider_configured'] ? 'Ready' : 'Not configured';
         $adminEmail = $this->status['admin_email'] ?? 'None';
         $products = $this->status['product_count'] ?? 0;
 
         $this->components->twoColumnDetail('App Name', $appName);
-        $this->components->twoColumnDetail('Database', $this->status['database'] ? '✓ Ready' : '❌ Not migrated');
+        $this->components->twoColumnDetail('Database', $this->status['database'] ? 'Ready' : 'Not migrated');
         $this->components->twoColumnDetail('Billing Provider', "{$provider} {$providerStatus}");
         $this->components->twoColumnDetail('Admin User', $adminEmail);
         $this->components->twoColumnDetail('Products Synced', (string) $products);
     }
 
-    /**
-     * Menu action: Change billing provider.
-     */
     private function menuChangeBilling(): int
     {
         $this->setupBillingProvider();
         $this->writeEnv();
         $this->clearCaches();
 
-        $this->components->success('✓ Billing provider updated!');
+        $this->components->success('Billing provider updated.');
 
-        if ($this->confirm('Sync products from new provider?', true)) {
+        if ($this->confirm('Publish the current catalog to the new provider?', true)) {
             return $this->menuSyncProducts();
         }
 
         return self::SUCCESS;
     }
 
-    /**
-     * Menu action: Create admin user.
-     */
     private function menuCreateAdmin(): int
     {
         $this->setupAdminUser();
-        $this->components->success('✓ Admin user created!');
+        $this->components->success('Admin user created.');
 
         return self::SUCCESS;
     }
 
-    /**
-     * Menu action: Sync products.
-     */
     private function menuSyncProducts(): int
     {
         $provider = $this->status['provider'] ?? 'stripe';
 
-        $this->components->task("Syncing products from {$provider}", function () use ($provider) {
-            Artisan::call('billing:sync', ['--provider' => $provider]);
+        $this->components->task("Publishing catalog to {$provider}", function () use ($provider) {
+            Artisan::call(self::CATALOG_SYNC_COMMAND, [
+                'provider' => $provider,
+                '--apply' => true,
+                '--update' => true,
+            ]);
 
             return true;
         });
 
-        $this->components->success('✓ Products synced!');
+        $this->components->success('Catalog published.');
 
         return self::SUCCESS;
     }
 
-    /**
-     * Run the full setup wizard.
-     */
     private function runFullSetup(): int
     {
-        // Step 1: Application Settings
         $this->setupApplication();
-
-        // Step 2: Billing Provider
         $this->setupBillingProvider();
 
-        // Step 3: Database
         if (! $this->option('skip-db')) {
             $this->setupDatabase();
         }
 
-        // Step 4: Admin User
         $this->setupAdminUser();
 
-        // Step 5: Optional Demo Data
         if (! $this->option('skip-seed')) {
             $this->setupDemoData();
         }
 
-        // Write all env changes
         $this->writeEnv();
-
-        // Final steps
         $this->runFinalCommands();
 
         $this->newLine();
-        $this->components->success('🎉 Setup complete!');
+        $this->components->success('Setup complete.');
         $this->newLine();
 
         $appUrl = $this->envValues['APP_URL'] ?? 'http://localhost:8000';
@@ -228,10 +195,6 @@ class SetupWizard extends Command
 
         return self::SUCCESS;
     }
-
-    // ========================================
-    // Status Detection Helpers
-    // ========================================
 
     private function isDatabaseReady(): bool
     {
@@ -305,17 +268,14 @@ class SetupWizard extends Command
         }
     }
 
-    // ========================================
-    // Setup Steps
-    // ========================================
-
     private function loadEnv(): void
     {
         $content = File::get($this->envPath);
 
         foreach (explode("\n", $content) as $line) {
             $line = trim($line);
-            if (empty($line) || str_starts_with($line, '#')) {
+
+            if ($line === '' || str_starts_with($line, '#')) {
                 continue;
             }
 
@@ -328,20 +288,17 @@ class SetupWizard extends Command
 
     private function setupApplication(): void
     {
-        $this->components->info('📝 Application Settings');
+        $this->components->info('Application Settings');
         $this->newLine();
 
-        // App Name
         $currentName = trim((string) ($this->envValues['APP_NAME'] ?? 'SaaS Kit'), '"');
         $appName = $this->ask('What is your application name?', $currentName);
         $this->envValues['APP_NAME'] = "\"{$appName}\"";
 
-        // App URL
         $currentUrl = $this->envValues['APP_URL'] ?? 'http://localhost:8000';
         $appUrl = $this->ask('What is your application URL?', $currentUrl);
         $this->envValues['APP_URL'] = $appUrl;
 
-        // Generate app key if not set
         if (empty($this->envValues['APP_KEY']) || $this->envValues['APP_KEY'] === 'base64:') {
             $this->components->task('Generating application key', function () {
                 Artisan::call('key:generate', ['--force' => true]);
@@ -355,7 +312,7 @@ class SetupWizard extends Command
 
     private function setupBillingProvider(): void
     {
-        $this->components->info('💳 Billing Provider');
+        $this->components->info('Billing Provider');
         $this->newLine();
 
         $provider = $this->choice(
@@ -369,13 +326,11 @@ class SetupWizard extends Command
 
         $this->envValues['BILLING_DEFAULT_PROVIDER'] = $provider;
 
-        // Provider-specific configuration
         match ($provider) {
             'stripe' => $this->setupStripe(),
             'paddle' => $this->setupPaddle(),
         };
 
-        // Provider choice on pricing page
         $showProviderChoice = $this->confirm(
             'Show provider choice tabs on pricing page? (Recommended: No for production)',
             false
@@ -387,7 +342,7 @@ class SetupWizard extends Command
 
     private function setupStripe(): void
     {
-        $this->components->info('  → Stripe Configuration');
+        $this->components->info('  Stripe configuration');
 
         $currentSecret = $this->envValues['STRIPE_SECRET'] ?? '';
         $masked = $currentSecret ? Str::mask($currentSecret, '*', 7, -4) : '(not set)';
@@ -412,7 +367,7 @@ class SetupWizard extends Command
 
     private function setupPaddle(): void
     {
-        $this->components->info('  → Paddle Configuration');
+        $this->components->info('  Paddle configuration');
 
         $currentEnvironment = $this->envValues['PADDLE_ENV']
             ?? $this->envValues['PADDLE_ENVIRONMENT']
@@ -453,12 +408,10 @@ class SetupWizard extends Command
 
     private function setupDatabase(): void
     {
-        $this->components->info('🗄️  Database');
+        $this->components->info('Database');
         $this->newLine();
 
-        $runMigrations = $this->confirm('Run database migrations?', true);
-
-        if ($runMigrations) {
+        if ($this->confirm('Run database migrations?', true)) {
             $this->components->task('Running migrations', function () {
                 Artisan::call('migrate', ['--force' => true]);
 
@@ -471,7 +424,7 @@ class SetupWizard extends Command
 
     private function setupAdminUser(): void
     {
-        $this->components->info('👤 Admin User');
+        $this->components->info('Admin User');
         $this->newLine();
 
         if (! $this->confirm('Create an admin user?', true)) {
@@ -512,7 +465,7 @@ class SetupWizard extends Command
 
     private function setupDemoData(): void
     {
-        $this->components->info('🎭 Demo Data');
+        $this->components->info('Demo Data');
         $this->newLine();
 
         if (! $this->confirm('Seed demo data? (sample content)', false)) {
@@ -534,16 +487,13 @@ class SetupWizard extends Command
             $content = File::get($this->envPath);
 
             foreach ($this->envValues as $key => $value) {
-                // Check if key exists
                 if (preg_match("/^{$key}=.*/m", $content)) {
-                    // Update existing key
                     $content = preg_replace(
                         "/^{$key}=.*/m",
                         "{$key}={$value}",
                         $content
                     );
                 } else {
-                    // Add new key at end
                     $content .= "\n{$key}={$value}";
                 }
             }
@@ -569,7 +519,6 @@ class SetupWizard extends Command
             return true;
         });
 
-        // Sync products if provider is configured
         $provider = $this->envValues['BILLING_DEFAULT_PROVIDER'] ?? 'stripe';
         $hasKey = match ($provider) {
             'stripe' => ! empty($this->envValues['STRIPE_SECRET']),
@@ -577,9 +526,13 @@ class SetupWizard extends Command
             default => false,
         };
 
-        if ($hasKey && $this->confirm('Sync products from billing provider?', true)) {
-            $this->components->task('Syncing products', function () use ($provider) {
-                Artisan::call('billing:sync', ['--provider' => $provider]);
+        if ($hasKey && $this->confirm('Publish the local catalog to the billing provider?', true)) {
+            $this->components->task('Publishing catalog', function () use ($provider) {
+                Artisan::call(self::CATALOG_SYNC_COMMAND, [
+                    'provider' => $provider,
+                    '--apply' => true,
+                    '--update' => true,
+                ]);
 
                 return true;
             });

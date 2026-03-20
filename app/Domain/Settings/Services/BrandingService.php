@@ -7,6 +7,7 @@ use App\Support\Color\Contrast;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Throwable;
 
 class BrandingService
 {
@@ -116,21 +117,73 @@ class BrandingService
             return null;
         }
 
-        return Cache::remember(
-            'branding.global',
-            now()->addMinutes(self::CACHE_TTL_MINUTES),
-            fn () => BrandSetting::query()->find(BrandSetting::GLOBAL_ID)
-                ?? BrandSetting::query()->first()
-        );
+        if (! $this->shouldUseCache()) {
+            try {
+                return $this->loadGlobalSetting();
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return null;
+            }
+        }
+
+        try {
+            return Cache::remember(
+                'branding.global',
+                now()->addMinutes(self::CACHE_TTL_MINUTES),
+                fn () => $this->loadGlobalSetting()
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            try {
+                return $this->loadGlobalSetting();
+            } catch (Throwable $innerException) {
+                report($innerException);
+
+                return null;
+            }
+        }
     }
 
     private function brandingTableReady(): bool
     {
-        return (bool) Cache::remember(
-            'branding.table_ready',
-            now()->addMinutes(self::CACHE_TTL_MINUTES),
-            fn () => Schema::hasTable('brand_settings')
-        );
+        if (! $this->databaseConnectionLooksReachable()) {
+            return false;
+        }
+
+        if (! $this->shouldUseCache()) {
+            return $this->detectBrandingTableReady();
+        }
+
+        try {
+            return (bool) Cache::remember(
+                'branding.table_ready',
+                now()->addMinutes(self::CACHE_TTL_MINUTES),
+                fn (): bool => $this->detectBrandingTableReady()
+            );
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return $this->detectBrandingTableReady();
+        }
+    }
+
+    private function loadGlobalSetting(): ?BrandSetting
+    {
+        return BrandSetting::query()->find(BrandSetting::GLOBAL_ID)
+            ?? BrandSetting::query()->first();
+    }
+
+    private function detectBrandingTableReady(): bool
+    {
+        try {
+            return Schema::hasTable('brand_settings');
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return false;
+        }
     }
 
     private function normalizeAssetPath(?string $path): ?string
@@ -215,5 +268,46 @@ class BrandingService
         }
 
         return sprintf('%d %d %d', $values[0], $values[1], $values[2]);
+    }
+
+    private function shouldUseCache(): bool
+    {
+        $defaultStore = config('cache.default');
+        $driver = config("cache.stores.{$defaultStore}.driver");
+
+        return $driver !== 'database';
+    }
+
+    private function databaseConnectionLooksReachable(): bool
+    {
+        $connection = config('database.connections.'.config('database.default'));
+
+        if (! is_array($connection)) {
+            return true;
+        }
+
+        $driver = $connection['driver'] ?? null;
+
+        if ($driver === 'sqlite') {
+            return true;
+        }
+
+        $host = $connection['host'] ?? null;
+        $port = $connection['port'] ?? null;
+
+        if (! is_string($host) || trim($host) === '' || ! is_numeric($port)) {
+            return true;
+        }
+
+        $timeout = (float) env('DB_CONNECT_PROBE_TIMEOUT', 1.0);
+        $socket = @fsockopen($host, (int) $port, $errorCode, $errorMessage, $timeout);
+
+        if (! is_resource($socket)) {
+            return false;
+        }
+
+        fclose($socket);
+
+        return true;
     }
 }

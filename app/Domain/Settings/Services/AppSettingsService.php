@@ -6,6 +6,7 @@ use App\Domain\Settings\Models\AppSetting;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 class AppSettingsService
 {
@@ -13,7 +14,17 @@ class AppSettingsService
 
     public function isAvailable(): bool
     {
-        return Schema::hasTable('app_settings');
+        if (! $this->databaseConnectionLooksReachable()) {
+            return false;
+        }
+
+        try {
+            return Schema::hasTable('app_settings');
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return false;
+        }
     }
 
     public function all(): array
@@ -147,20 +158,48 @@ class AppSettingsService
             return [];
         }
 
-        return Cache::rememberForever(self::CACHE_KEY, function (): array {
-            return AppSetting::query()
-                ->get()
-                ->mapWithKeys(function (AppSetting $setting): array {
-                    return [
-                        $setting->key => [
-                            'value' => $setting->value,
-                            'type' => $setting->type,
-                            'is_encrypted' => $setting->is_encrypted,
-                        ],
-                    ];
-                })
-                ->all();
-        });
+        if (! $this->shouldUseCache()) {
+            try {
+                return $this->loadRawSettings();
+            } catch (Throwable $exception) {
+                report($exception);
+
+                return [];
+            }
+        }
+
+        try {
+            return Cache::rememberForever(self::CACHE_KEY, fn (): array => $this->loadRawSettings());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            try {
+                return $this->loadRawSettings();
+            } catch (Throwable $innerException) {
+                report($innerException);
+
+                return [];
+            }
+        }
+    }
+
+    /**
+     * @return array<string, array{value: ?string, type: string, is_encrypted: bool}>
+     */
+    private function loadRawSettings(): array
+    {
+        return AppSetting::query()
+            ->get()
+            ->mapWithKeys(function (AppSetting $setting): array {
+                return [
+                    $setting->key => [
+                        'value' => $setting->value,
+                        'type' => $setting->type,
+                        'is_encrypted' => $setting->is_encrypted,
+                    ],
+                ];
+            })
+            ->all();
     }
 
     private function encodeValue(mixed $value, string $type, bool $encrypted): ?string
@@ -201,5 +240,46 @@ class AppSettingsService
             'json' => json_decode($raw, true),
             default => $raw,
         };
+    }
+
+    private function shouldUseCache(): bool
+    {
+        $defaultStore = config('cache.default');
+        $driver = config("cache.stores.{$defaultStore}.driver");
+
+        return $driver !== 'database';
+    }
+
+    private function databaseConnectionLooksReachable(): bool
+    {
+        $connection = config('database.connections.'.config('database.default'));
+
+        if (! is_array($connection)) {
+            return true;
+        }
+
+        $driver = $connection['driver'] ?? null;
+
+        if ($driver === 'sqlite') {
+            return true;
+        }
+
+        $host = $connection['host'] ?? null;
+        $port = $connection['port'] ?? null;
+
+        if (! is_string($host) || trim($host) === '' || ! is_numeric($port)) {
+            return true;
+        }
+
+        $timeout = (float) env('DB_CONNECT_PROBE_TIMEOUT', 1.0);
+        $socket = @fsockopen($host, (int) $port, $errorCode, $errorMessage, $timeout);
+
+        if (! is_resource($socket)) {
+            return false;
+        }
+
+        fclose($socket);
+
+        return true;
     }
 }

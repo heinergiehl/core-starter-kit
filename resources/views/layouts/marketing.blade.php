@@ -141,18 +141,21 @@
             $templateFonts = $templateConfig['fonts'] ?? [];
             $fontSans = $templateFonts['sans'] ?? config('saas.branding.fonts.sans', 'Plus Jakarta Sans');
             $fontDisplay = $templateFonts['display'] ?? config('saas.branding.fonts.display', 'Outfit');
-            
-            // Build Google Fonts URL based on template
+            $fontWeightQuery = (string) config('saas.performance.font_weight_query', '400;500;600;700');
+
             $fontFamilies = collect([$fontSans, $fontDisplay])
                 ->unique()
-                ->map(fn($f) => str_replace(' ', '+', $f) . ':wght@300;400;500;600;700')
+                ->map(fn($f) => str_replace(' ', '+', $f) . ":wght@{$fontWeightQuery}")
                 ->implode('&family=');
+            $templateCssEntry = "resources/css/templates/{$activeTemplate}.css";
         @endphp
 
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family={{ $fontFamilies }}&display=swap" onload="this.onload=null;this.rel='stylesheet'">
-        <noscript><link href="https://fonts.googleapis.com/css2?family={{ $fontFamilies }}&display=swap" rel="stylesheet"></noscript>
+        @if (config('saas.performance.remote_fonts_enabled', true))
+            <link rel="preconnect" href="https://fonts.googleapis.com">
+            <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+            <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family={{ $fontFamilies }}&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+            <noscript><link href="https://fonts.googleapis.com/css2?family={{ $fontFamilies }}&display=swap" rel="stylesheet"></noscript>
+        @endif
 
         <style>
             :root {
@@ -163,7 +166,7 @@
 
         
         @livewireStyles
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        @vite(['resources/css/app.css', $templateCssEntry, 'resources/js/app.js'])
     </head>
     <body class="bg-surface text-ink {{ $bodyClass }}">
         <div class="min-h-screen bg-hero-glow">

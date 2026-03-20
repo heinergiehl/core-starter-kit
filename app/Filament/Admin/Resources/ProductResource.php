@@ -260,7 +260,7 @@ class ProductResource extends Resource
             ->headerActions([
                 CreateAction::make(),
                 Action::make('sync')
-                    ->label('Import from Providers')
+                    ->label('Import Provider Catalog')
                     ->icon('heroicon-o-arrow-path')
                     ->color('gray')
                     ->disabled(fn () => false) // Placeholder if we had a job status to check
@@ -290,21 +290,21 @@ class ProductResource extends Resource
                         SyncProductsJob::dispatch($includeDeleted, auth()->id());
 
                         Notification::make()
-                            ->title('Sync started')
-                            ->body('Product synchronization has started in the background. You will be notified when it completes.')
+                            ->title('Import started')
+                            ->body('Provider catalog import has started in the background. Local products will be updated when it completes.')
                             ->info()
                             ->send();
                     }),
 
-                // Publish Action Removed for Provider-First
+                // Provider import is kept as a migration/reconciliation tool.
             ])
             ->defaultSort('name')
             ->actions([
                 EditAction::make(),
-                // Delete removed: Products are managed on provider side (Paddle/Stripe)
+                // Delete is intentionally disabled until provider-side archival is modeled.
             ])
             ->bulkActions([
-                // Bulk delete removed: Products are managed on provider side
+                // Bulk delete is intentionally disabled until provider-side archival is modeled.
             ]);
     }
 

@@ -5,7 +5,7 @@
 
 @foreach($announcements as $announcement)
     @if(!in_array($announcement->id, $dismissedIds))
-        <div 
+        <div
             data-announcement-banner
             class="border-b {{ $announcement->getTypeClasses() }}"
         >
@@ -19,27 +19,27 @@
                             <p class="text-sm font-medium">
                                 {{ $announcement->title }}
                                 @if($announcement->message)
-                                    <span class="font-normal opacity-80">— {{ $announcement->message }}</span>
+                                    <span class="font-normal opacity-80">- {{ $announcement->message }}</span>
                                 @endif
                             </p>
                         </div>
                     </div>
-                    
+
                     <div class="flex items-center gap-2">
                         @if($announcement->link_url)
-                            <a 
-                                href="{{ $announcement->link_url }}" 
+                            <a
+                                href="{{ $announcement->link_url }}"
                                 class="rounded-full px-3 py-1 text-xs font-semibold bg-white/20 hover:bg-white/30 transition"
                             >
                                 {{ $announcement->link_text ?: __('Learn more') }}
                             </a>
                         @endif
-                        
+
                         @if($announcement->is_dismissible)
                             <form method="POST" action="{{ route('announcements.dismiss', $announcement) }}" class="inline" data-submit-lock>
                                 @csrf
-                                <button 
-                                    type="submit" 
+                                <button
+                                    type="submit"
                                     class="rounded-full p-1 hover:bg-white/20 transition"
                                 >
                                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

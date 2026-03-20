@@ -5,6 +5,7 @@ namespace Tests\Unit\Domain\Settings;
 use App\Domain\Settings\Services\AppSettingsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class AppSettingsServiceTest extends TestCase
@@ -78,5 +79,28 @@ class AppSettingsServiceTest extends TestCase
         $this->assertIsArray($cached['mail.postmark.token']);
         $this->assertTrue($cached['mail.postmark.token']['is_encrypted']);
         $this->assertNotSame('secret-token', $cached['mail.postmark.token']['value']);
+    }
+
+    public function test_it_treats_settings_as_unavailable_when_schema_lookup_throws(): void
+    {
+        Schema::shouldReceive('hasTable')
+            ->once()
+            ->with('app_settings')
+            ->andThrow(new \RuntimeException('Database offline'));
+
+        $this->assertFalse(app(AppSettingsService::class)->isAvailable());
+    }
+
+    public function test_it_falls_back_to_direct_queries_when_cache_access_fails(): void
+    {
+        $service = app(AppSettingsService::class);
+        $service->set('support.email', 'fallback@example.com', 'support');
+
+        Cache::shouldReceive('rememberForever')
+            ->once()
+            ->with('app_settings.all', \Closure::class)
+            ->andThrow(new \RuntimeException('Cache store unavailable'));
+
+        $this->assertSame('fallback@example.com', $service->get('support.email'));
     }
 }

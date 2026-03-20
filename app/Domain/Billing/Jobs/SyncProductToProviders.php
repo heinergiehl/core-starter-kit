@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 
 class SyncProductToProviders implements ShouldQueue
 {
@@ -20,11 +21,14 @@ class SyncProductToProviders implements ShouldQueue
     public function __construct(
         public Product $product,
         public bool $cascadePriceSync = true
-    ) {}
+    ) {
+        $this->afterCommit = true;
+    }
 
     public function handle(BillingProviderManager $manager): void
     {
         $syncedAnyProvider = false;
+        $failures = [];
 
         // Get configured providers
         $providers = \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
@@ -39,9 +43,16 @@ class SyncProductToProviders implements ShouldQueue
                 $syncedAnyProvider = true;
             } catch (\Throwable $e) {
                 Log::error("Failed to sync product {$this->product->id} to {$provider}: ".$e->getMessage());
-                // We don't rethrow to avoid blocking other providers,
-                // but usually you might want to retry.
+                $failures[$provider] = $e->getMessage();
             }
+        }
+
+        if ($failures !== []) {
+            throw new RuntimeException(
+                'Product sync failed for provider(s): '.collect($failures)
+                    ->map(fn (string $message, string $provider): string => "{$provider} ({$message})")
+                    ->implode(', ')
+            );
         }
 
         if (! $this->cascadePriceSync || ! $syncedAnyProvider) {
