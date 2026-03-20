@@ -4,37 +4,49 @@ on:
   workflow_run:
     workflows: ["CI"]
     branches: [main]
-    tags: ['v*']
     types: [completed]
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: production
       ref:
-        description: "Git ref (branch, tag, or SHA) to deploy to production"
+        description: "Git ref (branch, tag, or SHA) to deploy"
         required: false
         default: "main"
+      bootstrap_admin:
+        description: "Create the initial admin if none exists"
+        required: false
+        type: boolean
+        default: false
 
-# A tag-triggered CI run has head_branch = tag name (e.g. "v1.0.0")
-# and the branch array will NOT match, so we detect it via startsWith.
+permissions:
+  contents: read
 
 concurrency:
-  group: saas-kit-deploy-${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'staging' || 'production' }}
+  group: saas-kit-deploy-${{ github.event_name == 'workflow_run' && 'staging' || github.event.inputs.environment || 'production' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
-    name: Deploy to ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'Staging' || 'Production' }}
+    name: Deploy to ${{ github.event_name == 'workflow_run' && 'Staging' || (github.event.inputs.environment == 'staging' && 'Staging' || 'Production') }}
     if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
-    environment: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'staging' || 'production' }}
+    environment: ${{ github.event_name == 'workflow_run' && 'staging' || github.event.inputs.environment || 'production' }}
 
     env:
-      IS_STAGING: ${{ github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v') }}
-      DEPLOY_ENV: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'staging' || 'production' }}
+      DEPLOY_ENV: ${{ github.event_name == 'workflow_run' && 'staging' || github.event.inputs.environment || 'production' }}
       DEPLOY_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.ref || 'main' }}
-      PADDLE_ENV_DEFAULT: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && 'sandbox' || 'production' }}
-      VPS_PATH: ${{ vars.VPS_PATH || ((github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'v')) && '/var/www/saas-kit-staging' || '/var/www/saas-kit') }}
+      PADDLE_ENV_DEFAULT: ${{ ((github.event_name == 'workflow_run') || (github.event.inputs.environment == 'staging')) && 'sandbox' || 'production' }}
+      VPS_PATH: ${{ vars.VPS_PATH || (((github.event_name == 'workflow_run') || (github.event.inputs.environment == 'staging')) && '/var/www/saas-kit-staging' || '/var/www/saas-kit') }}
       WEB_GROUP: ${{ vars.WEB_GROUP || 'www-data' }}
       RUN_BILLING_BOOTSTRAP: ${{ vars.RUN_BILLING_BOOTSTRAP || 'false' }}
+      BOOTSTRAP_ADMIN: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.bootstrap_admin == 'true' && 'true' || 'false') || vars.BOOTSTRAP_ADMIN || 'false' }}
 
     steps:
       - name: Checkout
@@ -74,6 +86,7 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DEPLOY_SSH_HOST_KEY: ${{ secrets.DEPLOY_SSH_HOST_KEY || vars.DEPLOY_SSH_HOST_KEY }}
           APP_KEY: ${{ secrets.APP_KEY || vars.APP_KEY }}
           APP_URL: ${{ secrets.APP_URL || vars.APP_URL }}
           DB_HOST: ${{ secrets.DB_HOST || vars.DB_HOST }}
@@ -95,6 +108,9 @@ jobs:
           GH_REPO_NAME: ${{ vars.GH_REPO_NAME || secrets.GH_REPO_NAME || vars.GITHUB_REPO_NAME || secrets.GITHUB_REPO_NAME }}
           MAILGUN_DOMAIN: ${{ vars.MAILGUN_DOMAIN }}
           MAILGUN_SECRET: ${{ secrets.MAILGUN_SECRET }}
+          BOOTSTRAP_ADMIN: ${{ env.BOOTSTRAP_ADMIN }}
+          INITIAL_ADMIN_EMAIL: ${{ secrets.INITIAL_ADMIN_EMAIL || vars.INITIAL_ADMIN_EMAIL }}
+          INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
         run: |
           set -Eeuo pipefail
           missing=0
@@ -103,6 +119,7 @@ jobs:
             DEPLOY_HOST
             DEPLOY_USER
             SSH_PRIVATE_KEY
+            DEPLOY_SSH_HOST_KEY
             APP_KEY
             APP_URL
             STRIPE_KEY
@@ -115,7 +132,6 @@ jobs:
             MAILGUN_SECRET
           )
 
-          # For staging, DB values may be omitted and docker-compose defaults are used.
           if [ "${DEPLOY_ENV}" != "staging" ]; then
             required_vars+=(
               DB_HOST
@@ -140,12 +156,17 @@ jobs:
             done
           fi
 
-          if [ "$missing" -ne 0 ]; then
-            exit 1
-          fi
-
           if [ -z "${PADDLE_CLIENT_SIDE_TOKEN:-}" ]; then
             echo "::warning::PADDLE_CLIENT_SIDE_TOKEN is not set. Paddle inline checkout UI token is optional."
+          fi
+
+          if [ "${BOOTSTRAP_ADMIN}" = "true" ]; then
+            for var in INITIAL_ADMIN_EMAIL INITIAL_ADMIN_PASSWORD; do
+              if [ -z "${!var:-}" ]; then
+                echo "::error::BOOTSTRAP_ADMIN=true but missing required value: ${var}"
+                missing=1
+              fi
+            done
           fi
 
           if [ "${REPO_ACCESS_ENABLED,,}" = "true" ]; then
@@ -156,6 +177,7 @@ jobs:
               GH_REPO_OWNER
               GH_REPO_NAME
             )
+
             for var in "${repo_required_vars[@]}"; do
               if [ -z "${!var:-}" ]; then
                 if [ "${DEPLOY_ENV}" = "staging" ]; then
@@ -177,15 +199,23 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Add VPS to known_hosts
+      - name: Configure SSH known_hosts
+        env:
+          DEPLOY_SSH_HOST_KEY: ${{ secrets.DEPLOY_SSH_HOST_KEY || vars.DEPLOY_SSH_HOST_KEY }}
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+          printf '%s\n' "$DEPLOY_SSH_HOST_KEY" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Prepare Remote Directory
         run: |
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "mkdir -p '${VPS_PATH}'"
+
+      - name: Enable maintenance mode
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan down --retry=60 || true; fi"
 
       - name: Sync
         run: |
@@ -198,8 +228,6 @@ jobs:
             --exclude='tests/' \
             --exclude='phpunit.xml' \
             ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
-
-
 
       - name: Generate .env
         env:
@@ -292,7 +320,7 @@ jobs:
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
         run: |
-          printf "%s" "$ENV_FILE" | ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cat > ${{ env.VPS_PATH }}/.env"
+          printf "%s" "$ENV_FILE" | ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cat > ${{ env.VPS_PATH }}/.env && chmod 600 ${{ env.VPS_PATH }}/.env"
 
       - name: Run Remote Scripts
         run: |
@@ -300,7 +328,7 @@ jobs:
             set -Eeuo pipefail
             cd ${{ env.VPS_PATH }}
 
-            app_is_down=0
+            app_is_down=1
             cleanup() {
               if [ "$app_is_down" -eq 1 ]; then
                 php artisan up || true
@@ -308,10 +336,8 @@ jobs:
             }
             trap cleanup EXIT
             
-            # Ensure Postgres is running - ignore if already up/bound
             docker compose up -d --wait pgsql || true
             
-            # Ensure storage structure exists since we exclude it from sync
             umask 002
             mkdir -p storage/framework/cache/data
             mkdir -p storage/framework/sessions
@@ -322,7 +348,6 @@ jobs:
             mkdir -p bootstrap/cache
             touch storage/logs/laravel.log
             
-            # Keep storage writable for both deploy user and PHP-FPM group.
             WEB_GROUP="${{ env.WEB_GROUP }}"
             if getent group "$WEB_GROUP" >/dev/null 2>&1; then
               chgrp -R "$WEB_GROUP" storage bootstrap/cache || true
@@ -333,11 +358,6 @@ jobs:
 
             php artisan storage:link --force
 
-            php artisan down --retry=60 || true
-            app_is_down=1
-
-            # Migrate first — fresh databases (e.g. Neon) have no tables yet,
-            # so optimize:clear and readiness checks would fail without them.
             php artisan migrate --force
             if [ "${{ env.RUN_BILLING_BOOTSTRAP }}" = "true" ]; then
               php artisan db:seed --class=PaymentProviderSeeder --force
@@ -361,18 +381,23 @@ jobs:
           EOF
 
       - name: Initialize Admin User
-        if: ${{ env.DEPLOY_ENV == 'production' || env.DEPLOY_ENV == 'staging' }}
+        if: ${{ env.BOOTSTRAP_ADMIN == 'true' }}
+        env:
+          INITIAL_ADMIN_EMAIL: ${{ secrets.INITIAL_ADMIN_EMAIL || vars.INITIAL_ADMIN_EMAIL }}
+          INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
+          INITIAL_ADMIN_NAME: ${{ vars.INITIAL_ADMIN_NAME || 'System Admin' }}
         run: |
-          admin_email="admin@test.com"
-          admin_pass="Gopro12386@"
-          
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd ${{ env.VPS_PATH }}
-            
-            php artisan app:shipping-admin "${admin_email}" "${admin_pass}" > /dev/null 2>&1
-            
-            echo "✅ Admin user created/updated automatically."
-            echo "Email: ${admin_email}"
-            echo "Password: ${admin_pass}"
-            echo "::warning title=Admin Credentials::Email: ${admin_email} | Password: ${admin_pass}"
+
+            INITIAL_ADMIN_EMAIL='${INITIAL_ADMIN_EMAIL}' \
+            INITIAL_ADMIN_PASSWORD='${INITIAL_ADMIN_PASSWORD}' \
+            INITIAL_ADMIN_NAME='${INITIAL_ADMIN_NAME}' \
+            php artisan app:shipping-admin --only-if-missing --no-interaction
           EOF
+
+      - name: Restore application availability
+        if: ${{ always() }}
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan up || true; fi"
