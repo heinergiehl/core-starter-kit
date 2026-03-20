@@ -15,6 +15,7 @@ use App\Http\Controllers\Content\BrandingAssetController;
 use App\Http\Controllers\Content\DocsController;
 use App\Http\Controllers\Content\MarketingSitemapController;
 use App\Http\Controllers\Content\OgImageController;
+use App\Http\Controllers\Content\RobotsController;
 use App\Http\Controllers\Content\RssController;
 use App\Http\Controllers\Content\SitemapController;
 use App\Http\Controllers\Content\SolutionPageController;
@@ -137,6 +138,7 @@ Route::prefix('{locale}')
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])
     ->name('announcements.dismiss');
+Route::get('/robots.txt', RobotsController::class)->name('robots');
 
 // Branding asset fallback route for environments where /storage symlink is unavailable/restricted.
 Route::get('/branding/{path}', BrandingAssetController::class)

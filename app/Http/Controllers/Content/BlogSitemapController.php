@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Content;
 use App\Domain\Content\Models\BlogPost;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Http\Response;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class BlogSitemapController
@@ -24,6 +23,12 @@ class BlogSitemapController
         $supportedLocales = $this->localizedRouteService->supportedLocales();
         $defaultLocale = $this->localizedRouteService->defaultLocale();
         $blogEnabled = (bool) config('saas.features.blog', true);
+        $latestBlogPost = $blogEnabled
+            ? BlogPost::published()
+                ->orderByDesc('updated_at')
+                ->orderByDesc('published_at')
+                ->first(['updated_at', 'published_at'])
+            : null;
 
         $posts = $blogEnabled
             ? BlogPost::published()
@@ -36,7 +41,7 @@ class BlogSitemapController
             $entries[] = [
                 'route' => 'blog.index',
                 'parameters' => [],
-                'lastmod' => Carbon::now()->toAtomString(),
+                'lastmod' => optional($latestBlogPost?->updated_at ?? $latestBlogPost?->published_at ?? now())->toAtomString(),
             ];
         }
 
@@ -52,6 +57,8 @@ class BlogSitemapController
             'blog_enabled' => $blogEnabled,
             'default' => $defaultLocale,
             'locales' => $supportedLocales,
+            'latest_blog_updated_at' => optional($latestBlogPost?->updated_at)->toAtomString(),
+            'latest_blog_published_at' => optional($latestBlogPost?->published_at)->toAtomString(),
             'posts' => $posts->map(fn (BlogPost $post): array => [
                 'slug' => $post->slug,
                 'updated_at' => optional($post->updated_at)->toAtomString(),

@@ -28,6 +28,30 @@
             $pageTitle = trim($__env->yieldContent('title')) ?: $defaultTitle;
             $pageDescription = trim($__env->yieldContent('meta_description')) ?: __('Launch a polished SaaS with billing, auth, and clean architecture.');
             $ogImage = trim($__env->yieldContent('og_image'));
+            $canonicalUrl = trim($__env->yieldContent('canonical_url'));
+
+            if ($canonicalUrl === '') {
+                $canonicalQuery = request()->query();
+                foreach ([
+                    'utm_source',
+                    'utm_medium',
+                    'utm_campaign',
+                    'utm_term',
+                    'utm_content',
+                    'utm_id',
+                    'gclid',
+                    'fbclid',
+                    'mc_cid',
+                    'mc_eid',
+                ] as $ignoredParameter) {
+                    unset($canonicalQuery[$ignoredParameter]);
+                }
+
+                $canonicalUrl = url()->current();
+                if ($canonicalQuery !== []) {
+                    $canonicalUrl .= '?'.http_build_query($canonicalQuery);
+                }
+            }
 
             if (!$ogImage) {
                 $ogImage = route('og', [
@@ -39,12 +63,12 @@
 
         <title>{{ $pageTitle }}</title>
         <meta name="description" content="{{ $pageDescription }}">
-        <link rel="canonical" href="{{ url()->current() }}">
+        <link rel="canonical" href="{{ $canonicalUrl }}">
         <meta name="robots" content="@yield('meta_robots', 'index,follow,max-image-preview:large')">
         <meta property="og:title" content="{{ $pageTitle }}">
         <meta property="og:description" content="{{ $pageDescription }}">
         <meta property="og:type" content="@yield('og_type', 'website')">
-        <meta property="og:url" content="{{ url()->current() }}">
+        <meta property="og:url" content="{{ $canonicalUrl }}">
         <meta property="og:site_name" content="{{ $defaultTitle }}">
         <meta property="og:locale" content="{{ str_replace('-', '_', app()->getLocale()) }}">
         <meta property="og:image" content="{{ $ogImage }}">
@@ -116,13 +140,18 @@
                         'publisher' => [
                             '@id' => $organizationId,
                         ],
+                        'potentialAction' => [
+                            '@type' => 'SearchAction',
+                            'target' => route('blog.index', ['locale' => app()->getLocale()], true).'?search={search_term_string}',
+                            'query-input' => 'required name=search_term_string',
+                        ],
                     ],
                 ],
             ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) !!}
         </script>
         @stack('meta')
         @stack('preloads')
-        <link rel="alternate" type="application/rss+xml" title="{{ __('RSS') }}" href="{{ route('rss') }}">
+        <link rel="alternate" type="application/rss+xml" title="{{ __('RSS') }}" href="{{ route('rss', ['locale' => app()->getLocale()]) }}">
         <link rel="sitemap" type="application/xml" title="{{ __('Sitemap') }}" href="{{ route('sitemap') }}">
 
         @php

@@ -2,6 +2,7 @@
 
 namespace App\Domain\Content\Models;
 
+use App\Enums\PostStatus;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -47,6 +48,16 @@ class BlogPost extends Model
             // Auto-generate slug from title if not set
             if (empty($post->slug) && ! empty($post->title)) {
                 $post->slug = Str::slug($post->title);
+            }
+
+            $status = $post->status;
+
+            if (is_string($status)) {
+                $status = PostStatus::tryFrom($status);
+            }
+
+            if ($status === PostStatus::Published && empty($post->published_at)) {
+                $post->published_at = now();
             }
 
             // Calculate reading time from content

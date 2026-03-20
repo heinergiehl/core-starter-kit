@@ -2,6 +2,7 @@
 
 namespace App\Filament\Admin\Resources\BlogPostResource\Pages;
 
+use App\Enums\PostStatus;
 use App\Filament\Admin\Resources\BlogPostResource;
 use Filament\Resources\Pages\CreateRecord;
 
@@ -17,7 +18,13 @@ class CreateBlogPost extends CreateRecord
         }
 
         // Set published_at to now if publishing without a date
-        if ($data['is_published'] && empty($data['published_at'])) {
+        $status = $data['status'] ?? null;
+
+        if (is_string($status)) {
+            $status = PostStatus::tryFrom($status);
+        }
+
+        if ($status === PostStatus::Published && empty($data['published_at'])) {
             $data['published_at'] = now();
         }
 

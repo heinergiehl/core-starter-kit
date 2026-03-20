@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Blog;
 use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -19,19 +20,13 @@ class BlogController
         $posts = BlogPost::query()
             ->published()
             ->with(['category', 'tags', 'author'])
-            // Search filter (ILIKE for case-insensitive PostgreSQL search)
-            ->when($search, function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->whereRaw('title ILIKE ?', ["%{$search}%"])
-                        ->orWhereRaw('excerpt ILIKE ?', ["%{$search}%"]);
-                });
+            ->when($search, function (Builder $query, string $search) {
+                $this->applySearchFilter($query, $search);
             })
-            // Category filter
-            ->when($categorySlug, function ($query, $categorySlug) {
+            ->when($categorySlug, function (Builder $query, string $categorySlug) {
                 $query->whereHas('category', fn ($q) => $q->where('slug', $categorySlug));
             })
-            // Tag filter
-            ->when($tagSlug, function ($query, $tagSlug) {
+            ->when($tagSlug, function (Builder $query, string $tagSlug) {
                 $query->whereHas('tags', fn ($q) => $q->where('slug', $tagSlug));
             })
             ->orderByDesc('published_at')
@@ -74,5 +69,23 @@ class BlogController
         return view('blog.show', [
             'post' => $post,
         ]);
+    }
+
+    private function applySearchFilter(Builder $query, string $search): void
+    {
+        $term = '%'.mb_strtolower(trim($search)).'%';
+        $driver = $query->getConnection()->getDriverName();
+
+        $query->where(function (Builder $nestedQuery) use ($driver, $term) {
+            if ($driver === 'pgsql') {
+                $nestedQuery->whereRaw('title ILIKE ?', [$term])
+                    ->orWhereRaw('excerpt ILIKE ?', [$term]);
+
+                return;
+            }
+
+            $nestedQuery->whereRaw('LOWER(title) LIKE ?', [$term])
+                ->orWhereRaw('LOWER(excerpt) LIKE ?', [$term]);
+        });
     }
 }

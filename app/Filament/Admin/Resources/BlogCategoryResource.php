@@ -3,16 +3,21 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Content\Models\BlogCategory;
+use App\Support\Content\BlogEditorSupport;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Support\Str;
 
 class BlogCategoryResource extends Resource
 {
@@ -34,12 +39,19 @@ class BlogCategoryResource extends Resource
                     ->required()
                     ->maxLength(100)
                     ->live(onBlur: true)
-                    ->afterStateUpdated(fn ($state, $set) => $set('slug', Str::slug($state))),
+                    ->afterStateUpdated(function (?string $state, ?string $old, Get $get, Set $set): void {
+                        if (! BlogEditorSupport::shouldAutoUpdateSlug($get('slug'), $old)) {
+                            return;
+                        }
+
+                        $set('slug', BlogEditorSupport::generateSlug($state));
+                    }),
 
                 TextInput::make('slug')
                     ->required()
                     ->maxLength(100)
-                    ->unique(ignoreRecord: true),
+                    ->unique(ignoreRecord: true)
+                    ->helperText('Auto-generated from the category name until you customize it.'),
 
                 Textarea::make('description')
                     ->rows(2)
@@ -73,6 +85,29 @@ class BlogCategoryResource extends Resource
             ])
             ->headerActions([
                 CreateAction::make(),
+                Action::make('bulkCreate')
+                    ->label('Paste List')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->modalHeading('Bulk create categories')
+                    ->schema([
+                        Textarea::make('names')
+                            ->label('Category names')
+                            ->required()
+                            ->rows(8)
+                            ->placeholder("Billing\nProduct Updates\nGrowth")
+                            ->helperText('Paste comma-separated or one-per-line category names. Existing slugs are reused.'),
+                        Placeholder::make('bulk_create_help')
+                            ->content('Example: Billing, Product Updates, Growth'),
+                    ])
+                    ->action(function (array $data): void {
+                        $result = static::createRecordsFromBulkInput($data['names'] ?? '');
+
+                        Notification::make()
+                            ->title('Categories processed')
+                            ->body("Created {$result['created']} and reused {$result['existing']} existing categories.")
+                            ->success()
+                            ->send();
+                    }),
             ])
             ->actions([
                 EditAction::make(),
@@ -87,6 +122,30 @@ class BlogCategoryResource extends Resource
             'index' => \App\Filament\Admin\Resources\BlogCategoryResource\Pages\ListBlogCategories::route('/'),
             'create' => \App\Filament\Admin\Resources\BlogCategoryResource\Pages\CreateBlogCategory::route('/create'),
             'edit' => \App\Filament\Admin\Resources\BlogCategoryResource\Pages\EditBlogCategory::route('/{record}/edit'),
+        ];
+    }
+
+    /**
+     * @return array{created:int,existing:int}
+     */
+    protected static function createRecordsFromBulkInput(string $input): array
+    {
+        $created = 0;
+        $existing = 0;
+
+        foreach (BlogEditorSupport::parseBulkNames($input) as $name) {
+            $slug = BlogEditorSupport::generateSlug($name);
+            $record = BlogCategory::query()->firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $name]
+            );
+
+            $record->wasRecentlyCreated ? $created++ : $existing++;
+        }
+
+        return [
+            'created' => $created,
+            'existing' => $existing,
         ];
     }
 }
