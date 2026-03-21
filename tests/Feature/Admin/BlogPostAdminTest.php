@@ -24,7 +24,9 @@ class BlogPostAdminTest extends TestCase
         $this->actingAs($admin)
             ->get('/admin/blog-posts/create')
             ->assertOk()
-            ->assertSeeText('Create Blog Post');
+            ->assertSeeText('Create Blog Post')
+            ->assertSeeText('Summary')
+            ->assertSeeText('SEO Title');
     }
 
     public function test_admin_can_create_a_published_blog_post_without_setting_a_publish_date(): void

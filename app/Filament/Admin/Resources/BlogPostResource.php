@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Content\Models\BlogPost;
+use App\Enums\PostStatus;
 use App\Support\Content\BlogEditorSupport;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
@@ -23,6 +24,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 
 class BlogPostResource extends Resource
 {
@@ -43,11 +45,12 @@ class BlogPostResource extends Resource
                 Section::make('Content')
                     ->schema([
                         TextInput::make('title')
+                            ->label('Title')
                             ->required()
                             ->maxLength(255)
                             ->placeholder('Stripe vs Paddle for SaaS billing')
-                            ->helperText('This is the public headline shown on the post page and in cards.')
-                            ->live(onBlur: true)
+                            ->helperText('Main headline for the post and the default SEO title.')
+                            ->live(debounce: 500)
                             ->afterStateUpdated(function (?string $state, ?string $old, Get $get, Set $set): void {
                                 if (! BlogEditorSupport::shouldAutoUpdateSlug($get('slug'), $old)) {
                                     return;
@@ -57,18 +60,22 @@ class BlogPostResource extends Resource
                             }),
 
                         TextInput::make('slug')
+                            ->label('URL Slug')
                             ->required()
                             ->maxLength(255)
                             ->unique(ignoreRecord: true)
                             ->rules(['alpha_dash'])
                             ->placeholder('stripe-vs-paddle-for-saas-billing')
-                            ->helperText('Auto-generated from the title until you customize it.'),
+                            ->helperText('Used in the blog URL. Auto-generated until you change it.')
+                            ->live(debounce: 500),
 
                         Textarea::make('excerpt')
+                            ->label('Summary')
                             ->rows(3)
                             ->maxLength(500)
-                            ->placeholder('Short summary used on cards, feeds, and as the default SEO description.')
-                            ->helperText('Recommended for blog cards, feeds, and meta description fallback.')
+                            ->placeholder('Short summary for blog cards, RSS, and the default SEO description.')
+                            ->helperText('Recommended. Blank SEO description will reuse this.')
+                            ->live(debounce: 500)
                             ->columnSpanFull(),
 
                         RichEditor::make('body_html')
@@ -99,12 +106,12 @@ class BlogPostResource extends Resource
                     ->columns(2)
                     ->columnSpanFull(),
 
-                Section::make('Metadata')
+                Section::make('Organization')
                     ->schema([
                         FileUpload::make('featured_image')
                             ->label('Featured Image')
                             ->image()
-                            ->helperText('Used in cards and as the visual fallback for sharing.')
+                            ->helperText('Shown in cards and social previews.')
                             ->directory('blog-images')
                             ->imageResizeMode('cover')
                             ->imageCropAspectRatio('16:9')
@@ -124,7 +131,7 @@ class BlogPostResource extends Resource
                             ->relationship('category', 'name')
                             ->searchable()
                             ->preload()
-                            ->helperText('Use one primary category per post. Need many categories? Use Categories > Paste List.')
+                            ->helperText('Use one primary category per post. Need many? Use Categories > Paste List.')
                             ->createOptionForm([
                                 TextInput::make('name')
                                     ->required()
@@ -149,7 +156,7 @@ class BlogPostResource extends Resource
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->helperText('Use tags for secondary topics. Need many new tags? Use Tags > Paste List.')
+                            ->helperText('Secondary topics. Need many new tags? Use Tags > Paste List.')
                             ->createOptionForm([
                                 TextInput::make('name')
                                     ->required()
@@ -168,36 +175,58 @@ class BlogPostResource extends Resource
                                     ->unique('blog_tags', 'slug')
                                     ->helperText('Auto-generated from the tag name until you customize it.'),
                             ]),
+                    ]),
 
+                Section::make('Publishing')
+                    ->schema([
                         ToggleButtons::make('status')
                             ->label('Status')
                             ->inline()
-                            ->options(\App\Enums\PostStatus::class)
-                            ->default(\App\Enums\PostStatus::Draft)
+                            ->options(PostStatus::class)
+                            ->default(PostStatus::Draft)
+                            ->helperText('Draft = private, Published = live, Archived = hidden.')
+                            ->live()
                             ->required(),
 
                         DateTimePicker::make('published_at')
-                            ->label('Publish Date')
-                            ->helperText('Leave empty to publish immediately when status is Published.'),
+                            ->label('Publish On')
+                            ->helperText(function (Get $get): string {
+                                return static::isPublishedState($get('status'))
+                                    ? 'Leave empty to publish now.'
+                                    : 'Optional until you publish.';
+                            }),
                     ])
-                    ->columns(2)
-                    ->columnSpanFull(),
+                    ->columnSpan(1),
 
                 Section::make('Search Appearance')
-                    ->description('Optional SEO overrides. Leave these blank to use the title and excerpt automatically.')
+                    ->description('Optional. Leave blank to reuse the Title and Summary above.')
                     ->schema([
                         TextInput::make('meta_title')
                             ->label('SEO Title')
                             ->maxLength(60)
-                            ->placeholder(fn (Get $get): string => (string) ($get('title') ?: 'Uses the post title'))
-                            ->helperText('Optional. Recommended: 50-60 characters.'),
+                            ->placeholder(fn (Get $get): string => (string) ($get('title') ?: 'Uses the title above'))
+                            ->helperText(function (Get $get): string {
+                                $state = (string) ($get('meta_title') ?? '');
+                                $length = Str::length($state);
+                                $fallback = filled($state) ? '' : ' Blank = Title.';
+
+                                return "{$length}/60.{$fallback}";
+                            })
+                            ->live(debounce: 500),
 
                         Textarea::make('meta_description')
                             ->label('SEO Description')
                             ->rows(3)
                             ->maxLength(160)
-                            ->placeholder(fn (Get $get): string => (string) ($get('excerpt') ?: 'Uses the excerpt or body fallback'))
-                            ->helperText('Optional. Recommended: 150-160 characters.')
+                            ->placeholder(fn (Get $get): string => (string) ($get('excerpt') ?: 'Uses the summary above'))
+                            ->helperText(function (Get $get): string {
+                                $state = (string) ($get('meta_description') ?? '');
+                                $length = Str::length($state);
+                                $fallback = filled($state) ? '' : ' Blank = Summary.';
+
+                                return "{$length}/160.{$fallback}";
+                            })
+                            ->live(debounce: 500)
                             ->columnSpanFull(),
                     ])
                     ->columns(2)
@@ -281,5 +310,18 @@ class BlogPostResource extends Resource
     public static function getNavigationBadge(): ?string
     {
         return static::getModel()::count();
+    }
+
+    protected static function isPublishedState(mixed $value): bool
+    {
+        if ($value instanceof PostStatus) {
+            return $value === PostStatus::Published;
+        }
+
+        if (is_string($value)) {
+            return PostStatus::tryFrom($value) === PostStatus::Published;
+        }
+
+        return false;
     }
 }
