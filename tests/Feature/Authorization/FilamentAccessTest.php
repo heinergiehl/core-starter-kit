@@ -114,9 +114,24 @@ class FilamentAccessTest extends TestCase
     {
         $admin = User::factory()->create(['is_admin' => true]);
 
-        $this->actingAs($admin)->get('/admin/manage-settings')->assertOk();
-        $this->actingAs($admin)->get('/admin/manage-branding')->assertOk();
-        $this->actingAs($admin)->get('/admin/manage-email-settings')->assertOk();
+        $this->actingAs($admin)
+            ->get('/admin/manage-settings')
+            ->assertOk()
+            ->assertSeeText('Changes save after validation passes.')
+            ->assertSeeText('Save changes');
+
+        $this->actingAs($admin)
+            ->get('/admin/manage-branding')
+            ->assertOk()
+            ->assertSeeText('Template Gallery')
+            ->assertSeeText('Reset controls only update this form until you save.')
+            ->assertSeeText('Preview');
+
+        $this->actingAs($admin)
+            ->get('/admin/manage-email-settings')
+            ->assertOk()
+            ->assertSeeText('Changes save after validation passes.')
+            ->assertSeeText('Send test email');
 
         $expectedTemplate = config('template.active', 'default');
         $this->assertNotNull(BrandSetting::query()->find(BrandSetting::GLOBAL_ID));

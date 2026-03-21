@@ -10,18 +10,20 @@ class RssController
 {
     public function __invoke(): Response
     {
+        $locale = (string) app()->getLocale();
         $cacheSeconds = max((int) config('saas.seo.rss_cache_seconds', 900), 0);
         $cacheHeader = $cacheSeconds > 0
             ? "public, max-age={$cacheSeconds}, stale-while-revalidate=3600"
             : 'no-cache, no-store, must-revalidate';
 
         $posts = BlogPost::published()
+            ->forLocale($locale)
             ->orderByDesc('published_at')
             ->take(20)
             ->get(['slug', 'title', 'excerpt', 'published_at', 'updated_at']);
 
         $cacheKey = 'seo:rss:v1:'.sha1(json_encode([
-            'locale' => app()->getLocale(),
+            'locale' => $locale,
             'posts' => $posts->map(fn (BlogPost $post): array => [
                 'slug' => $post->slug,
                 'updated_at' => optional($post->updated_at)->toAtomString(),

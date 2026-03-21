@@ -24,6 +24,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Facades\Schema as DatabaseSchema;
+use Illuminate\Validation\Rule;
 
 class DiscountResource extends Resource
 {
@@ -45,8 +46,7 @@ class DiscountResource extends Resource
             ->schema([
                 Select::make('provider')
                     ->options(self::providerOptions())
-                    ->required()
-                    ->live(),
+                    ->required(),
                 TextInput::make('code')
                     ->label('Code')
                     ->required()

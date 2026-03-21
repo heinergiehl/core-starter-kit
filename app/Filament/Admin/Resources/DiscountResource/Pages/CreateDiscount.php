@@ -12,27 +12,25 @@ class CreateDiscount extends CreateRecord
 
     protected function handleRecordCreation(array $data): \Illuminate\Database\Eloquent\Model
     {
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($data) {
+        $provider = (string) ($data['provider'] ?? 'provider');
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($data, $provider) {
             $discount = static::getModel()::create($data);
 
             try {
-                $provider = $data['provider'];
-                $adapter = app(BillingProviderManager::class)->adapter((string) $provider);
+                $adapter = app(BillingProviderManager::class)->adapter($provider);
 
                 $providerId = $adapter->createDiscount($discount);
                 $discount->update(['provider_id' => $providerId]);
-            } catch (\Exception $e) {
-                // We rely on the transaction rollback to undo the local creation
-                // if we re-throw.
-
+            } catch (\Throwable $exception) {
                 \Filament\Notifications\Notification::make()
                     ->title('Failed to sync discount to '.ucfirst($provider))
-                    ->body($e->getMessage())
+                    ->body($exception->getMessage())
                     ->danger()
                     ->persistent()
                     ->send();
 
-                throw $e;
+                throw $exception;
             }
 
             return $discount;

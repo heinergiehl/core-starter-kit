@@ -33,7 +33,7 @@ class BlogSitemapController
         $posts = $blogEnabled
             ? BlogPost::published()
                 ->orderByDesc('published_at')
-                ->get(['slug', 'updated_at', 'published_at'])
+                ->get(['translation_group_uuid', 'locale', 'slug', 'updated_at', 'published_at'])
             : collect();
 
         $entries = [];
@@ -41,15 +41,32 @@ class BlogSitemapController
             $entries[] = [
                 'route' => 'blog.index',
                 'parameters' => [],
+                'localized_urls' => collect($supportedLocales)
+                    ->mapWithKeys(fn (string $locale): array => [
+                        $locale => route('blog.index', ['locale' => $locale]),
+                    ])
+                    ->all(),
                 'lastmod' => optional($latestBlogPost?->updated_at ?? $latestBlogPost?->published_at ?? now())->toAtomString(),
             ];
         }
 
-        foreach ($posts as $post) {
+        foreach ($posts->groupBy('translation_group_uuid') as $groupedPosts) {
+            $localizedUrls = $groupedPosts
+                ->sortBy('locale')
+                ->mapWithKeys(fn (BlogPost $post): array => [
+                    (string) $post->locale => route('blog.show', ['locale' => $post->locale, 'slug' => $post->slug]),
+                ])
+                ->all();
+
+            $lastModifiedAt = $groupedPosts
+                ->map(fn (BlogPost $post) => $post->updated_at ?? $post->published_at)
+                ->filter()
+                ->sortDesc()
+                ->first();
+
             $entries[] = [
-                'route' => 'blog.show',
-                'parameters' => ['slug' => $post->slug],
-                'lastmod' => optional($post->updated_at ?? $post->published_at)->toAtomString(),
+                'localized_urls' => $localizedUrls,
+                'lastmod' => optional($lastModifiedAt)->toAtomString(),
             ];
         }
 
@@ -60,6 +77,8 @@ class BlogSitemapController
             'latest_blog_updated_at' => optional($latestBlogPost?->updated_at)->toAtomString(),
             'latest_blog_published_at' => optional($latestBlogPost?->published_at)->toAtomString(),
             'posts' => $posts->map(fn (BlogPost $post): array => [
+                'translation_group_uuid' => $post->translation_group_uuid,
+                'locale' => $post->locale,
                 'slug' => $post->slug,
                 'updated_at' => optional($post->updated_at)->toAtomString(),
                 'published_at' => optional($post->published_at)->toAtomString(),

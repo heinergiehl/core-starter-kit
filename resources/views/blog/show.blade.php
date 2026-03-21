@@ -11,7 +11,7 @@
     $organizationId = route('home', ['locale' => app()->getLocale()], true).'#organization';
     $featuredImageUrl = $post->featured_image
         ? url(Storage::disk('public')->url($post->featured_image))
-        : route('og.blog', ['slug' => $post->slug], true);
+        : route('og.blog', ['locale' => app()->getLocale(), 'slug' => $post->slug], true);
     $wordCount = str_word_count(strip_tags($post->body_html ?: Str::markdown($post->body_markdown ?? '')));
     $articleKeywords = $post->tags->pluck('name')->implode(', ');
 @endphp
@@ -20,7 +20,7 @@
 @section('meta_description', $metaDescription)
 @section('canonical_url', $articleUrl)
 @section('og_type', 'article')
-@section('og_image', route('og.blog', ['slug' => $post->slug], true))
+@section('og_image', route('og.blog', ['locale' => app()->getLocale(), 'slug' => $post->slug], true))
 
 @push('meta')
     <meta name="author" content="{{ $post->author?->name ?? ($appBrandName ?? config('app.name', 'SaaS Kit')) }}">

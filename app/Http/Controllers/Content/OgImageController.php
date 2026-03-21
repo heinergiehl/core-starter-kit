@@ -17,9 +17,12 @@ class OgImageController
         return $this->render($title, $subtitle);
     }
 
-    public function blog(string $slug): Response
+    public function blog(Request $request, string $slug): Response
     {
+        $locale = (string) $request->query('locale', config('saas.locales.default', config('app.locale', 'en')));
+
         $post = BlogPost::published()
+            ->forLocale($locale)
             ->where('slug', $slug)
             ->firstOrFail();
 

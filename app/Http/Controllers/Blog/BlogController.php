@@ -13,12 +13,14 @@ class BlogController
 {
     public function index(Request $request): View
     {
+        $locale = (string) app()->getLocale();
         $search = $request->input('search');
         $categorySlug = $request->input('category');
         $tagSlug = $request->input('tag');
 
         $posts = BlogPost::query()
             ->published()
+            ->forLocale($locale)
             ->with(['category', 'tags', 'author'])
             ->when($search, function (Builder $query, string $search) {
                 $this->applySearchFilter($query, $search);
@@ -33,18 +35,16 @@ class BlogController
             ->paginate(10)
             ->withQueryString();
 
-        // Get categories and tags for the filter UI (PostgreSQL compatible)
-        $categories = BlogCategory::whereHas('posts', fn ($q) => $q->published())
-            ->withCount(['posts' => fn ($q) => $q->published()])
+        $categories = BlogCategory::whereHas('posts', fn (Builder $query) => $query->published()->forLocale($locale))
+            ->withCount(['posts' => fn (Builder $query) => $query->published()->forLocale($locale)])
             ->orderBy('name')
             ->get();
 
-        $tags = BlogTag::whereHas('posts', fn ($q) => $q->published())
-            ->withCount(['posts' => fn ($q) => $q->published()])
+        $tags = BlogTag::whereHas('posts', fn (Builder $query) => $query->published()->forLocale($locale))
+            ->withCount(['posts' => fn (Builder $query) => $query->published()->forLocale($locale)])
             ->orderBy('name')
             ->get();
 
-        // Get active filter models for display
         $activeCategory = $categorySlug ? BlogCategory::where('slug', $categorySlug)->first() : null;
         $activeTag = $tagSlug ? BlogTag::where('slug', $tagSlug)->first() : null;
 
@@ -61,9 +61,10 @@ class BlogController
     public function show(string $locale, string $slug): View
     {
         $post = BlogPost::query()
+            ->forLocale($locale)
             ->where('slug', $slug)
             ->published()
-            ->with(['category', 'tags', 'author'])
+            ->with(['category', 'tags', 'author', 'translations'])
             ->firstOrFail();
 
         return view('blog.show', [

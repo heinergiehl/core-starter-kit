@@ -2,12 +2,15 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
     @foreach ($entries as $entry)
         @php
-            $localizedUrls = [];
-            foreach ($supportedLocales as $locale) {
-                $localizedUrls[$locale] = route(
-                    $entry['route'],
-                    array_merge($entry['parameters'], ['locale' => $locale])
-                );
+            $localizedUrls = $entry['localized_urls'] ?? [];
+
+            if ($localizedUrls === [] && isset($entry['route'])) {
+                foreach ($supportedLocales as $locale) {
+                    $localizedUrls[$locale] = route(
+                        $entry['route'],
+                        array_merge($entry['parameters'] ?? [], ['locale' => $locale])
+                    );
+                }
             }
 
             $canonicalUrl = $localizedUrls[$defaultLocale] ?? reset($localizedUrls);

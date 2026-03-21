@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Support\Localization;
 
+use App\Domain\Content\Models\BlogPost;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Route as RouteFacade;
@@ -90,6 +91,45 @@ class LocalizedRouteService
         return route($routeName, array_merge($parameters, ['locale' => $targetLocale]), $absolute);
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public function localizedRouteVariantUrls(?string $routeName, array $parameters = [], bool $absolute = true): array
+    {
+        $localizedRouteName = $this->localizedRouteName($routeName);
+
+        if (! $localizedRouteName) {
+            return [];
+        }
+
+        if ($localizedRouteName === 'blog.show') {
+            return $this->localizedBlogPostUrls(
+                sourceLocale: (string) ($parameters['locale'] ?? $this->defaultLocale()),
+                slug: (string) ($parameters['slug'] ?? ''),
+                absolute: $absolute,
+            );
+        }
+
+        $localizedUrls = [];
+
+        foreach ($this->supportedLocales() as $locale) {
+            $localizedUrls[$locale] = $this->localizedUrl($localizedRouteName, $locale, $parameters, $absolute);
+        }
+
+        return $localizedUrls;
+    }
+
+    public function localizedRouteVariantUrl(
+        ?string $routeName,
+        string $locale,
+        array $parameters = [],
+        bool $absolute = true
+    ): ?string {
+        $targetLocale = $this->isSupportedLocale($locale) ? $locale : $this->defaultLocale();
+
+        return $this->localizedRouteVariantUrls($routeName, $parameters, $absolute)[$targetLocale] ?? null;
+    }
+
     public function resolveLocaleSwitchRedirect(Request $request, string $locale, string $redirect): string
     {
         $targetLocale = $this->isSupportedLocale($locale) ? $locale : $this->defaultLocale();
@@ -121,15 +161,62 @@ class LocalizedRouteService
         }
 
         $routeParameters = $matchedRoute?->parametersWithoutNulls() ?? [];
+        $sourceLocale = (string) ($routeParameters['locale'] ?? $this->defaultLocale());
         unset($routeParameters['locale']);
 
-        $localizedPath = $this->localizedUrl($localizedRouteName, $targetLocale, $routeParameters, false);
+        $localizedPath = $this->localizedRouteVariantUrl(
+            routeName: $localizedRouteName,
+            locale: $targetLocale,
+            parameters: $routeParameters + ['locale' => $sourceLocale],
+            absolute: false,
+        );
+
+        if (! is_string($localizedPath) || $localizedPath === '') {
+            if ($localizedRouteName === 'blog.show') {
+                $localizedPath = $this->localizedUrl('blog.index', $targetLocale, absolute: false);
+            } else {
+                return $fallback;
+            }
+        }
+
         $query = http_build_query($queryParameters);
         $fragment = (string) ($parts['fragment'] ?? '');
 
         return $localizedPath
             .($query !== '' ? '?'.$query : '')
             .($fragment !== '' ? '#'.$fragment : '');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function localizedBlogPostUrls(string $sourceLocale, string $slug, bool $absolute = true): array
+    {
+        if ($slug === '') {
+            return [];
+        }
+
+        $sourcePost = BlogPost::published()
+            ->forLocale($this->isSupportedLocale($sourceLocale) ? $sourceLocale : $this->defaultLocale())
+            ->where('slug', $slug)
+            ->first(['translation_group_uuid']);
+
+        if (! $sourcePost) {
+            return [];
+        }
+
+        return BlogPost::published()
+            ->where('translation_group_uuid', $sourcePost->translation_group_uuid)
+            ->get(['locale', 'slug'])
+            ->mapWithKeys(fn (BlogPost $post): array => [
+                (string) $post->locale => $this->localizedUrl(
+                    'blog.show',
+                    (string) $post->locale,
+                    ['slug' => $post->slug],
+                    $absolute,
+                ),
+            ])
+            ->all();
     }
 
     private function routeAcceptsLocale(string $routeName): bool

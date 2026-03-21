@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 class BlogPost extends Model
@@ -16,6 +18,8 @@ class BlogPost extends Model
     use HasFactory;
 
     protected $fillable = [
+        'translation_group_uuid',
+        'locale',
         'title',
         'slug',
         'excerpt',
@@ -37,16 +41,20 @@ class BlogPost extends Model
         'status' => \App\Enums\PostStatus::class,
     ];
 
-    /**
-     * Boot the model.
-     */
-    protected static function boot()
+    protected static function booted(): void
     {
-        parent::boot();
+        static::creating(function (BlogPost $post): void {
+            if (blank($post->translation_group_uuid)) {
+                $post->translation_group_uuid = (string) Str::uuid();
+            }
+
+            if (blank($post->locale)) {
+                $post->locale = (string) config('saas.locales.default', config('app.locale', 'en'));
+            }
+        });
 
         static::saving(function (BlogPost $post) {
-            // Auto-generate slug from title if not set
-            if (empty($post->slug) && ! empty($post->title)) {
+            if (blank($post->slug) && filled($post->title)) {
                 $post->slug = Str::slug($post->title);
             }
 
@@ -60,49 +68,119 @@ class BlogPost extends Model
                 $post->published_at = now();
             }
 
-            // Calculate reading time from content
-            if (! empty($post->body_html)) {
+            if (filled($post->body_html)) {
                 $wordCount = str_word_count(strip_tags($post->body_html));
                 $post->reading_time = max(1, ceil($wordCount / 200));
             }
         });
     }
 
-    /**
-     * Scope to published posts.
-     */
     public function scopePublished(Builder $query): Builder
     {
         return $query
             ->where('status', \App\Enums\PostStatus::Published)
-            ->where(function ($q) {
-                $q->whereNull('published_at')
+            ->where(function (Builder $query) {
+                $query->whereNull('published_at')
                     ->orWhere('published_at', '<=', now());
             });
     }
 
-    /**
-     * Scope to draft posts.
-     */
+    public function scopeForLocale(Builder $query, ?string $locale): Builder
+    {
+        $targetLocale = filled($locale)
+            ? (string) $locale
+            : (string) config('saas.locales.default', config('app.locale', 'en'));
+
+        return $query->where('locale', $targetLocale);
+    }
+
     public function scopeDraft(Builder $query): Builder
     {
         return $query->where('status', \App\Enums\PostStatus::Draft);
     }
 
-    /**
-     * Get the SEO title.
-     */
     public function getSeoTitleAttribute(): string
     {
         return $this->meta_title ?: $this->title;
     }
 
-    /**
-     * Get the SEO description.
-     */
     public function getSeoDescriptionAttribute(): string
     {
-        return $this->meta_description ?: $this->excerpt ?: Str::limit(strip_tags($this->body_html), 160);
+        return $this->meta_description
+            ?: $this->excerpt
+            ?: Str::limit(strip_tags($this->body_html ?: (string) Str::markdown($this->body_markdown ?? '')), 160);
+    }
+
+    public function getLocaleLabelAttribute(): string
+    {
+        return \App\Enums\Locale::tryFrom((string) $this->locale)?->getLabel() ?? strtoupper((string) $this->locale);
+    }
+
+    public function translations(): HasMany
+    {
+        return $this->hasMany(self::class, 'translation_group_uuid', 'translation_group_uuid')
+            ->orderBy('locale');
+    }
+
+    public function translationForLocale(string $locale): ?self
+    {
+        if ($this->relationLoaded('translations')) {
+            /** @var Collection<int, self> $translations */
+            $translations = $this->getRelation('translations');
+
+            return $translations->firstWhere('locale', $locale);
+        }
+
+        return $this->translations()
+            ->where('locale', $locale)
+            ->first();
+    }
+
+    /**
+     * @return Collection<int, string>
+     */
+    public function availableTranslationLocales(): Collection
+    {
+        if ($this->relationLoaded('translations')) {
+            /** @var Collection<int, self> $translations */
+            $translations = $this->getRelation('translations');
+
+            return $translations
+                ->pluck('locale')
+                ->filter()
+                ->values();
+        }
+
+        return $this->translations()
+            ->pluck('locale');
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public function missingTranslationLocales(): array
+    {
+        $supportedLocales = array_keys(config('saas.locales.supported', ['en' => 'English']));
+
+        return array_values(array_diff($supportedLocales, $this->availableTranslationLocales()->all()));
+    }
+
+    public function translationStatusSummary(): string
+    {
+        $translations = $this->relationLoaded('translations')
+            ? $this->getRelation('translations')
+            : $this->translations()->get();
+
+        return $translations
+            ->map(function (BlogPost $translation): string {
+                $locale = strtoupper((string) $translation->locale);
+                $status = $translation->status instanceof PostStatus
+                    ? $translation->status->value
+                    : (string) $translation->status;
+
+                return "{$locale} {$status}";
+            })
+            ->implode(' | ');
     }
 
     public function author(): BelongsTo

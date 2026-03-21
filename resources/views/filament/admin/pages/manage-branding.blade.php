@@ -1,5 +1,5 @@
 <x-filament-panels::page>
-    <form wire:submit.prevent="save">
+    <form wire:submit.prevent="save" class="space-y-6">
         {{ $this->form }}
 
         @php
@@ -8,15 +8,11 @@
             $currentLocale = app()->getLocale();
         @endphp
 
-        <div style="margin-top: 1.5rem; border: 1px solid rgba(148, 163, 184, 0.2); border-radius: 0.75rem; padding: 1rem; background: rgba(15, 23, 42, 0.02);">
-            <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                <h3 style="margin: 0; font-size: 1rem; font-weight: 700;">Template Gallery</h3>
-                <p style="margin: 0; color: #64748b; font-size: 0.875rem;">
-                    Templates affect customer-facing pages. Interface color overrides can intentionally make templates look more alike.
-                </p>
-            </div>
-
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 0.875rem;">
+        <x-filament::section
+            heading="Template Gallery"
+            description="Templates affect customer-facing pages. Interface color overrides can intentionally make templates feel more alike."
+        >
+            <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
                 @foreach ($templates as $key => $template)
                     @php
                         $name = $template['name'] ?? \Illuminate\Support\Str::headline($key);
@@ -35,58 +31,79 @@
                         ]);
                     @endphp
 
-                    <div style="border: 1px solid {{ $isSelected ? '#6366F1' : 'rgba(148, 163, 184, 0.35)' }}; border-radius: 0.75rem; padding: 0.75rem; background: {{ $isSelected ? 'rgba(99, 102, 241, 0.06)' : '#ffffff' }};">
-                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                            <strong style="font-size: 0.9rem;">{{ $name }}</strong>
+                    <article @class([
+                        'rounded-xl border border-gray-200 bg-white p-4 shadow-sm ring-1 ring-gray-950/5 transition duration-150 dark:border-white/10 dark:bg-gray-900 dark:ring-white/10',
+                        'bg-gray-50 ring-2 ring-primary-600 dark:bg-white/5 dark:ring-primary-500' => $isSelected,
+                        'hover:bg-gray-50 dark:hover:bg-white/5' => ! $isSelected,
+                    ])>
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <h3 class="text-sm font-semibold text-gray-950 dark:text-white">{{ $name }}</h3>
+                                <p class="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400">
+                                    {{ $description }}
+                                </p>
+                            </div>
+
                             @if ($isSelected)
-                                <span style="font-size: 0.75rem; color: #4338ca; font-weight: 600;">Selected</span>
+                                <x-filament::badge color="primary">
+                                    Selected
+                                </x-filament::badge>
                             @endif
                         </div>
 
-                        <p style="margin: 0.35rem 0 0; font-size: 0.78rem; color: #64748b; line-height: 1.35;">
-                            {{ $description }}
-                        </p>
-
-                        <div style="display: flex; align-items: center; gap: 0.375rem; margin-top: 0.65rem;">
-                            <span title="Primary" style="display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 999px; background: {{ $primary }}; border: 1px solid rgba(15, 23, 42, 0.12);"></span>
-                            <span title="Secondary" style="display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 999px; background: {{ $secondary }}; border: 1px solid rgba(15, 23, 42, 0.12);"></span>
-                            <span title="Accent" style="display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 999px; background: {{ $accent }}; border: 1px solid rgba(15, 23, 42, 0.12);"></span>
+                        <div class="mt-4 flex items-center gap-2">
+                            <span title="Primary" class="inline-block size-4 rounded-full border border-gray-950/10 dark:border-white/10" style="background-color: {{ $primary }}"></span>
+                            <span title="Secondary" class="inline-block size-4 rounded-full border border-gray-950/10 dark:border-white/10" style="background-color: {{ $secondary }}"></span>
+                            <span title="Accent" class="inline-block size-4 rounded-full border border-gray-950/10 dark:border-white/10" style="background-color: {{ $accent }}"></span>
                         </div>
 
-                        <p style="margin: 0.55rem 0 0; font-size: 0.72rem; color: #475569;">
+                        <p class="mt-3 text-xs font-medium uppercase text-gray-500 dark:text-gray-400">
                             {{ $fontSans }} / {{ $fontDisplay }}
                         </p>
 
-                        <div style="display: flex; gap: 0.5rem; margin-top: 0.65rem; flex-wrap: wrap;">
-                            <button
-                                type="button"
-                                wire:click="$set('data.template', '{{ $key }}')"
-                                style="border: 1px solid rgba(99, 102, 241, 0.35); background: #ffffff; color: #4338ca; border-radius: 0.5rem; padding: 0.35rem 0.55rem; font-size: 0.72rem; font-weight: 600; cursor: pointer;"
-                            >
-                                Select
-                            </button>
-                            <a
+                        <div class="mt-4 flex flex-wrap items-center gap-2">
+                            @if ($isSelected)
+                                <x-filament::button
+                                    type="button"
+                                    size="sm"
+                                    disabled
+                                >
+                                    Selected
+                                </x-filament::button>
+                            @else
+                                <x-filament::button
+                                    type="button"
+                                    size="sm"
+                                    color="gray"
+                                    outlined
+                                    wire:click="$set('data.template', '{{ $key }}')"
+                                >
+                                    Select
+                                </x-filament::button>
+                            @endif
+
+                            <x-filament::button
+                                tag="a"
+                                size="sm"
+                                color="gray"
+                                outlined
                                 href="{{ $previewUrl }}"
                                 target="_blank"
-                                rel="noopener noreferrer"
-                                style="display: inline-block; border: 1px solid rgba(148, 163, 184, 0.4); color: #334155; border-radius: 0.5rem; padding: 0.35rem 0.55rem; font-size: 0.72rem; font-weight: 600; text-decoration: none;"
                             >
                                 Preview
-                            </a>
+                            </x-filament::button>
                         </div>
-                    </div>
+                    </article>
                 @endforeach
             </div>
-        </div>
+        </x-filament::section>
 
-        <div style="margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-start;">
+        <x-admin.settings-form-actions message="Reset controls only update this form until you save.">
             <x-filament::button
                 type="button"
                 color="gray"
                 outlined
                 wire:click="resetInterfaceColors"
-                wire:loading.attr="disabled"
-                wire:target="resetInterfaceColors"
             >
                 Reset interface colors
             </x-filament::button>
@@ -96,23 +113,9 @@
                 color="gray"
                 outlined
                 wire:click="resetEmailColors"
-                wire:loading.attr="disabled"
-                wire:target="resetEmailColors"
             >
                 Reset email colors
             </x-filament::button>
-
-            <x-filament::button 
-                type="submit"
-                wire:loading.attr="disabled"
-            >
-                <span wire:loading.remove wire:target="save">Save changes</span>
-                <svg wire:loading wire:target="save" class="inline w-4 h-4 mr-2 -ml-1 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span wire:loading wire:target="save">Saving...</span>
-            </x-filament::button>
-        </div>
+        </x-admin.settings-form-actions>
     </form>
 </x-filament-panels::page>

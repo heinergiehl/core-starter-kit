@@ -41,8 +41,11 @@ Windows note:
 
 ## 2) URLs you should know
 - Marketing (locale-prefixed): `/{locale}` (example: `/en`)
+- Blog: `/{locale}/blog`
+- Blog post: `/{locale}/blog/{slug}`
 - Docs: `/{locale}/docs`
 - Pricing: `/{locale}/pricing`
+- RSS: `/{locale}/rss.xml`
 - Admin Panel (operators): `/admin`
 - App Panel (customers): `/app`
 
@@ -74,4 +77,4 @@ Next: see `docs/billing.md` and run `docs/billing-go-live-checklist.md` before p
 2) [Billing](billing.md) (providers, catalog, webhooks, readiness checks)
 3) [Security](security.md) (hardening + CSP notes)
 4) [Testing](testing.md) (smoke pass + CI gates)
-5) [Theming](theming.md) and [Localization](localization.md) (launch polish)
+5) [Theming](theming.md) and [Localization](localization.md) (launch polish, locale-aware blog setup, SEO notes)

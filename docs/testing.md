@@ -36,13 +36,21 @@ npm run build
 ## 3) Manual smoke checklist
 
 ### Public pages
-- `/` marketing page renders, no console errors.
-- `/pricing` shows plans and provider tabs.
-- `/blog` and `/blog/{slug}` render.
-- `/roadmap` renders, voting requires auth.
-- `/rss.xml`, `/sitemap.xml`, `/og` endpoints return successfully.
+- `/` redirects to the default locale marketing page.
+- `/{locale}` marketing page renders, no console errors.
+- `/{locale}/pricing` shows plans and provider tabs.
+- `/{locale}/blog` and `/{locale}/blog/{slug}` render.
+- `/{locale}/roadmap` renders, voting requires auth.
+- `/{locale}/rss.xml`, `/sitemap.xml`, and `/og` endpoints return successfully.
 - `/branding/shipsolid-s-mark.svg` returns 200.
 - `/branding/does-not-exist.png` should not return 500 (fallback asset expected).
+
+### Multilingual blog flow
+- Create an English post and confirm it renders at `/{locale}/blog/{slug}`.
+- Create a second locale translation from the admin and confirm it renders at its translated slug.
+- Switch locale from the post page and confirm the redirect lands on the translated slug, not the source slug.
+- Confirm a locale without a translation does not render a fake alternate page.
+- Confirm filtered blog archive pages (`?category=...`, `?tag=...`, `?search=...`) are `noindex,follow` and canonicalize back to the main archive.
 
 ### Auth + profile
 - Register new user.
@@ -62,6 +70,7 @@ npm run build
 - Create products (plans) and prices.
 - Confirm pricing page reflects DB catalog when `BILLING_CATALOG=database`.
 - Create a discount and verify the coupon field appears.
+- Create a blog post translation draft and confirm locale-specific slug/SEO state works as expected.
 
 ### Billing test flow
 - Configure Stripe/Paddle test keys in `.env`.

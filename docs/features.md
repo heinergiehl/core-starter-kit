@@ -27,9 +27,11 @@ Status legend:
 ## 3) Marketing + Content
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Blog + SEO (RSS, sitemap, OG tags) | Done | Blog, sitemap, RSS live. |
+| Blog + SEO (RSS, sitemap, OG tags) | Done | Locale-aware blog posts, sitemap, RSS, OG tags, and translation-aware `hreflang` support live. |
 | Open Graph image generator | Done | `/og` and blog OG images supported. |
-| Localization (marketing + dashboard) | Done | Locale switcher, JSON translations, admin stays English. |
+| Localization (marketing + dashboard) | Done | Locale switcher, localized marketing routes, customer-facing translations, admin stays English. |
+| Multilingual blog workflow | Done | Blog posts support linked locale variants with per-locale slug, SEO fields, and publish state. |
+| Multilingual taxonomy landing pages | Not planned by default | Categories and tags currently stay shared filter facets instead of separate localized SEO pages. |
 
 ## 4) Auth + Email
 | Feature | Status | Notes |

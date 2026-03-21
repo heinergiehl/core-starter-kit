@@ -8,6 +8,7 @@ use App\Domain\Content\Models\BlogTag;
 use App\Enums\PostStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class BlogSeoTest extends TestCase
@@ -113,6 +114,71 @@ class BlogSeoTest extends TestCase
         $response->assertSee(route('blog.show', ['locale' => 'en', 'slug' => $post->slug]), false);
     }
 
+    public function test_blog_post_only_outputs_hreflang_links_for_existing_published_translations(): void
+    {
+        $groupUuid = (string) Str::uuid();
+
+        $englishPost = $this->createPublishedPost([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'en',
+            'title' => 'Launch notes',
+            'slug' => 'launch-notes',
+        ]);
+
+        $this->createPublishedPost([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'de',
+            'title' => 'Startnotizen',
+            'slug' => 'startnotizen',
+        ]);
+
+        BlogPost::create([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'fr',
+            'author_id' => User::factory()->create()->id,
+            'title' => 'Notes de lancement',
+            'slug' => 'notes-de-lancement',
+            'excerpt' => 'French translation still in draft.',
+            'body_markdown' => '# Launch',
+            'status' => PostStatus::Draft,
+        ]);
+
+        $response = $this->get(route('blog.show', [
+            'locale' => 'en',
+            'slug' => $englishPost->slug,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee(
+            '<link rel="alternate" hreflang="en" href="'.route('blog.show', ['locale' => 'en', 'slug' => 'launch-notes']).'">',
+            false
+        );
+        $response->assertSee(
+            '<link rel="alternate" hreflang="de" href="'.route('blog.show', ['locale' => 'de', 'slug' => 'startnotizen']).'">',
+            false
+        );
+        $response->assertDontSee(
+            route('blog.show', ['locale' => 'fr', 'slug' => 'notes-de-lancement']),
+            false
+        );
+    }
+
+    public function test_blog_post_route_returns_not_found_when_the_locale_variant_does_not_exist(): void
+    {
+        $post = $this->createPublishedPost([
+            'locale' => 'en',
+            'title' => 'English only launch notes',
+            'slug' => 'english-only-launch-notes',
+        ]);
+
+        $response = $this->get(route('blog.show', [
+            'locale' => 'de',
+            'slug' => $post->slug,
+        ]));
+
+        $response->assertNotFound();
+    }
+
     public function test_robots_route_uses_the_dynamic_sitemap_url(): void
     {
         $response = $this->get('/robots.txt');
@@ -130,6 +196,8 @@ class BlogSeoTest extends TestCase
 
         return BlogPost::create(array_merge([
             'author_id' => $authorId,
+            'translation_group_uuid' => (string) Str::uuid(),
+            'locale' => 'en',
             'title' => 'Default post',
             'slug' => 'default-post',
             'excerpt' => 'Default excerpt',

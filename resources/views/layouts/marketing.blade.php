@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 @php
     use App\Domain\Settings\Services\BrandingService;
+    use App\Support\Localization\LocalizedRouteService;
     
     $branding = app(BrandingService::class);
+    $localizedRouteService = app(LocalizedRouteService::class);
     $forcedTemplate = trim($__env->yieldContent('template'));
     $previewTemplate = (string) request()->query('template_preview', '');
     $availableTemplates = array_keys(config('template.templates', []));
@@ -87,13 +89,7 @@
             $routeParameters = $currentRoute?->parameters() ?? [];
 
             if ($routeName && array_key_exists('locale', $routeParameters)) {
-                foreach (array_keys(config('saas.locales.supported', ['en' => 'English'])) as $localeCode) {
-                    $alternateLocaleUrls[$localeCode] = route(
-                        $routeName,
-                        array_merge($routeParameters, ['locale' => $localeCode]),
-                        true
-                    );
-                }
+                $alternateLocaleUrls = $localizedRouteService->localizedRouteVariantUrls($routeName, $routeParameters, true);
             }
 
             $xDefaultLocale = (string) config('saas.locales.default', config('app.locale', 'en'));

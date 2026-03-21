@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Domain\Content\Models\BlogPost;
+use App\Enums\PostStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class LocalizationSeoTest extends TestCase
@@ -134,18 +136,70 @@ class LocalizationSeoTest extends TestCase
         $response->assertSeeText($post->title);
     }
 
-    public function test_locale_switch_redirect_uses_route_matching_for_legacy_urls(): void
+    public function test_locale_switch_redirect_uses_the_translated_blog_slug_when_available(): void
     {
+        $groupUuid = (string) Str::uuid();
+        $author = User::factory()->create();
+
+        BlogPost::create([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'en',
+            'author_id' => $author->id,
+            'title' => 'Senior routing check',
+            'slug' => 'senior-routing-check',
+            'excerpt' => 'English routing article.',
+            'body_markdown' => '# Routing',
+            'status' => PostStatus::Published,
+            'published_at' => now(),
+        ]);
+
+        BlogPost::create([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'de',
+            'author_id' => $author->id,
+            'title' => 'Senior routing pruefung',
+            'slug' => 'senior-routing-pruefung',
+            'excerpt' => 'German routing article.',
+            'body_markdown' => '# Routing',
+            'status' => PostStatus::Published,
+            'published_at' => now(),
+        ]);
+
         $response = $this->post(route('locale.update'), [
             'locale' => 'de',
-            'redirect' => 'http://localhost:8000/blog/senior-routing-check?lang=fr&utm_source=nav#top',
+            'redirect' => route('blog.show', ['locale' => 'en', 'slug' => 'senior-routing-check']).'?lang=fr&utm_source=nav#top',
         ]);
 
         $response->assertStatus(302);
         $this->assertSame(
-            route('blog.show', ['locale' => 'de', 'slug' => 'senior-routing-check']).'?utm_source=nav#top',
+            route('blog.show', ['locale' => 'de', 'slug' => 'senior-routing-pruefung']).'?utm_source=nav#top',
             $response->headers->get('Location')
         );
+    }
+
+    public function test_locale_switch_redirect_falls_back_to_the_localized_blog_index_when_translation_is_missing(): void
+    {
+        $author = User::factory()->create();
+
+        BlogPost::create([
+            'translation_group_uuid' => (string) Str::uuid(),
+            'locale' => 'en',
+            'author_id' => $author->id,
+            'title' => 'English only routing post',
+            'slug' => 'english-only-routing-post',
+            'excerpt' => 'No German translation yet.',
+            'body_markdown' => '# Routing',
+            'status' => PostStatus::Published,
+            'published_at' => now(),
+        ]);
+
+        $response = $this->post(route('locale.update'), [
+            'locale' => 'de',
+            'redirect' => route('blog.show', ['locale' => 'en', 'slug' => 'english-only-routing-post']),
+        ]);
+
+        $response->assertStatus(302);
+        $response->assertRedirect(route('blog.index', ['locale' => 'de']));
     }
 
     public function test_locale_switch_redirect_preserves_non_localized_internal_paths(): void

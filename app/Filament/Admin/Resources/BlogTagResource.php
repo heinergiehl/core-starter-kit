@@ -3,24 +3,25 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Content\Models\BlogTag;
+use App\Filament\Admin\Resources\Concerns\InteractsWithAutoSlugFields;
+use App\Filament\Admin\Resources\Concerns\InteractsWithBulkTaxonomyActions;
 use App\Support\Content\BlogEditorSupport;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\Placeholder;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Utilities\Get;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 class BlogTagResource extends Resource
 {
+    use InteractsWithAutoSlugFields;
+    use InteractsWithBulkTaxonomyActions;
+
     protected static ?string $model = BlogTag::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-tag';
@@ -35,23 +36,22 @@ class BlogTagResource extends Resource
     {
         return $schema
             ->schema([
-                TextInput::make('name')
-                    ->required()
-                    ->maxLength(50)
-                    ->live(onBlur: true)
-                    ->afterStateUpdated(function (?string $state, ?string $old, Get $get, Set $set): void {
-                        if (! BlogEditorSupport::shouldAutoUpdateSlug($get('slug'), $old)) {
-                            return;
-                        }
+                static::makeSlugSyncHiddenField(),
 
-                        $set('slug', BlogEditorSupport::generateSlug($state));
-                    }),
+                static::configureSlugSourceField(
+                    TextInput::make('name')
+                        ->required()
+                        ->maxLength(50),
+                ),
 
-                TextInput::make('slug')
-                    ->required()
-                    ->maxLength(50)
-                    ->unique(ignoreRecord: true)
-                    ->helperText('Auto-generated from the tag name until you customize it.'),
+                static::configureSlugField(
+                    TextInput::make('slug')
+                        ->required()
+                        ->alphaDash()
+                        ->maxLength(50)
+                        ->unique(ignoreRecord: true),
+                    sourceLabel: 'tag name',
+                ),
             ])
             ->columns(2);
     }
@@ -78,23 +78,29 @@ class BlogTagResource extends Resource
                 Action::make('bulkCreate')
                     ->label('Paste List')
                     ->icon('heroicon-o-clipboard-document-list')
+                    ->modalWidth('2xl')
                     ->modalHeading('Bulk create tags')
-                    ->schema([
-                        Textarea::make('names')
-                            ->label('Tag names')
-                            ->required()
-                            ->rows(8)
-                            ->placeholder("Laravel\nBilling\nSEO")
-                            ->helperText('Paste comma-separated or one-per-line tag names. Existing slugs are reused.'),
-                        Placeholder::make('bulk_create_help')
-                            ->content('Example: Laravel, Billing, SEO'),
-                    ])
-                    ->action(function (array $data): void {
-                        $result = static::createRecordsFromBulkInput($data['names'] ?? '');
+                    ->modalDescription('Paste names, review the generated slugs, then confirm.')
+                    ->modalSubmitActionLabel('Create tags')
+                    ->steps(static::makeBulkTaxonomyWizardSteps(
+                        singularLabel: 'tag',
+                        pluralLabel: 'tags',
+                        modelClass: BlogTag::class,
+                        nameMaxLength: 50,
+                        slugMaxLength: 50,
+                        placeholder: "Laravel\nBilling\nSEO",
+                    ))
+                    ->action(function (array $data, array $mountedActions): void {
+                        $result = BlogEditorSupport::commitTaxonomyDrafts(
+                            drafts: (array) ($data['drafts'] ?? []),
+                            modelClass: BlogTag::class,
+                            singularLabel: 'tag',
+                            errorPathPrefix: static::getMountedActionDataPath($mountedActions, 'drafts'),
+                        );
 
                         Notification::make()
                             ->title('Tags processed')
-                            ->body("Created {$result['created']} and reused {$result['existing']} existing tags.")
+                            ->body(static::formatTaxonomyNotificationBody('tag', $result))
                             ->success()
                             ->send();
                     }),
@@ -112,30 +118,6 @@ class BlogTagResource extends Resource
             'index' => \App\Filament\Admin\Resources\BlogTagResource\Pages\ListBlogTags::route('/'),
             'create' => \App\Filament\Admin\Resources\BlogTagResource\Pages\CreateBlogTag::route('/create'),
             'edit' => \App\Filament\Admin\Resources\BlogTagResource\Pages\EditBlogTag::route('/{record}/edit'),
-        ];
-    }
-
-    /**
-     * @return array{created:int,existing:int}
-     */
-    protected static function createRecordsFromBulkInput(string $input): array
-    {
-        $created = 0;
-        $existing = 0;
-
-        foreach (BlogEditorSupport::parseBulkNames($input) as $name) {
-            $slug = BlogEditorSupport::generateSlug($name);
-            $record = BlogTag::query()->firstOrCreate(
-                ['slug' => $slug],
-                ['name' => $name]
-            );
-
-            $record->wasRecentlyCreated ? $created++ : $existing++;
-        }
-
-        return [
-            'created' => $created,
-            'existing' => $existing,
         ];
     }
 }

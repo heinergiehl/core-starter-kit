@@ -2,19 +2,27 @@
 
 namespace App\Filament\Admin\Resources;
 
+use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
+use App\Domain\Content\Models\BlogTag;
+use App\Enums\Locale;
 use App\Enums\PostStatus;
+use App\Filament\Admin\Resources\Concerns\InteractsWithAutoSlugFields;
+use App\Filament\Admin\Resources\Concerns\InteractsWithBulkTaxonomyActions;
 use App\Support\Content\BlogEditorSupport;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\RichEditor;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -24,10 +32,16 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class BlogPostResource extends Resource
 {
+    use InteractsWithAutoSlugFields;
+    use InteractsWithBulkTaxonomyActions;
+
     protected static ?string $model = BlogPost::class;
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-text';
@@ -42,32 +56,56 @@ class BlogPostResource extends Resource
     {
         return $schema
             ->schema([
+                Section::make('Translations')
+                    ->visible(fn (?BlogPost $record): bool => filled($record))
+                    ->schema([
+                        Placeholder::make('translation_family')
+                            ->hiddenLabel()
+                            ->html()
+                            ->content(fn (?BlogPost $record) => static::renderTranslationFamily($record)),
+                    ])
+                    ->columnSpanFull(),
+
                 Section::make('Content')
                     ->schema([
-                        TextInput::make('title')
-                            ->label('Title')
-                            ->required()
-                            ->maxLength(255)
-                            ->placeholder('Stripe vs Paddle for SaaS billing')
-                            ->helperText('Main headline for the post and the default SEO title.')
-                            ->live(debounce: 500)
-                            ->afterStateUpdated(function (?string $state, ?string $old, Get $get, Set $set): void {
-                                if (! BlogEditorSupport::shouldAutoUpdateSlug($get('slug'), $old)) {
-                                    return;
-                                }
+                        static::makeSlugSyncHiddenField('slug_sync_enabled'),
 
-                                $set('slug', BlogEditorSupport::generateSlug($state));
-                            }),
-
-                        TextInput::make('slug')
-                            ->label('URL Slug')
+                        Select::make('locale')
+                            ->label('Locale')
+                            ->options(static::localeOptions())
+                            ->default((string) config('saas.locales.default', config('app.locale', 'en')))
                             ->required()
-                            ->maxLength(255)
-                            ->unique(ignoreRecord: true)
-                            ->rules(['alpha_dash'])
-                            ->placeholder('stripe-vs-paddle-for-saas-billing')
-                            ->helperText('Used in the blog URL. Auto-generated until you change it.')
-                            ->live(debounce: 500),
+                            ->native(false)
+                            ->helperText('Each translation keeps its own locale, slug, SEO fields, and publish state.')
+                            ->disabled(fn (string $operation): bool => $operation === 'edit')
+                            ->dehydrated(fn (string $operation): bool => $operation === 'create'),
+
+                        static::configureSlugSourceField(
+                            TextInput::make('title')
+                                ->label('Title')
+                                ->required()
+                                ->maxLength(255)
+                                ->placeholder('Stripe vs Paddle for SaaS billing')
+                                ->helperText('Main headline for the post and the default SEO title.'),
+                            syncField: 'slug_sync_enabled',
+                        ),
+
+                        static::configureSlugField(
+                            TextInput::make('slug')
+                                ->label('URL Slug')
+                                ->required()
+                                ->maxLength(255)
+                                ->rules([
+                                    fn (Get $get, ?BlogPost $record) => Rule::unique('blog_posts', 'slug')
+                                        ->where('locale', $get('locale'))
+                                        ->ignore($record?->id),
+                                ])
+                                ->rules(['alpha_dash'])
+                                ->placeholder('stripe-vs-paddle-for-saas-billing'),
+                            sourceField: 'title',
+                            sourceLabel: 'title',
+                            syncField: 'slug_sync_enabled',
+                        ),
 
                         Textarea::make('excerpt')
                             ->label('Summary')
@@ -75,7 +113,7 @@ class BlogPostResource extends Resource
                             ->maxLength(500)
                             ->placeholder('Short summary for blog cards, RSS, and the default SEO description.')
                             ->helperText('Recommended. Blank SEO description will reuse this.')
-                            ->live(debounce: 500)
+                            ->live(onBlur: true)
                             ->columnSpanFull(),
 
                         RichEditor::make('body_html')
@@ -131,23 +169,23 @@ class BlogPostResource extends Resource
                             ->relationship('category', 'name')
                             ->searchable()
                             ->preload()
-                            ->helperText('Use one primary category per post. Need many? Use Categories > Paste List.')
+                            ->helperText('Use one primary category per post. Paste list can bulk-create options here.')
+                            ->hintAction(static::makeBulkCreateCategoriesAction())
                             ->createOptionForm([
-                                TextInput::make('name')
-                                    ->required()
-                                    ->maxLength(100)
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(function (?string $state, ?string $old, Get $get, Set $set): void {
-                                        if (! BlogEditorSupport::shouldAutoUpdateSlug($get('slug'), $old)) {
-                                            return;
-                                        }
-
-                                        $set('slug', BlogEditorSupport::generateSlug($state));
-                                    }),
-                                TextInput::make('slug')
-                                    ->required()
-                                    ->maxLength(100)
-                                    ->helperText('Auto-generated from the category name until you customize it.'),
+                                static::makeSlugSyncHiddenField(),
+                                static::configureSlugSourceField(
+                                    TextInput::make('name')
+                                        ->required()
+                                        ->maxLength(100),
+                                ),
+                                static::configureSlugField(
+                                    TextInput::make('slug')
+                                        ->required()
+                                        ->alphaDash()
+                                        ->maxLength(100)
+                                        ->unique('blog_categories', 'slug'),
+                                    sourceLabel: 'category name',
+                                ),
                             ]),
 
                         Select::make('tags')
@@ -156,24 +194,23 @@ class BlogPostResource extends Resource
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->helperText('Secondary topics. Need many new tags? Use Tags > Paste List.')
+                            ->helperText('Secondary topics. Paste list creates and selects multiple tags in one step.')
+                            ->hintAction(static::makeBulkCreateTagsAction())
                             ->createOptionForm([
-                                TextInput::make('name')
-                                    ->required()
-                                    ->maxLength(50)
-                                    ->live(onBlur: true)
-                                    ->afterStateUpdated(function (?string $state, ?string $old, Get $get, Set $set): void {
-                                        if (! BlogEditorSupport::shouldAutoUpdateSlug($get('slug'), $old)) {
-                                            return;
-                                        }
-
-                                        $set('slug', BlogEditorSupport::generateSlug($state));
-                                    }),
-                                TextInput::make('slug')
-                                    ->required()
-                                    ->maxLength(50)
-                                    ->unique('blog_tags', 'slug')
-                                    ->helperText('Auto-generated from the tag name until you customize it.'),
+                                static::makeSlugSyncHiddenField(),
+                                static::configureSlugSourceField(
+                                    TextInput::make('name')
+                                        ->required()
+                                        ->maxLength(50),
+                                ),
+                                static::configureSlugField(
+                                    TextInput::make('slug')
+                                        ->required()
+                                        ->alphaDash()
+                                        ->maxLength(50)
+                                        ->unique('blog_tags', 'slug'),
+                                    sourceLabel: 'tag name',
+                                ),
                             ]),
                     ]),
 
@@ -212,7 +249,7 @@ class BlogPostResource extends Resource
 
                                 return "{$length}/60.{$fallback}";
                             })
-                            ->live(debounce: 500),
+                            ->live(onBlur: true),
 
                         Textarea::make('meta_description')
                             ->label('SEO Description')
@@ -226,7 +263,7 @@ class BlogPostResource extends Resource
 
                                 return "{$length}/160.{$fallback}";
                             })
-                            ->live(debounce: 500)
+                            ->live(onBlur: true)
                             ->columnSpanFull(),
                     ])
                     ->columns(2)
@@ -240,6 +277,7 @@ class BlogPostResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('translations'))
             ->columns([
                 ImageColumn::make('featured_image')
                     ->label('Image')
@@ -250,7 +288,12 @@ class BlogPostResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->limit(40)
-                    ->description(fn (BlogPost $record) => str($record->excerpt)->limit(50)),
+                    ->description(fn (BlogPost $record): string => $record->translationStatusSummary()),
+
+                TextColumn::make('locale')
+                    ->badge()
+                    ->formatStateUsing(fn (string $state): string => static::localeOptions()[$state] ?? strtoupper($state))
+                    ->sortable(),
 
                 TextColumn::make('category.name')
                     ->label('Category')
@@ -277,6 +320,9 @@ class BlogPostResource extends Resource
                     ->sortable(),
             ])
             ->filters([
+                SelectFilter::make('locale')
+                    ->options(static::localeOptions()),
+
                 SelectFilter::make('category')
                     ->relationship('category', 'name'),
 
@@ -312,6 +358,13 @@ class BlogPostResource extends Resource
         return static::getModel()::count();
     }
 
+    public static function localeOptions(): array
+    {
+        return collect(Locale::cases())
+            ->mapWithKeys(fn (Locale $locale): array => [$locale->value => $locale->getLabel() ?? strtoupper($locale->value)])
+            ->all();
+    }
+
     protected static function isPublishedState(mixed $value): bool
     {
         if ($value instanceof PostStatus) {
@@ -323,5 +376,157 @@ class BlogPostResource extends Resource
         }
 
         return false;
+    }
+
+    protected static function makeBulkCreateCategoriesAction(): Action
+    {
+        return Action::make('pasteCategories')
+            ->label('Paste list')
+            ->link()
+            ->color('gray')
+            ->icon('heroicon-o-clipboard-document-list')
+            ->modalWidth('2xl')
+            ->modalHeading('Bulk create categories')
+            ->modalDescription('Paste names, review the generated slugs, then confirm.')
+            ->modalSubmitActionLabel('Create categories')
+            ->steps(static::makeBulkTaxonomyWizardSteps(
+                singularLabel: 'category',
+                pluralLabel: 'categories',
+                modelClass: BlogCategory::class,
+                nameMaxLength: 100,
+                slugMaxLength: 100,
+                placeholder: "Billing\nProduct Updates\nGrowth",
+            ))
+            ->action(function (array $data, Set $schemaSet, array $mountedActions): void {
+                $result = BlogEditorSupport::commitTaxonomyDrafts(
+                    drafts: (array) ($data['drafts'] ?? []),
+                    modelClass: BlogCategory::class,
+                    singularLabel: 'category',
+                    errorPathPrefix: static::getMountedActionDataPath($mountedActions, 'drafts'),
+                );
+
+                if (count($result['ids']) === 1) {
+                    $schemaSet('category_id', $result['ids'][0]);
+
+                    Notification::make()
+                        ->title('Category ready')
+                        ->body(static::formatTaxonomyNotificationBody('category', $result, true))
+                        ->success()
+                        ->send();
+
+                    return;
+                }
+
+                Notification::make()
+                    ->title('Categories ready')
+                    ->body(static::formatTaxonomyNotificationBody('category', $result))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    protected static function makeBulkCreateTagsAction(): Action
+    {
+        return Action::make('pasteTags')
+            ->label('Paste list')
+            ->link()
+            ->color('gray')
+            ->icon('heroicon-o-clipboard-document-list')
+            ->modalWidth('2xl')
+            ->modalHeading('Bulk create tags')
+            ->modalDescription('Paste names, review the generated slugs, then confirm.')
+            ->modalSubmitActionLabel('Create and select tags')
+            ->steps(static::makeBulkTaxonomyWizardSteps(
+                singularLabel: 'tag',
+                pluralLabel: 'tags',
+                modelClass: BlogTag::class,
+                nameMaxLength: 50,
+                slugMaxLength: 50,
+                placeholder: 'laravel saas starter kit, filament, stripe',
+            ))
+            ->action(function (array $data, Get $schemaGet, Set $schemaSet, array $mountedActions): void {
+                $result = BlogEditorSupport::commitTaxonomyDrafts(
+                    drafts: (array) ($data['drafts'] ?? []),
+                    modelClass: BlogTag::class,
+                    singularLabel: 'tag',
+                    errorPathPrefix: static::getMountedActionDataPath($mountedActions, 'drafts'),
+                );
+
+                $currentTagIds = collect($schemaGet('tags') ?? [])
+                    ->map(static fn (mixed $id): int => (int) $id)
+                    ->filter(static fn (int $id): bool => $id > 0);
+
+                $schemaSet(
+                    'tags',
+                    $currentTagIds
+                        ->merge($result['ids'])
+                        ->unique()
+                        ->values()
+                        ->all()
+                );
+
+                Notification::make()
+                    ->title('Tags ready')
+                    ->body(static::formatTaxonomyNotificationBody('tag', $result, true))
+                    ->success()
+                    ->send();
+            });
+    }
+
+    protected static function renderTranslationFamily(?BlogPost $record): HtmlString
+    {
+        if (! $record) {
+            return new HtmlString('');
+        }
+
+        $supportedLocales = static::localeOptions();
+        $translations = $record->relationLoaded('translations')
+            ? $record->getRelation('translations')
+            : $record->translations()->get();
+
+        $translationsByLocale = $translations->keyBy('locale');
+
+        $badges = collect(array_keys($supportedLocales))
+            ->map(function (string $locale) use ($translationsByLocale): string {
+                /** @var BlogPost|null $translation */
+                $translation = $translationsByLocale->get($locale);
+
+                if (! $translation) {
+                    return sprintf(
+                        '<span class="%s">%s missing</span>',
+                        'inline-flex items-center rounded-full border border-dashed border-slate-300 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-950/30 dark:text-slate-400',
+                        e(strtoupper($locale)),
+                    );
+                }
+
+                $status = $translation->status instanceof PostStatus
+                    ? $translation->status->value
+                    : (string) $translation->status;
+
+                $classes = match ($status) {
+                    PostStatus::Published->value => 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/80 dark:bg-emerald-950/40 dark:text-emerald-300',
+                    PostStatus::Archived->value => 'border-slate-300 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300',
+                    default => 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/80 dark:bg-amber-950/40 dark:text-amber-300',
+                };
+
+                return sprintf(
+                    '<a href="%s" class="%s">%s %s</a>',
+                    e(static::getUrl('edit', ['record' => $translation])),
+                    "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium transition hover:opacity-85 {$classes}",
+                    e(strtoupper($locale)),
+                    e(Str::headline($status)),
+                );
+            })
+            ->implode('');
+
+        return new HtmlString(<<<HTML
+<div class="space-y-3">
+    <div>
+        <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Translation family</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Each locale is its own post record with its own slug, SEO fields, and publish state.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">{$badges}</div>
+</div>
+HTML);
     }
 }
