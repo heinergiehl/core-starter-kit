@@ -271,6 +271,43 @@ MD);
         $this->assertTrue($post->published_at->equalTo($publishedAt));
     }
 
+    public function test_it_parses_quoted_front_matter_values_that_contain_colons(): void
+    {
+        User::factory()->create([
+            'is_admin' => true,
+            'email' => 'admin@example.com',
+        ]);
+
+        $this->writeMarkdown('quoted-values/en.md', <<<'MD'
+---
+title: "Laravel SaaS Starter Kit: launch faster"
+slug: laravel-saas-starter-kit-launch-faster
+author_email: admin@example.com
+tags: [laravel, "micro saas"]
+status: published
+meta_title: "Laravel SaaS Starter Kit: launch faster"
+meta_description: "A practical guide: what to ship first."
+---
+# Laravel SaaS Starter Kit
+
+Quoted front matter should import correctly.
+MD);
+
+        $this->artisan('blog:sync-content', $this->commandArguments())
+            ->assertExitCode(0);
+
+        $post = BlogPost::query()->where('content_source_path', 'quoted-values/en.md')->first();
+
+        $this->assertNotNull($post);
+        $this->assertSame('Laravel SaaS Starter Kit: launch faster', $post->title);
+        $this->assertSame('Laravel SaaS Starter Kit: launch faster', $post->meta_title);
+        $this->assertSame('A practical guide: what to ship first.', $post->meta_description);
+        $this->assertSame(
+            ['laravel', 'micro-saas'],
+            $post->tags()->orderBy('slug')->pluck('slug')->all()
+        );
+    }
+
     public function test_it_can_archive_missing_markdown_managed_posts(): void
     {
         $admin = User::factory()->create([

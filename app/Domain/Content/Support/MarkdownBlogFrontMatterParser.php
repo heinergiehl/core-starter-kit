@@ -10,8 +10,6 @@ use DateTimeInterface;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
-use Symfony\Component\Yaml\Exception\ParseException;
-use Symfony\Component\Yaml\Yaml;
 
 class MarkdownBlogFrontMatterParser
 {
@@ -39,15 +37,7 @@ class MarkdownBlogFrontMatterParser
         $contents = preg_replace('/^\xEF\xBB\xBF/', '', (string) File::get($absolutePath)) ?? '';
         [$frontMatter, $bodyMarkdown] = $this->splitFrontMatter($contents, $relativePath);
 
-        try {
-            $parsedFrontMatter = Yaml::parse($frontMatter);
-        } catch (ParseException $exception) {
-            throw new InvalidArgumentException("Markdown post [{$relativePath}] has invalid YAML front matter: {$exception->getMessage()}.", previous: $exception);
-        }
-
-        if (! is_array($parsedFrontMatter)) {
-            throw new InvalidArgumentException("Markdown post [{$relativePath}] front matter must resolve to a key/value object.");
-        }
+        $parsedFrontMatter = $this->parseFrontMatter($frontMatter, $relativePath);
 
         $title = trim((string) ($parsedFrontMatter['title'] ?? ''));
 
@@ -99,6 +89,172 @@ class MarkdownBlogFrontMatterParser
             (string) ($matches['front_matter'] ?? ''),
             (string) ($matches['body'] ?? ''),
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function parseFrontMatter(string $frontMatter, string $relativePath): array
+    {
+        $lines = preg_split('/\R/', $frontMatter) ?: [];
+        $parsed = [];
+        $currentListKey = null;
+
+        foreach ($lines as $lineIndex => $line) {
+            $trimmedLine = trim($line);
+
+            if (($trimmedLine === '') || str_starts_with($trimmedLine, '#')) {
+                continue;
+            }
+
+            if (preg_match('/^\s*-\s*(.+)\s*$/', $line, $matches) === 1) {
+                if ($currentListKey === null) {
+                    throw new InvalidArgumentException("Markdown post [{$relativePath}] has invalid YAML front matter near line ".($lineIndex + 1).'.');
+                }
+
+                if (! is_array($parsed[$currentListKey] ?? null)) {
+                    throw new InvalidArgumentException("Markdown post [{$relativePath}] has invalid YAML front matter near line ".($lineIndex + 1).'.');
+                }
+
+                $parsed[$currentListKey][] = $this->parseScalarValue($matches[1]);
+
+                continue;
+            }
+
+            $currentListKey = null;
+
+            if (preg_match('/^([A-Za-z0-9_]+):(.*)$/', $line, $matches) !== 1) {
+                throw new InvalidArgumentException("Markdown post [{$relativePath}] has invalid YAML front matter near line ".($lineIndex + 1).'.');
+            }
+
+            $key = trim($matches[1]);
+            $rawValue = ltrim($matches[2]);
+
+            if ($rawValue === '') {
+                if ($this->nextSignificantLineStartsList($lines, $lineIndex + 1)) {
+                    $parsed[$key] = [];
+                    $currentListKey = $key;
+                } else {
+                    $parsed[$key] = null;
+                }
+
+                continue;
+            }
+
+            $parsed[$key] = $this->parseValue($rawValue, $relativePath, $lineIndex + 1);
+        }
+
+        return $parsed;
+    }
+
+    /**
+     * @param  array<int, string>  $lines
+     */
+    private function nextSignificantLineStartsList(array $lines, int $startIndex): bool
+    {
+        $remainingLines = array_slice($lines, $startIndex);
+
+        foreach ($remainingLines as $line) {
+            $trimmedLine = trim($line);
+
+            if (($trimmedLine === '') || str_starts_with($trimmedLine, '#')) {
+                continue;
+            }
+
+            return preg_match('/^\s*-\s+/', $line) === 1;
+        }
+
+        return false;
+    }
+
+    private function parseValue(string $rawValue, string $relativePath, int $lineNumber): mixed
+    {
+        $trimmedValue = trim($rawValue);
+
+        if (($trimmedValue !== '') && str_starts_with($trimmedValue, '[')) {
+            if (! str_ends_with($trimmedValue, ']')) {
+                throw new InvalidArgumentException("Markdown post [{$relativePath}] has invalid YAML front matter near line {$lineNumber}.");
+            }
+
+            return $this->parseInlineList(substr($trimmedValue, 1, -1));
+        }
+
+        return $this->parseScalarValue($trimmedValue);
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function parseInlineList(string $value): array
+    {
+        $items = [];
+        $buffer = '';
+        $quote = null;
+        $characters = preg_split('//u', $value, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        foreach ($characters as $character) {
+            if ($quote !== null) {
+                if ($character === $quote) {
+                    $quote = null;
+                }
+
+                $buffer .= $character;
+
+                continue;
+            }
+
+            if (($character === '"') || ($character === '\'')) {
+                $quote = $character;
+                $buffer .= $character;
+
+                continue;
+            }
+
+            if ($character === ',') {
+                $items[] = $this->parseScalarValue($buffer);
+                $buffer = '';
+
+                continue;
+            }
+
+            $buffer .= $character;
+        }
+
+        if (trim($buffer) !== '') {
+            $items[] = $this->parseScalarValue($buffer);
+        }
+
+        return array_values(array_filter($items, static fn (mixed $item): bool => $item !== null && $item !== ''));
+    }
+
+    private function parseScalarValue(string $value): mixed
+    {
+        $trimmedValue = trim($value);
+
+        if ($trimmedValue === '') {
+            return '';
+        }
+
+        if (($trimmedValue === 'null') || ($trimmedValue === '~')) {
+            return null;
+        }
+
+        if (
+            ((str_starts_with($trimmedValue, '"') && str_ends_with($trimmedValue, '"'))
+            || (str_starts_with($trimmedValue, '\'') && str_ends_with($trimmedValue, '\'')))
+            && (strlen($trimmedValue) >= 2)
+        ) {
+            $quote = $trimmedValue[0];
+            $unquotedValue = substr($trimmedValue, 1, -1);
+
+            if ($quote === '"') {
+                return stripcslashes($unquotedValue);
+            }
+
+            return str_replace(["\\'", '\\\\'], ["'", '\\'], $unquotedValue);
+        }
+
+        return $trimmedValue;
     }
 
     private function parseStatus(mixed $value, string $relativePath): PostStatus
