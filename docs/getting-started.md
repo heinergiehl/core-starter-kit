@@ -78,3 +78,4 @@ Next: see `docs/billing.md` and run `docs/billing-go-live-checklist.md` before p
 3) [Security](security.md) (hardening + CSP notes)
 4) [Testing](testing.md) (smoke pass + CI gates)
 5) [Theming](theming.md) and [Localization](localization.md) (launch polish, locale-aware blog setup, SEO notes)
+6) [Blog Content Sync](blog-content-sync.md) (markdown structure, multilingual import workflow, admin behavior)

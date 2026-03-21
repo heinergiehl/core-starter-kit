@@ -19,6 +19,7 @@ class ConsoleCommandsTest extends TestCase
         $this->assertIsString($syncCommand);
         $this->assertSame('billing:publish-catalog', $syncCommand);
         $this->assertStringContainsString('app:create-admin', $output);
+        $this->assertStringContainsString('blog:sync-content', $output);
         $this->assertStringContainsString('billing:publish-catalog', $output);
         $this->assertStringNotContainsString('app:create-admin-command', $output);
     }

@@ -56,6 +56,16 @@ class BlogPostResource extends Resource
     {
         return $schema
             ->schema([
+                Section::make('Source')
+                    ->visible(fn (?BlogPost $record): bool => filled($record) && $record->isManagedByMarkdown())
+                    ->schema([
+                        Placeholder::make('content_source_meta')
+                            ->hiddenLabel()
+                            ->html()
+                            ->content(fn (?BlogPost $record) => static::renderContentSourceMeta($record)),
+                    ])
+                    ->columnSpanFull(),
+
                 Section::make('Translations')
                     ->visible(fn (?BlogPost $record): bool => filled($record))
                     ->schema([
@@ -289,6 +299,12 @@ class BlogPostResource extends Resource
                     ->sortable()
                     ->limit(40)
                     ->description(fn (BlogPost $record): string => $record->translationStatusSummary()),
+
+                TextColumn::make('content_source')
+                    ->label('Source')
+                    ->badge()
+                    ->formatStateUsing(fn (?string $state): string => $state === 'markdown' ? 'Markdown' : 'Manual')
+                    ->color(fn (?string $state): string => $state === 'markdown' ? 'info' : 'gray'),
 
                 TextColumn::make('locale')
                     ->badge()
@@ -526,6 +542,27 @@ class BlogPostResource extends Resource
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">Each locale is its own post record with its own slug, SEO fields, and publish state.</p>
     </div>
     <div class="flex flex-wrap gap-2">{$badges}</div>
+</div>
+HTML);
+    }
+
+    protected static function renderContentSourceMeta(?BlogPost $record): HtmlString
+    {
+        if (! $record || ! $record->isManagedByMarkdown()) {
+            return new HtmlString('');
+        }
+
+        $sourcePath = e((string) $record->content_source_path);
+        $lastSyncedAt = $record->content_source_synced_at?->format('M d, Y H:i');
+        $syncedCopy = $lastSyncedAt ? "Last synced {$lastSyncedAt}." : 'Not synced yet.';
+
+        return new HtmlString(<<<HTML
+<div class="space-y-3">
+    <div>
+        <p class="text-sm font-medium text-slate-900 dark:text-slate-100">Markdown-managed post</p>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-300">This record is synced from the markdown source path <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-900">{$sourcePath}</code>. Changes made here can be overwritten the next time <code class="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-900">php artisan blog:sync-content</code> runs.</p>
+    </div>
+    <p class="text-xs text-slate-500 dark:text-slate-400">{$syncedCopy}</p>
 </div>
 HTML);
     }

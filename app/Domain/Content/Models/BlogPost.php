@@ -20,6 +20,11 @@ class BlogPost extends Model
     protected $fillable = [
         'translation_group_uuid',
         'locale',
+        'content_source',
+        'content_source_key',
+        'content_source_path',
+        'content_source_hash',
+        'content_source_synced_at',
         'title',
         'slug',
         'excerpt',
@@ -37,6 +42,7 @@ class BlogPost extends Model
 
     protected $casts = [
         'published_at' => 'datetime',
+        'content_source_synced_at' => 'datetime',
         'reading_time' => 'int',
         'status' => \App\Enums\PostStatus::class,
     ];
@@ -181,6 +187,11 @@ class BlogPost extends Model
                 return "{$locale} {$status}";
             })
             ->implode(' | ');
+    }
+
+    public function isManagedByMarkdown(): bool
+    {
+        return $this->content_source === 'markdown' && filled($this->content_source_path);
     }
 
     public function author(): BelongsTo

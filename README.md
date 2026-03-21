@@ -238,6 +238,7 @@ When running locally, you can browse these in the app at `/{locale}/docs` (examp
 - `docs/billing.md` - providers, env/config, webhooks
 - `docs/billing-go-live-checklist.md` - release gate for subscription + one-time billing flows
 - `docs/features.md` - parity checklist and missing features
+- `docs/blog-content-sync.md` - markdown file structure and multilingual blog import workflow
 - `docs/theming.md` - design tokens, theming, branding
 - `docs/localization.md` - locale setup and translation workflow
 - `docs/testing.md` - automated + manual QA checklist
