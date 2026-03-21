@@ -8,6 +8,7 @@ use App\Domain\Content\Models\BlogTag;
 use App\Enums\PostStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -269,6 +270,65 @@ MD);
         $this->assertSame(PostStatus::Published, $post->status);
         $this->assertNotNull($post->published_at);
         $this->assertTrue($post->published_at->equalTo($publishedAt));
+    }
+
+    public function test_it_can_force_publish_now_for_scheduled_markdown_posts(): void
+    {
+        Carbon::setTestNow('2026-03-22 12:00:00');
+
+        try {
+            User::factory()->create([
+                'is_admin' => true,
+                'email' => 'admin@example.com',
+            ]);
+
+            $this->writeMarkdown('scheduled-post/en.md', <<<'MD'
+---
+title: Scheduled Post
+slug: scheduled-post
+author_email: admin@example.com
+status: published
+published_at: 2026-04-01 09:00:00
+---
+# Scheduled Post
+
+This starts in the future.
+MD);
+
+            $this->artisan('blog:sync-content', $this->commandArguments())
+                ->assertExitCode(0);
+
+            $post = BlogPost::query()->where('content_source_path', 'scheduled-post/en.md')->first();
+
+            $this->assertNotNull($post);
+            $this->assertSame('2026-04-01 09:00:00', $post->published_at?->format('Y-m-d H:i:s'));
+            $this->assertSame(0, BlogPost::query()->published()->count());
+
+            $this->artisan('blog:sync-content', $this->commandArguments([
+                '--publish-now' => true,
+            ]))
+                ->assertExitCode(0);
+
+            $post->refresh();
+            $publishedAt = $post->published_at;
+
+            $this->assertSame(PostStatus::Published, $post->status);
+            $this->assertNotNull($publishedAt);
+            $this->assertSame('2026-03-22 12:00:00', $publishedAt->format('Y-m-d H:i:s'));
+            $this->assertSame(1, BlogPost::query()->published()->count());
+
+            $this->artisan('blog:sync-content', $this->commandArguments([
+                '--publish-now' => true,
+            ]))
+                ->assertExitCode(0);
+
+            $post->refresh();
+
+            $this->assertNotNull($post->published_at);
+            $this->assertTrue($post->published_at->equalTo($publishedAt));
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_it_parses_quoted_front_matter_values_that_contain_colons(): void

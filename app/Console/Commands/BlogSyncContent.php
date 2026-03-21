@@ -13,6 +13,7 @@ class BlogSyncContent extends Command
         {--dry-run : Preview creates, updates, and archives without writing to the database}
         {--archive-missing : Archive markdown-managed posts whose source files no longer exist}
         {--publish : Force imported markdown posts to published status}
+        {--publish-now : Force imported markdown posts live immediately, overriding future published_at values}
         {--author= : Fallback author email when a file omits author_email}';
 
     protected $description = 'Sync multilingual markdown blog content into the database';
@@ -31,6 +32,7 @@ class BlogSyncContent extends Command
             archiveMissing: (bool) $this->option('archive-missing'),
             fallbackAuthorEmail: $this->option('author') ? (string) $this->option('author') : null,
             forcePublish: (bool) $this->option('publish'),
+            publishNow: (bool) $this->option('publish-now'),
         );
 
         foreach ($result['errors'] as $error) {

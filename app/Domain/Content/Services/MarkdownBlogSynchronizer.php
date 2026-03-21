@@ -44,6 +44,7 @@ class MarkdownBlogSynchronizer
         bool $archiveMissing = false,
         ?string $fallbackAuthorEmail = null,
         bool $forcePublish = false,
+        bool $publishNow = false,
     ): array {
         $rootPath = $this->resolveRootPath($path);
         $result = [
@@ -123,7 +124,7 @@ class MarkdownBlogSynchronizer
             $result['warnings'][] = "{$missingCount} markdown-managed blog posts no longer have source files. Re-run with --archive-missing to archive them.";
         }
 
-        $persistChanges = function () use (&$result, $archiveMissing, $dryRun, $fallbackAuthorEmail, $forcePublish, $missingMarkdownPosts, $parsedPostCollection): void {
+        $persistChanges = function () use (&$result, $archiveMissing, $dryRun, $fallbackAuthorEmail, $forcePublish, $publishNow, $missingMarkdownPosts, $parsedPostCollection): void {
             $existingPostsBySourcePath = BlogPost::query()
                 ->where('content_source', 'markdown')
                 ->whereIn('content_source_path', $parsedPostCollection->map(static fn (ParsedMarkdownBlogPost $parsedPost): string => $parsedPost->sourcePath)->all())
@@ -140,8 +141,8 @@ class MarkdownBlogSynchronizer
 
             foreach ($parsedPostCollection as $parsedPost) {
                 $existingPost = $existingPostsBySourcePath->get($parsedPost->sourcePath);
-                $effectiveStatus = $this->determineStatus($parsedPost, $forcePublish);
-                $effectivePublishedAt = $this->determinePublishedAt($parsedPost, $existingPost, $forcePublish);
+                $effectiveStatus = $this->determineStatus($parsedPost, $forcePublish, $publishNow);
+                $effectivePublishedAt = $this->determinePublishedAt($parsedPost, $existingPost, $forcePublish, $publishNow);
 
                 if (
                     $existingPost
@@ -332,9 +333,9 @@ class MarkdownBlogSynchronizer
         $this->validateTags($parsedPost);
     }
 
-    private function determineStatus(ParsedMarkdownBlogPost $parsedPost, bool $forcePublish): PostStatus
+    private function determineStatus(ParsedMarkdownBlogPost $parsedPost, bool $forcePublish, bool $publishNow): PostStatus
     {
-        if ($forcePublish) {
+        if ($forcePublish || $publishNow) {
             return PostStatus::Published;
         }
 
@@ -345,7 +346,20 @@ class MarkdownBlogSynchronizer
         ParsedMarkdownBlogPost $parsedPost,
         ?BlogPost $existingPost,
         bool $forcePublish,
+        bool $publishNow,
     ): ?CarbonInterface {
+        if ($publishNow) {
+            if (($parsedPost->publishedAt instanceof CarbonInterface) && $parsedPost->publishedAt->lessThanOrEqualTo(now())) {
+                return $parsedPost->publishedAt;
+            }
+
+            if (($existingPost?->published_at instanceof CarbonInterface) && $existingPost->published_at->lessThanOrEqualTo(now())) {
+                return $existingPost->published_at;
+            }
+
+            return now();
+        }
+
         if (! $forcePublish) {
             return $parsedPost->publishedAt;
         }

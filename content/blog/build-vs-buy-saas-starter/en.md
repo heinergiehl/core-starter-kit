@@ -9,7 +9,7 @@ tags:
   - Product
   - Engineering
 status: published
-published_at: 2026-04-08 09:00:00
+published_at: 2026-03-21 09:00:00
 meta_title: Build vs Buy a SaaS Starter Kit
 meta_description: Understand the real build vs buy tradeoff for SaaS starter kits, from billing and auth to admin tooling, SEO, and time-to-market.
 ---
@@ -204,3 +204,4 @@ No. It is just as much a business and time-allocation decision.
 The build vs buy decision is not really about whether your team can write the code. It is about whether writing that code is the best use of your attention before launch.
 
 For many SaaS founders, a good starter kit is valuable because it removes platform drag. That creates more room to build the actual product, ship content, test pricing, and reach customers sooner.
+
