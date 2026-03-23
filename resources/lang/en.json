@@ -63,5 +63,6 @@
   "Yes. It includes metadata, Open Graph support, sitemap and RSS routes, and page structures optimized for discoverability.": "Yes. Canonicals + hreflang, structured data, Open Graph images, sitemap + RSS endpoints, and SSR-first pages are built in for discoverability.",
   "Build your SaaS on a foundation that already feels production-grade": "Build your Laravel SaaS on a starter kit that saves weeks of setup",
   "Ship product value faster by starting with an integrated stack for authentication, monetization, and operations.": "Ship faster by starting with a Laravel SaaS boilerplate that already includes authentication, monetization, admin ops, and SEO-ready marketing pages.",
-  "The boilerplate for high-ambition SaaS. Ship faster with senior-dev quality code.": "Developer-first Laravel 12 SaaS starter kit with Stripe + Paddle billing, Filament admin, and SEO-ready marketing pages."
+  "The boilerplate for high-ambition SaaS. Ship faster with senior-dev quality code.": "Developer-first Laravel 12 SaaS starter kit with Stripe + Paddle billing, Filament admin, and SEO-ready marketing pages.",
+  "Written by": "Written by"
 }

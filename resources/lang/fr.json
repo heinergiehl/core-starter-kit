@@ -628,5 +628,6 @@
   "This archive currently shows :count live posts.": "Cette archive affiche actuellement :count articles en ligne.",
   ":count live": ":count en ligne",
   "Current archive": "Archive actuelle",
-  "Open archive": "Ouvrir l'archive"
+  "Open archive": "Ouvrir l'archive",
+  "Written by": "Écrit par"
 }

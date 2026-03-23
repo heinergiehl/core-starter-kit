@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Blog;
 use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;
+use App\Domain\Content\Support\ArticleContentRenderer;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -13,7 +14,8 @@ use Illuminate\View\View;
 class BlogController
 {
     public function __construct(
-        private readonly LocalizedRouteService $localizedRouteService
+        private readonly LocalizedRouteService $localizedRouteService,
+        private readonly ArticleContentRenderer $articleContentRenderer,
     ) {}
 
     public function index(Request $request): View
@@ -91,8 +93,14 @@ class BlogController
             ->with(['category', 'tags', 'author', 'translations'])
             ->firstOrFail();
 
+        $renderedArticle = filled($post->body_html)
+            ? $this->articleContentRenderer->renderHtml((string) $post->body_html)
+            : $this->articleContentRenderer->renderMarkdown((string) ($post->body_markdown ?? ''));
+
         return view('blog.show', [
             'post' => $post,
+            'content' => $renderedArticle['html'],
+            'toc' => count($renderedArticle['toc']) >= 3 ? $renderedArticle['toc'] : [],
         ]);
     }
 

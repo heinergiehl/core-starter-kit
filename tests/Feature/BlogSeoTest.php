@@ -153,6 +153,42 @@ class BlogSeoTest extends TestCase
         $response->assertSee(route('blog.show', ['locale' => 'en', 'slug' => $post->slug]), false);
     }
 
+    public function test_blog_post_uses_public_author_profile_and_rendered_table_of_contents(): void
+    {
+        $author = User::factory()->create([
+            'name' => 'System Admin',
+            'public_author_name' => 'ShipSolid Team',
+            'public_author_title' => 'Editorial Team',
+            'public_author_bio' => 'We document the launch, billing, SEO, and operational decisions behind real SaaS products.',
+        ]);
+
+        $post = $this->createPublishedPost([
+            'author_id' => $author->id,
+            'title' => 'Launch checklist',
+            'slug' => 'launch-checklist',
+            'body_html' => '<h1>Launch checklist</h1><p>Intro paragraph.</p><h2>Billing setup</h2><p>Billing content.</p><h2>Admin workflows</h2><p>Ops content.</p><h3>Support actions</h3><p>Support content.</p>',
+        ]);
+
+        $response = $this->get(route('blog.show', [
+            'locale' => 'en',
+            'slug' => $post->slug,
+        ]));
+
+        $response->assertOk();
+        $response->assertSee('<meta name="author" content="ShipSolid Team">', false);
+        $response->assertSeeText('ShipSolid Team');
+        $response->assertSeeText('Editorial Team');
+        $response->assertSeeText('We document the launch, billing, SEO, and operational decisions behind real SaaS products.');
+        $response->assertSeeText('On this page');
+        $response->assertSee('x-data="blogToc(', false);
+        $response->assertSee('data-toc-heading="billing-setup"', false);
+        $response->assertSee('x-ref="desktopTocNav"', false);
+        $response->assertSee('href="#billing-setup"', false);
+        $response->assertSee('href="#admin-workflows"', false);
+        $response->assertSee('href="#support-actions"', false);
+        $response->assertDontSee('<h1>Launch checklist</h1>', false);
+    }
+
     public function test_blog_post_only_outputs_hreflang_links_for_existing_published_translations(): void
     {
         $groupUuid = (string) Str::uuid();

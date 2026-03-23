@@ -172,7 +172,7 @@ class BlogPostResource extends Resource
                             ->searchable()
                             ->preload()
                             ->default(auth()->id())
-                            ->helperText('Defaults to the signed-in admin.'),
+                            ->helperText('Defaults to the signed-in admin. Public byline, avatar, and bio come from the selected user profile.'),
 
                         Select::make('category_id')
                             ->label('Primary Category')

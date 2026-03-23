@@ -24,6 +24,17 @@ class DocsPagesTest extends TestCase
             ->assertSeeText('Billing (Stripe, Paddle)');
     }
 
+    public function test_doc_page_uses_shared_renderer_for_heading_links_and_toc(): void
+    {
+        $response = $this->get(route('docs.show', ['page' => 'billing']));
+
+        $response->assertOk();
+        $response->assertSeeText('On this page');
+        $response->assertSee('href="#1-overview"', false);
+        $response->assertSee('href="#2-canonical-data-model"', false);
+        $response->assertDontSee('<h1>Billing (Stripe, Paddle)</h1>', false);
+    }
+
     public function test_unknown_doc_page_returns_not_found(): void
     {
         $this->get(route('docs.show', ['page' => 'does-not-exist']))

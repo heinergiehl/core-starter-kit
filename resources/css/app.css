@@ -374,6 +374,10 @@ body {
         @apply rounded-r-lg border-l-4 border-primary/50 bg-primary/5 py-1 pl-4 text-ink/70;
     }
 
+    .docs-prose :where(img):not(:where([class~="not-prose"] *)) {
+        @apply rounded-2xl shadow-lg shadow-ink/10;
+    }
+
     .docs-prose :where(table):not(:where([class~="not-prose"] *)) {
         @apply w-full text-sm;
     }
@@ -412,7 +416,9 @@ body {
     }
 
     .docs-toc {
-        @apply hidden h-fit rounded-2xl border border-ink/10 bg-white/70 p-4 xl:block xl:sticky xl:top-24;
+        @apply hidden rounded-2xl border border-ink/10 bg-white/70 p-4 xl:sticky xl:top-24 xl:block;
+        top: clamp(4.75rem, 8vh, 5.75rem);
+        max-height: calc(100vh - clamp(6rem, 10vh, 7.5rem));
     }
 
     .dark .docs-toc {
@@ -425,11 +431,18 @@ body {
     }
 
     .docs-toc-nav {
-        @apply mt-3 space-y-1;
+        @apply mt-3 space-y-1 overflow-y-auto pr-1;
+        max-height: calc(100vh - clamp(9.5rem, 14vh, 11rem));
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
     }
 
     .docs-toc-link {
         @apply block rounded-md px-2 py-1.5 text-sm text-ink/65 transition hover:bg-ink/5 hover:text-ink;
+    }
+
+    .docs-toc-link-active {
+        @apply bg-primary/10 font-semibold text-primary;
     }
 
     .dark .docs-toc-link {
@@ -438,5 +451,9 @@ body {
 
     .docs-toc-link-nested {
         @apply pl-5 text-xs;
+    }
+
+    .docs-toc-link-mobile {
+        @apply px-3 py-2;
     }
 }

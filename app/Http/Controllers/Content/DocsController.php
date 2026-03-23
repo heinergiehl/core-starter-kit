@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Content;
 
-use DOMDocument;
-use DOMElement;
-use DOMXPath;
+use App\Domain\Content\Support\ArticleContentRenderer;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -14,6 +12,10 @@ use Illuminate\View\View;
 
 class DocsController
 {
+    public function __construct(
+        private readonly ArticleContentRenderer $articleContentRenderer
+    ) {}
+
     public function index(): View
     {
         return view('docs.index', [
@@ -38,7 +40,9 @@ class DocsController
         [$prevDoc, $nextDoc] = $this->neighborDocs($docsList, $page);
 
         $markdown = File::get($doc['path']);
-        $rendered = $this->renderMarkdown($markdown);
+        $rendered = $this->articleContentRenderer->renderMarkdown($markdown, [
+            'rewrite_relative_markdown_links' => true,
+        ]);
 
         return view('docs.show', [
             'doc' => $doc,
@@ -156,141 +160,6 @@ class DocsController
         }
 
         return [null, null];
-    }
-
-    /**
-     * @return array{html: string, toc: list<array{id: string, title: string, level: int}>}
-     */
-    private function renderMarkdown(string $markdown): array
-    {
-        $html = (string) Str::markdown($markdown, [
-            'html_input' => 'strip',
-            'allow_unsafe_links' => false,
-        ]);
-
-        return $this->decorateHtml($html);
-    }
-
-    /**
-     * @return array{html: string, toc: list<array{id: string, title: string, level: int}>}
-     */
-    private function decorateHtml(string $html): array
-    {
-        $dom = new DOMDocument('1.0', 'UTF-8');
-        $errors = libxml_use_internal_errors(true);
-        $dom->loadHTML(
-            '<?xml encoding="UTF-8"><body>'.$html.'</body>',
-            LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
-        );
-        libxml_clear_errors();
-        libxml_use_internal_errors($errors);
-
-        $xpath = new DOMXPath($dom);
-
-        $firstH1 = $xpath->query('//h1')->item(0);
-        if ($firstH1 instanceof DOMElement) {
-            $firstH1->parentNode?->removeChild($firstH1);
-        }
-
-        $this->rewriteMarkdownLinks($xpath);
-
-        $usedHeadingIds = [];
-        $toc = [];
-
-        foreach ($xpath->query('//h2 | //h3') as $heading) {
-            if (! $heading instanceof DOMElement) {
-                continue;
-            }
-
-            $title = trim((string) $heading->textContent);
-            if ($title === '') {
-                continue;
-            }
-
-            $id = Str::slug($title);
-            if ($id === '') {
-                continue;
-            }
-
-            $id = $this->uniqueHeadingId($id, $usedHeadingIds);
-            $heading->setAttribute('id', $id);
-
-            $toc[] = [
-                'id' => $id,
-                'title' => $title,
-                'level' => (int) ltrim($heading->tagName, 'h'),
-            ];
-        }
-
-        $body = $dom->getElementsByTagName('body')->item(0);
-        $renderedHtml = '';
-
-        if ($body instanceof DOMElement) {
-            foreach ($body->childNodes as $node) {
-                $renderedHtml .= (string) $dom->saveHTML($node);
-            }
-        }
-
-        return [
-            'html' => $renderedHtml !== '' ? $renderedHtml : $html,
-            'toc' => $toc,
-        ];
-    }
-
-    private function rewriteMarkdownLinks(DOMXPath $xpath): void
-    {
-        foreach ($xpath->query('//a[@href]') as $link) {
-            if (! $link instanceof DOMElement) {
-                continue;
-            }
-
-            $href = trim((string) $link->getAttribute('href'));
-
-            if ($href === '' || str_starts_with($href, '#')) {
-                continue;
-            }
-
-            // Leave absolute URLs, mailto:, etc untouched.
-            if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $href) === 1) {
-                continue;
-            }
-
-            // Leave site-absolute paths untouched.
-            if (str_starts_with($href, '/')) {
-                continue;
-            }
-
-            $parts = explode('#', $href, 2);
-            $path = $parts[0] ?? '';
-            $fragment = $parts[1] ?? '';
-
-            $path = Str::startsWith($path, './') ? Str::after($path, './') : $path;
-
-            if (preg_match('/^[A-Za-z0-9-]+\\.md$/', $path) !== 1) {
-                continue;
-            }
-
-            $slug = Str::beforeLast($path, '.md');
-            $rewritten = $slug.($fragment !== '' ? "#{$fragment}" : '');
-
-            $link->setAttribute('href', $rewritten);
-        }
-    }
-
-    /**
-     * @param  array<string, int>  $usedHeadingIds
-     */
-    private function uniqueHeadingId(string $baseId, array &$usedHeadingIds): string
-    {
-        if (! isset($usedHeadingIds[$baseId])) {
-            $usedHeadingIds[$baseId] = 0;
-
-            return $baseId;
-        }
-
-        $usedHeadingIds[$baseId]++;
-
-        return $baseId.'-'.$usedHeadingIds[$baseId];
     }
 
     private function extractTitle(string $markdown, string $slug): string

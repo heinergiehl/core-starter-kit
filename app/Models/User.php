@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Spatie\Permission\Traits\HasRoles;
 
@@ -76,6 +78,10 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         'password',
         'locale',
         'onboarding_completed_at',
+        'public_author_name',
+        'public_author_title',
+        'public_author_avatar_path',
+        'public_author_bio',
     ];
 
     protected string $guard_name = PermissionGuardrails::DEFAULT_GUARD;
@@ -176,5 +182,36 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function sendPasswordResetNotification($token): void
     {
         $this->notify(new \App\Notifications\Auth\ResetPasswordNotification($token));
+    }
+
+    public function publicAuthorName(): string
+    {
+        return trim((string) ($this->public_author_name ?: $this->name));
+    }
+
+    public function publicAuthorTitle(): ?string
+    {
+        $title = trim((string) ($this->public_author_title ?? ''));
+
+        return $title !== '' ? $title : null;
+    }
+
+    public function publicAuthorBio(): ?string
+    {
+        $bio = trim((string) ($this->public_author_bio ?? ''));
+
+        return $bio !== '' ? $bio : null;
+    }
+
+    public function publicAuthorAvatarUrl(): ?string
+    {
+        $avatarPath = trim((string) ($this->public_author_avatar_path ?? ''));
+
+        return $avatarPath !== '' ? Storage::disk('public')->url($avatarPath) : null;
+    }
+
+    public function publicAuthorInitial(): string
+    {
+        return Str::upper(Str::substr($this->publicAuthorName(), 0, 1));
     }
 }

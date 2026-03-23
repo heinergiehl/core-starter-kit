@@ -13,11 +13,14 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
@@ -42,34 +45,68 @@ class UserResource extends Resource
     {
         return $schema
             ->schema([
-                TextInput::make('name')
-                    ->required()
-                    ->maxLength(255),
-                TextInput::make('email')
-                    ->email()
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(ignoreRecord: true),
-                TextInput::make('password')
-                    ->password()
-                    ->dehydrated(fn (?string $state): bool => filled($state))
-                    ->helperText('Leave blank to keep the current password.'),
-                Toggle::make('is_admin')
-                    ->label('Admin access')
-                    ->disabled(fn (?User $record): bool => PermissionGuardrails::isLastAdminUser($record)),
-                Select::make('roles')
-                    ->relationship('roles', 'name')
-                    ->multiple()
-                    ->preload()
-                    ->searchable(),
-                Select::make('permissions')
-                    ->relationship('permissions', 'name')
-                    ->multiple()
-                    ->preload()
-                    ->searchable()
-                    ->helperText('Direct permissions override role defaults.'),
-                DateTimePicker::make('email_verified_at')
-                    ->label('Email verified at'),
+                Section::make('Account')
+                    ->schema([
+                        TextInput::make('name')
+                            ->required()
+                            ->maxLength(255),
+                        TextInput::make('email')
+                            ->email()
+                            ->required()
+                            ->maxLength(255)
+                            ->unique(ignoreRecord: true),
+                        TextInput::make('password')
+                            ->password()
+                            ->dehydrated(fn (?string $state): bool => filled($state))
+                            ->helperText('Leave blank to keep the current password.'),
+                        Toggle::make('is_admin')
+                            ->label('Admin access')
+                            ->disabled(fn (?User $record): bool => PermissionGuardrails::isLastAdminUser($record)),
+                        Select::make('roles')
+                            ->relationship('roles', 'name')
+                            ->multiple()
+                            ->preload()
+                            ->searchable(),
+                        Select::make('permissions')
+                            ->relationship('permissions', 'name')
+                            ->multiple()
+                            ->preload()
+                            ->searchable()
+                            ->helperText('Direct permissions override role defaults.'),
+                        DateTimePicker::make('email_verified_at')
+                            ->label('Email verified at'),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
+
+                Section::make('Public author profile')
+                    ->description('Optional. Used in public blog bylines, article metadata, and the author card.')
+                    ->schema([
+                        TextInput::make('public_author_name')
+                            ->label('Public byline')
+                            ->maxLength(255)
+                            ->placeholder('ShipSolid Team')
+                            ->helperText('Leave blank to reuse the user name.'),
+                        TextInput::make('public_author_title')
+                            ->label('Public title')
+                            ->maxLength(255)
+                            ->placeholder('Founder, Developer, Editorial Team'),
+                        FileUpload::make('public_author_avatar_path')
+                            ->label('Public avatar')
+                            ->image()
+                            ->directory('author-avatars')
+                            ->imageResizeMode('cover')
+                            ->imageCropAspectRatio('1:1')
+                            ->imageResizeTargetWidth('400')
+                            ->imageResizeTargetHeight('400'),
+                        Textarea::make('public_author_bio')
+                            ->label('Public bio')
+                            ->rows(4)
+                            ->maxLength(600)
+                            ->columnSpanFull(),
+                    ])
+                    ->columns(2)
+                    ->columnSpanFull(),
             ])
             ->columns(2);
     }
@@ -84,6 +121,9 @@ class UserResource extends Resource
                 TextColumn::make('email')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('public_author_name')
+                    ->label('Public byline')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('is_admin')
                     ->label('Admin')
                     ->badge()
