@@ -355,7 +355,11 @@ jobs:
             php artisan storage:link --force
 
             php artisan migrate --force
-            php artisan blog:sync-content
+            if [ "${{ env.DEPLOY_ENV }}" = "production" ]; then
+              php artisan blog:sync-content --create-only --publish-now
+            else
+              php artisan blog:sync-content
+            fi
             if [ "${{ env.RUN_BILLING_BOOTSTRAP }}" = "true" ]; then
               php artisan db:seed --class=PaymentProviderSeeder --force
               php artisan db:seed --class=BillingProductSeeder --force

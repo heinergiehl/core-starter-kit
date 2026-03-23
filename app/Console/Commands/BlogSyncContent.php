@@ -12,6 +12,7 @@ class BlogSyncContent extends Command
         {--path=content/blog : Relative or absolute root that contains article folders}
         {--dry-run : Preview creates, updates, and archives without writing to the database}
         {--archive-missing : Archive markdown-managed posts whose source files no longer exist}
+        {--create-only : Only create missing markdown posts; skip updates to existing markdown-managed posts}
         {--publish : Force imported markdown posts to published status}
         {--publish-now : Force imported markdown posts live immediately, overriding future published_at values}
         {--author= : Fallback author email when a file omits author_email}';
@@ -31,6 +32,7 @@ class BlogSyncContent extends Command
             dryRun: (bool) $this->option('dry-run'),
             archiveMissing: (bool) $this->option('archive-missing'),
             fallbackAuthorEmail: $this->option('author') ? (string) $this->option('author') : null,
+            createOnly: (bool) $this->option('create-only'),
             forcePublish: (bool) $this->option('publish'),
             publishNow: (bool) $this->option('publish-now'),
         );
@@ -78,6 +80,7 @@ class BlogSyncContent extends Command
         $this->line("Markdown files discovered: {$result['discovered']}");
         $this->line("Created: {$result['created']}");
         $this->line("Updated: {$result['updated']}");
+        $this->line("Skipped: {$result['skipped']}");
         $this->line("Unchanged: {$result['unchanged']}");
         $this->line("Archived: {$result['archived']}");
 

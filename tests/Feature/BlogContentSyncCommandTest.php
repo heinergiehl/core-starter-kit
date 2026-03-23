@@ -221,6 +221,70 @@ MD);
         $this->assertNull($manualPost->content_source);
     }
 
+    public function test_create_only_mode_skips_existing_markdown_posts_and_still_creates_new_ones(): void
+    {
+        User::factory()->create([
+            'is_admin' => true,
+            'email' => 'admin@example.com',
+        ]);
+
+        $this->writeMarkdown('existing-post/en.md', <<<'MD'
+---
+title: Existing Post
+slug: existing-post
+author_email: admin@example.com
+status: published
+---
+# Existing Post
+
+Original content.
+MD);
+
+        $this->artisan('blog:sync-content', $this->commandArguments())
+            ->assertExitCode(0);
+
+        $this->writeMarkdown('existing-post/en.md', <<<'MD'
+---
+title: Existing Post Updated
+slug: existing-post
+author_email: admin@example.com
+status: published
+---
+# Existing Post Updated
+
+Changed content that should be skipped.
+MD);
+
+        $this->writeMarkdown('new-post/en.md', <<<'MD'
+---
+title: New Post
+slug: new-post
+author_email: admin@example.com
+status: draft
+---
+# New Post
+
+Brand new content.
+MD);
+
+        $this->artisan('blog:sync-content', $this->commandArguments([
+            '--create-only' => true,
+            '--publish-now' => true,
+        ]))
+            ->assertExitCode(0);
+
+        $existingPost = BlogPost::query()->where('content_source_path', 'existing-post/en.md')->first();
+        $newPost = BlogPost::query()->where('content_source_path', 'new-post/en.md')->first();
+
+        $this->assertNotNull($existingPost);
+        $this->assertNotNull($newPost);
+        $this->assertSame('Existing Post', $existingPost->title);
+        $this->assertSame(PostStatus::Published, $existingPost->status);
+        $this->assertSame('New Post', $newPost->title);
+        $this->assertSame(PostStatus::Published, $newPost->status);
+        $this->assertNotNull($newPost->published_at);
+    }
+
     public function test_it_can_force_publish_markdown_posts_even_when_the_source_hash_is_unchanged(): void
     {
         User::factory()->create([

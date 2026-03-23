@@ -31,6 +31,7 @@ class MarkdownBlogSynchronizer
      *     discovered:int,
      *     created:int,
      *     updated:int,
+     *     skipped:int,
      *     unchanged:int,
      *     archived:int,
      *     warnings:array<int, string>,
@@ -43,6 +44,7 @@ class MarkdownBlogSynchronizer
         bool $dryRun = false,
         bool $archiveMissing = false,
         ?string $fallbackAuthorEmail = null,
+        bool $createOnly = false,
         bool $forcePublish = false,
         bool $publishNow = false,
     ): array {
@@ -53,6 +55,7 @@ class MarkdownBlogSynchronizer
             'discovered' => 0,
             'created' => 0,
             'updated' => 0,
+            'skipped' => 0,
             'unchanged' => 0,
             'archived' => 0,
             'warnings' => [],
@@ -124,7 +127,7 @@ class MarkdownBlogSynchronizer
             $result['warnings'][] = "{$missingCount} markdown-managed blog posts no longer have source files. Re-run with --archive-missing to archive them.";
         }
 
-        $persistChanges = function () use (&$result, $archiveMissing, $dryRun, $fallbackAuthorEmail, $forcePublish, $publishNow, $missingMarkdownPosts, $parsedPostCollection): void {
+        $persistChanges = function () use (&$result, $archiveMissing, $createOnly, $dryRun, $fallbackAuthorEmail, $forcePublish, $publishNow, $missingMarkdownPosts, $parsedPostCollection): void {
             $existingPostsBySourcePath = BlogPost::query()
                 ->where('content_source', 'markdown')
                 ->whereIn('content_source_path', $parsedPostCollection->map(static fn (ParsedMarkdownBlogPost $parsedPost): string => $parsedPost->sourcePath)->all())
@@ -141,6 +144,20 @@ class MarkdownBlogSynchronizer
 
             foreach ($parsedPostCollection as $parsedPost) {
                 $existingPost = $existingPostsBySourcePath->get($parsedPost->sourcePath);
+
+                if ($existingPost && $createOnly) {
+                    $result['skipped']++;
+                    $result['changes'][] = [
+                        'action' => 'skipped_existing',
+                        'source_path' => $parsedPost->sourcePath,
+                        'title' => $parsedPost->title,
+                        'locale' => $parsedPost->locale,
+                    ];
+                    $groupUuidsByKey[$parsedPost->familyKey] = $existingPost->translation_group_uuid;
+
+                    continue;
+                }
+
                 $effectiveStatus = $this->determineStatus($parsedPost, $forcePublish, $publishNow);
                 $effectivePublishedAt = $this->determinePublishedAt($parsedPost, $existingPost, $forcePublish, $publishNow);
 
