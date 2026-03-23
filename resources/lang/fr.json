@@ -620,5 +620,13 @@
   "Locale-aware marketing and app routes": "Routes marketing et applicatives adapt\u00e9es \u00e0 la langue",
   "Multilingual blog content workflow": "Workflow de contenu de blog multilingue",
   "This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.": "Cette cartographie des fonctionnalit\u00e9s couvre ensemble la conversion, les op\u00e9rations et la pr\u00e9paration \u00e0 un lancement international, afin que votre \u00e9quipe puisse lancer, mon\u00e9tiser et se d\u00e9velopper sans assembler des outils d\u00e9connect\u00e9s.",
-  "Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.": "Options d'abonnement et d'achat unique avec des donn\u00e9es de facturation unifi\u00e9es, des workflows de contenu pr\u00eats pour le SEO et un support pour les lancements internationaux."
+  "Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.": "Options d'abonnement et d'achat unique avec des donn\u00e9es de facturation unifi\u00e9es, des workflows de contenu pr\u00eats pour le SEO et un support pour les lancements internationaux.",
+  "Archive scope": "Port\u00e9e de l'archive",
+  "You are viewing the :locale archive": "Vous consultez l'archive :locale",
+  "Posts are organized by language for SEO and localized URLs. Switch archives to browse every published post.": "Les articles sont organis\u00e9s par langue pour le SEO et les URLs localis\u00e9es. Changez d'archive pour parcourir tous les articles publi\u00e9s.",
+  "Live in this archive": "En ligne dans cette archive",
+  "This archive currently shows :count live posts.": "Cette archive affiche actuellement :count articles en ligne.",
+  ":count live": ":count en ligne",
+  "Current archive": "Archive actuelle",
+  "Open archive": "Ouvrir l'archive"
 }

@@ -951,4 +951,13 @@
   "Multilingual blog content workflow": "Mehrsprachiger Blog-Content-Workflow",
   "This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.": "Diese Funktions\u00fcbersicht deckt Conversion, Operations und internationale Launch-Bereitschaft gemeinsam ab, sodass Ihr Team starten, monetarisieren und wachsen kann, ohne getrennte Tools zusammenzubauen.",
   "Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.": "Abonnement- und Einmalzahlungsoptionen mit einheitlichen Abrechnungsdaten, SEO-f\u00e4higen Content-Workflows und Unterst\u00fctzung f\u00fcr internationale Launches."
+  ,
+  "Archive scope": "Archivumfang",
+  "You are viewing the :locale archive": "Sie sehen das :locale-Archiv",
+  "Posts are organized by language for SEO and localized URLs. Switch archives to browse every published post.": "Beitr\u00e4ge sind f\u00fcr SEO und lokalisierte URLs nach Sprache organisiert. Wechseln Sie das Archiv, um alle ver\u00f6ffentlichten Beitr\u00e4ge zu durchsuchen.",
+  "Live in this archive": "Live in diesem Archiv",
+  "This archive currently shows :count live posts.": "Dieses Archiv zeigt aktuell :count Live-Beitr\u00e4ge.",
+  ":count live": ":count live",
+  "Current archive": "Aktuelles Archiv",
+  "Open archive": "Archiv \u00f6ffnen"
 }

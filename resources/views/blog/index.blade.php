@@ -26,6 +26,55 @@
             <p class="text-sm text-ink/70">{{ __('Release notes, billing insights, and architecture updates.') }}</p>
         </div>
 
+        <div class="mt-8 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+            <article class="glass-panel rounded-2xl p-5">
+                <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                    <div class="max-w-2xl">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('Archive scope') }}</p>
+                        <h2 class="mt-2 text-xl font-semibold text-ink">{{ __('You are viewing the :locale archive', ['locale' => $currentLocaleLabel]) }}</h2>
+                        <p class="mt-2 text-sm leading-6 text-ink/70">{{ __('Posts are organized by language for SEO and localized URLs. Switch archives to browse every published post.') }}</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-ink/10 bg-white/70 px-5 py-4 text-left shadow-sm dark:bg-white/5">
+                        <p class="text-xs font-semibold uppercase tracking-[0.18em] text-ink/45">{{ __('Live in this archive') }}</p>
+                        <p class="mt-2 font-display text-3xl text-ink">{{ number_format($posts->total()) }}</p>
+                        <p class="mt-1 text-xs text-ink/60">{{ __('This archive currently shows :count live posts.', ['count' => number_format($posts->total())]) }}</p>
+                    </div>
+                </div>
+            </article>
+
+            <div class="grid gap-3 sm:grid-cols-2">
+                @foreach ($localeArchives as $archive)
+                    <a
+                        href="{{ $archive['url'] }}"
+                        @class([
+                            'rounded-2xl border p-4 transition',
+                            'border-primary/35 bg-primary/10 shadow-sm shadow-primary/10' => $archive['is_current'],
+                            'border-ink/10 bg-white/70 hover:border-primary/30 hover:bg-white/90 dark:bg-white/5 dark:hover:bg-white/10' => ! $archive['is_current'],
+                        ])
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink/45">{{ $archive['code'] }}</p>
+                                <p class="mt-1 text-sm font-semibold text-ink">{{ $archive['label'] }}</p>
+                            </div>
+                            <span class="font-display text-2xl text-ink">{{ number_format($archive['count']) }}</span>
+                        </div>
+                        <div class="mt-3 flex items-center justify-between gap-3 text-xs">
+                            <span class="font-medium text-ink/65">{{ __(':count live', ['count' => number_format($archive['count'])]) }}</span>
+                            <span @class([
+                                'font-semibold' => true,
+                                'text-primary' => $archive['is_current'],
+                                'text-ink/55' => ! $archive['is_current'],
+                            ])>
+                                {{ $archive['is_current'] ? __('Current archive') : __('Open archive') }}
+                            </span>
+                        </div>
+                    </a>
+                @endforeach
+            </div>
+        </div>
+
         <div class="mt-8 glass-panel rounded-2xl p-4">
             <form action="{{ $blogIndexUrl }}" method="GET" class="flex flex-col gap-4 lg:flex-row lg:items-center">
                 <div class="relative flex-1">

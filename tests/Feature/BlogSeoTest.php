@@ -80,6 +80,45 @@ class BlogSeoTest extends TestCase
         );
     }
 
+    public function test_blog_archive_explains_locale_scope_and_links_other_language_archives(): void
+    {
+        $groupUuid = (string) Str::uuid();
+
+        $this->createPublishedPost([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'en',
+            'title' => 'English launch notes',
+            'slug' => 'english-launch-notes',
+        ]);
+
+        $this->createPublishedPost([
+            'translation_group_uuid' => $groupUuid,
+            'locale' => 'de',
+            'title' => 'Deutsche Startnotizen',
+            'slug' => 'deutsche-startnotizen',
+        ]);
+
+        $this->createPublishedPost([
+            'locale' => 'en',
+            'title' => 'Second English post',
+            'slug' => 'second-english-post',
+        ]);
+
+        $response = $this->get(route('blog.index', [
+            'locale' => 'en',
+        ]));
+
+        $response->assertOk();
+        $response->assertSeeText('You are viewing the English archive');
+        $response->assertSeeText('This archive currently shows 2 live posts.');
+        $response->assertSeeText('2 live');
+        $response->assertSeeText('1 live');
+        $response->assertSeeText('Current archive');
+        $response->assertSeeText('Open archive');
+        $response->assertSee(route('blog.index', ['locale' => 'de']), false);
+        $response->assertSee(route('blog.index', ['locale' => 'es']), false);
+    }
+
     public function test_blog_post_includes_article_metadata_and_structured_data(): void
     {
         $category = BlogCategory::create([

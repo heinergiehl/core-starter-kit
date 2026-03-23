@@ -5,18 +5,40 @@ namespace App\Http\Controllers\Blog;
 use App\Domain\Content\Models\BlogCategory;
 use App\Domain\Content\Models\BlogPost;
 use App\Domain\Content\Models\BlogTag;
+use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class BlogController
 {
+    public function __construct(
+        private readonly LocalizedRouteService $localizedRouteService
+    ) {}
+
     public function index(Request $request): View
     {
         $locale = (string) app()->getLocale();
         $search = $request->input('search');
         $categorySlug = $request->input('category');
         $tagSlug = $request->input('tag');
+        $localeLabels = (array) config('saas.locales.supported', ['en' => 'English']);
+        $publishedCountsByLocale = BlogPost::query()
+            ->published()
+            ->selectRaw('locale, COUNT(*) as aggregate')
+            ->groupBy('locale')
+            ->pluck('aggregate', 'locale');
+        $localeArchives = collect($this->localizedRouteService->supportedLocales())
+            ->map(function (string $supportedLocale) use ($localeLabels, $publishedCountsByLocale, $locale): array {
+                return [
+                    'code' => strtoupper($supportedLocale),
+                    'label' => (string) ($localeLabels[$supportedLocale] ?? strtoupper($supportedLocale)),
+                    'count' => (int) ($publishedCountsByLocale[$supportedLocale] ?? 0),
+                    'url' => route('blog.index', ['locale' => $supportedLocale]),
+                    'is_current' => $supportedLocale === $locale,
+                ];
+            })
+            ->all();
 
         $posts = BlogPost::query()
             ->published()
@@ -55,6 +77,8 @@ class BlogController
             'search' => $search,
             'activeCategory' => $activeCategory,
             'activeTag' => $activeTag,
+            'currentLocaleLabel' => (string) ($localeLabels[$locale] ?? strtoupper($locale)),
+            'localeArchives' => $localeArchives,
         ]);
     }
 
