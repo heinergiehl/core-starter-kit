@@ -49,7 +49,7 @@ Optional front matter:
   If omitted, the importer generates it from `title`.
 - `excerpt`
 - `author_email`
-  Must match an existing user email. If omitted, the command falls back to the first admin user, or the `--author=` option.
+  Must match an existing user email. If omitted, the command falls back to the first admin user, or the `--author=` option. The public byline, title, avatar, and bio shown on the frontend come from that user's public author profile in Admin > Users.
 - `category`
   Created automatically if it does not exist yet.
 - `tags`
@@ -139,6 +139,7 @@ That means you can still:
 - edit imported posts in Admin
 - manage categories and tags in Admin
 - publish or archive imported posts in Admin
+- manage public blog bylines from the selected author user profile in Admin > Users
 
 The key constraint is ownership:
 - manual posts stay manual

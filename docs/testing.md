@@ -40,6 +40,7 @@ npm run build
 - `/{locale}` marketing page renders, no console errors.
 - `/{locale}/pricing` shows plans and provider tabs.
 - `/{locale}/blog` and `/{locale}/blog/{slug}` render.
+- Long-form blog posts show a working author card, active table of contents, and scrolling TOC on desktop.
 - `/{locale}/roadmap` renders, voting requires auth.
 - `/{locale}/rss.xml`, `/sitemap.xml`, and `/og` endpoints return successfully.
 - `/branding/shipsolid-s-mark.svg` returns 200.
@@ -71,6 +72,7 @@ npm run build
 - Confirm pricing page reflects DB catalog when `BILLING_CATALOG=database`.
 - Create a discount and verify the coupon field appears.
 - Create a blog post translation draft and confirm locale-specific slug/SEO state works as expected.
+- Update a user's public author byline/title/bio and confirm blog posts assigned to that author render the new public profile.
 
 ### Billing test flow
 - Configure Stripe/Paddle test keys in `.env`.
