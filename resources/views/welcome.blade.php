@@ -49,11 +49,11 @@
             ],
             [
                 'question' => __('Does this starter support multiple languages on marketing pages?'),
-                'answer' => __('Yes. The starter includes localization support and locale-aware content structure for marketing and UI text.'),
+                'answer' => __('Yes. The starter includes locale-aware marketing routes, localized UI copy, and multilingual blog content workflows so you can launch for more than one market from day one.'),
             ],
             [
                 'question' => __('Does the starter include multi-tenancy out of the box?'),
-                'answer' => __('Not by default. This starter is single-tenant by design so most SaaS teams can ship faster; if you need multi-tenancy later, you can integrate your preferred approach.'),
+                'answer' => __('Not by default today. The starter is optimized for a fast production launch now, and account or workspace patterns can be layered in later as your SaaS grows.'),
             ],
             [
                 'question' => __('Is this starter SEO-ready for marketing pages?'),
@@ -81,6 +81,7 @@
                 __('Authentication and social login'),
                 __('Checkout with Stripe and Paddle'),
                 __('Admin product and pricing workflows'),
+                __('Locale-aware marketing pages and multilingual content workflows'),
                 __('Customer and user management'),
                 __('Blog, docs, and roadmap pages'),
             ],
@@ -293,7 +294,7 @@
                 </h1>
 
                 <p class="mt-6 max-w-2xl text-base leading-7 text-ink/70 sm:text-lg">
-                    {{ __('Authentication, billing, admin operations, and growth pages are already integrated so your team can focus on product strategy, not plumbing.') }}
+                    {{ __('Authentication, billing, admin operations, SEO-ready content, and locale-aware marketing pages are already integrated so your team can focus on product strategy, not plumbing.') }}
                 </p>
 
                 <p class="mt-4 max-w-2xl text-sm font-medium text-ink/60">
@@ -312,7 +313,7 @@
                     </a>
                 </div>
 
-                <div class="mt-10 grid gap-3 sm:grid-cols-3">
+                <div class="mt-10 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
                         <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Architecture') }}</p>
                         <p class="mt-2 text-sm font-semibold text-ink">{{ __('Domain-driven + modular') }}</p>
@@ -324,6 +325,10 @@
                     <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
                         <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Admin UX') }}</p>
                         <p class="mt-2 text-sm font-semibold text-ink">{{ __('Filament-powered control center') }}</p>
+                    </div>
+                    <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
+                        <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Localization') }}</p>
+                        <p class="mt-2 text-sm font-semibold text-ink">{{ __('International launch ready') }}</p>
                     </div>
                 </div>
             </div>

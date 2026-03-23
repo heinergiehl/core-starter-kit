@@ -610,5 +610,15 @@
   "min read": "lecture min.",
   "multilingual laravel saas starter": "D\u00e9marreur Saas Laravel multilingue",
   "saas operations dashboard laravel": "Tableau de bord des op\u00e9rations Saas Laravel",
-  "stripe paddle dual provider checkout": "stripe paddle paiement aupr\u00e8s d'un double fournisseur"
+  "stripe paddle dual provider checkout": "stripe paddle paiement aupr\u00e8s d'un double fournisseur",
+  "Yes. The starter includes locale-aware marketing routes, localized UI copy, and multilingual blog content workflows so you can launch for more than one market from day one.": "Oui. Le starter inclut des routes marketing adapt\u00e9es \u00e0 la langue, des textes d'interface localis\u00e9s et des workflows de contenu de blog multilingue pour vous permettre de lancer dans plus d'un march\u00e9 d\u00e8s le premier jour.",
+  "Not by default today. The starter is optimized for a fast production launch now, and account or workspace patterns can be layered in later as your SaaS grows.": "Pas par d\u00e9faut aujourd'hui. Le starter est optimis\u00e9 pour un lancement rapide en production, et des mod\u00e8les de comptes ou d'espaces de travail peuvent \u00eatre ajout\u00e9s plus tard \u00e0 mesure que votre SaaS grandit.",
+  "Locale-aware marketing pages and multilingual content workflows": "Pages marketing adapt\u00e9es \u00e0 la langue et workflows de contenu multilingue",
+  "Authentication, billing, admin operations, SEO-ready content, and locale-aware marketing pages are already integrated so your team can focus on product strategy, not plumbing.": "L'authentification, la facturation, les op\u00e9rations d'administration, le contenu pr\u00eat pour le SEO et les pages marketing adapt\u00e9es \u00e0 la langue sont d\u00e9j\u00e0 int\u00e9gr\u00e9s afin que votre \u00e9quipe puisse se concentrer sur la strat\u00e9gie produit plut\u00f4t que sur la plomberie technique.",
+  "Localization": "Localisation",
+  "International launch ready": "Pr\u00eat pour un lancement international",
+  "Locale-aware marketing and app routes": "Routes marketing et applicatives adapt\u00e9es \u00e0 la langue",
+  "Multilingual blog content workflow": "Workflow de contenu de blog multilingue",
+  "This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.": "Cette cartographie des fonctionnalit\u00e9s couvre ensemble la conversion, les op\u00e9rations et la pr\u00e9paration \u00e0 un lancement international, afin que votre \u00e9quipe puisse lancer, mon\u00e9tiser et se d\u00e9velopper sans assembler des outils d\u00e9connect\u00e9s.",
+  "Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.": "Options d'abonnement et d'achat unique avec des donn\u00e9es de facturation unifi\u00e9es, des workflows de contenu pr\u00eats pour le SEO et un support pour les lancements internationaux."
 }

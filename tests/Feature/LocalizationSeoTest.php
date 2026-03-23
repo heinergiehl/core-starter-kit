@@ -66,6 +66,31 @@ class LocalizationSeoTest extends TestCase
         );
     }
 
+    public function test_marketing_pages_highlight_international_launch_readiness(): void
+    {
+        $homeResponse = $this->get(route('home', ['locale' => 'en']));
+
+        $homeResponse->assertOk();
+        $homeResponse->assertSeeText('International launch ready');
+        $homeResponse->assertSeeText('locale-aware marketing pages');
+
+        $featuresResponse = $this->get(route('features', ['locale' => 'en']));
+
+        $featuresResponse->assertOk();
+        $featuresResponse->assertSeeText('international launch readiness');
+        $featuresResponse->assertSeeText('Localization');
+
+        $pricingResponse = $this->get(route('pricing', ['locale' => 'en']));
+
+        $pricingResponse->assertOk();
+        $pricingResponse->assertSeeText('international launch support');
+
+        $germanFeaturesResponse = $this->get(route('features', ['locale' => 'de']));
+
+        $germanFeaturesResponse->assertOk();
+        $germanFeaturesResponse->assertSeeText('Lokalisierung');
+    }
+
     public function test_sitemap_contains_multilingual_alternate_links(): void
     {
         $response = $this->get(route('sitemap.marketing'));

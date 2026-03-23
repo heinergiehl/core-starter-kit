@@ -185,8 +185,8 @@
                     __('Sitemap.xml and RSS.xml endpoints'),
                     __('Open Graph image generation routes'),
                     __('Canonical tags and structured metadata patterns'),
-                    __('Locale switching for marketing and app routes'),
-                    __('Authentication and onboarding flows'),
+                    __('Locale-aware marketing and app routes'),
+                    __('Multilingual blog content workflow'),
                     __('Webhook ingestion pipeline for billing events'),
                 ],
                 'link_label' => __('Read implementation docs'),
@@ -272,7 +272,7 @@
                     {{ __('Production features that move users from first visit to paid account.') }}
                 </h1>
                 <p class="mt-6 max-w-2xl text-base leading-7 text-ink/70 sm:text-lg">
-                    {{ __('This feature map covers conversion and operations together, so your team can launch, monetize, and scale without assembling disconnected tools.') }}
+                    {{ __('This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.') }}
                 </p>
                 <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                     <a href="{{ route('pricing') }}" class="btn-primary text-center">{{ __('See Pricing') }}</a>
@@ -284,6 +284,7 @@
                     <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Billing Providers') }}</span>
                     <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Operations') }}</span>
                     <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('SEO Ready') }}</span>
+                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Localization') }}</span>
                 </div>
             </div>
 

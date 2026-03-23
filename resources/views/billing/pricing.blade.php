@@ -44,7 +44,7 @@
                     {{ __('Pricing Plans') }}
                 </div>
                 <h1 class="text-4xl font-bold font-display text-ink sm:text-5xl">{{ __('Plans that scale with your product') }}</h1>
-                <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data.') }}</p>
+                <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.') }}</p>
             </div>
             
             @if ($allIntervals->count() > 1)
@@ -559,4 +559,3 @@
     </script>
     </div> <!-- End x-data -->
 @endsection
-

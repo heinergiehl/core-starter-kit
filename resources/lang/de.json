@@ -940,5 +940,15 @@
   "min read": "Min. gelesen",
   "multilingual laravel saas starter": "Mehrsprachiger Laravel-Saas-Starter",
   "saas operations dashboard laravel": "Saas Operations Dashboard Laravel",
-  "stripe paddle dual provider checkout": "Stripe Paddle Dual-Provider-Kaufabwicklung"
+  "stripe paddle dual provider checkout": "Stripe Paddle Dual-Provider-Kaufabwicklung",
+  "Yes. The starter includes locale-aware marketing routes, localized UI copy, and multilingual blog content workflows so you can launch for more than one market from day one.": "Ja. Der Starter umfasst l\u00e4nderspezifische Marketingrouten, lokalisierte UI-Texte und mehrsprachige Blog-Workflows, damit Sie vom ersten Tag an in mehr als einem Markt starten k\u00f6nnen.",
+  "Not by default today. The starter is optimized for a fast production launch now, and account or workspace patterns can be layered in later as your SaaS grows.": "Heute nicht standardm\u00e4\u00dfig. Der Starter ist jetzt f\u00fcr einen schnellen Produktionsstart optimiert, und Konto- oder Workspace-Muster k\u00f6nnen sp\u00e4ter erg\u00e4nzt werden, wenn Ihr SaaS w\u00e4chst.",
+  "Locale-aware marketing pages and multilingual content workflows": "L\u00e4nderspezifische Marketingseiten und mehrsprachige Content-Workflows",
+  "Authentication, billing, admin operations, SEO-ready content, and locale-aware marketing pages are already integrated so your team can focus on product strategy, not plumbing.": "Authentifizierung, Abrechnung, Admin-Workflows, SEO-f\u00e4higer Content und l\u00e4nderspezifische Marketingseiten sind bereits integriert, sodass sich Ihr Team auf die Produktstrategie statt auf Boilerplate konzentrieren kann.",
+  "Localization": "Lokalisierung",
+  "International launch ready": "Bereit f\u00fcr internationale Launches",
+  "Locale-aware marketing and app routes": "L\u00e4nderspezifische Marketing- und App-Routen",
+  "Multilingual blog content workflow": "Mehrsprachiger Blog-Content-Workflow",
+  "This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.": "Diese Funktions\u00fcbersicht deckt Conversion, Operations und internationale Launch-Bereitschaft gemeinsam ab, sodass Ihr Team starten, monetarisieren und wachsen kann, ohne getrennte Tools zusammenzubauen.",
+  "Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.": "Abonnement- und Einmalzahlungsoptionen mit einheitlichen Abrechnungsdaten, SEO-f\u00e4higen Content-Workflows und Unterst\u00fctzung f\u00fcr internationale Launches."
 }

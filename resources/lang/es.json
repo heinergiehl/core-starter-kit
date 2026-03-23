@@ -618,5 +618,15 @@
   "min read": "lectura m\u00ednima",
   "multilingual laravel saas starter": "iniciador saas laravel multiling\u00fce",
   "saas operations dashboard laravel": "Panel de operaciones saas laravel",
-  "stripe paddle dual provider checkout": "pago con proveedor dual de paleta de rayas"
+  "stripe paddle dual provider checkout": "pago con proveedor dual de paleta de rayas",
+  "Yes. The starter includes locale-aware marketing routes, localized UI copy, and multilingual blog content workflows so you can launch for more than one market from day one.": "S\u00ed. El starter incluye rutas de marketing seg\u00fan la configuraci\u00f3n regional, textos de interfaz localizados y flujos de contenido multiling\u00fce para el blog, para que puedas lanzar en m\u00e1s de un mercado desde el primer d\u00eda.",
+  "Not by default today. The starter is optimized for a fast production launch now, and account or workspace patterns can be layered in later as your SaaS grows.": "Hoy no viene por defecto. El starter est\u00e1 optimizado para un lanzamiento r\u00e1pido en producci\u00f3n, y los patrones de cuentas o workspaces se pueden a\u00f1adir m\u00e1s adelante a medida que tu SaaS crece.",
+  "Locale-aware marketing pages and multilingual content workflows": "P\u00e1ginas de marketing seg\u00fan la configuraci\u00f3n regional y flujos de contenido multiling\u00fce",
+  "Authentication, billing, admin operations, SEO-ready content, and locale-aware marketing pages are already integrated so your team can focus on product strategy, not plumbing.": "La autenticaci\u00f3n, la facturaci\u00f3n, las operaciones de administraci\u00f3n, el contenido preparado para SEO y las p\u00e1ginas de marketing seg\u00fan la configuraci\u00f3n regional ya est\u00e1n integrados para que tu equipo se centre en la estrategia de producto y no en la infraestructura.",
+  "Localization": "Localizaci\u00f3n",
+  "International launch ready": "Listo para lanzamientos internacionales",
+  "Locale-aware marketing and app routes": "Rutas de marketing y de la app seg\u00fan la configuraci\u00f3n regional",
+  "Multilingual blog content workflow": "Flujo de contenido multiling\u00fce para el blog",
+  "This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.": "Este mapa de funciones cubre conversiones, operaciones y preparaci\u00f3n para lanzamientos internacionales en conjunto, para que tu equipo pueda lanzar, monetizar y crecer sin montar herramientas desconectadas.",
+  "Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.": "Opciones de suscripci\u00f3n y pago \u00fanico con datos de facturaci\u00f3n unificados, flujos de contenido preparados para SEO y soporte para lanzamientos internacionales."
 }
