@@ -46,6 +46,7 @@ class CheckoutServiceTest extends TestCase
         $this->assertInstanceOf(User::class, $result->user);
         $this->assertEquals($email, $result->user->email);
         $this->assertDatabaseHas('users', ['email' => $email]);
+        $this->assertDatabaseHas('accounts', ['personal_for_user_id' => $result->user->id]);
     }
 
     #[Test]

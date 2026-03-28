@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
@@ -11,6 +13,10 @@ use Illuminate\Http\Request;
 
 class BillingStatusController
 {
+    public function __construct(
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
+    ) {}
+
     public function __invoke(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -20,12 +26,13 @@ class BillingStatusController
             return response()->json(['status' => 'no_user'], 401);
         }
 
+        $billingOwner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+
         // When a checkout session UUID is provided, only report records that can belong
         // to that checkout. This avoids false failures from stale subscriptions/orders.
         if ($sessionUuid !== '') {
-            $checkoutSession = CheckoutSession::query()
+            $checkoutSession = $billingOwner->applyToQuery(CheckoutSession::query())
                 ->where('uuid', $sessionUuid)
-                ->where('user_id', $user->id)
                 ->first();
 
             if (! $checkoutSession) {
@@ -37,8 +44,7 @@ class BillingStatusController
 
             $windowStart = $checkoutSession->created_at->copy()->subSeconds(30);
 
-            $subscription = Subscription::query()
-                ->where('user_id', $user->id)
+            $subscription = $billingOwner->applyToQuery(Subscription::query())
                 ->where('plan_key', $checkoutSession->plan_key)
                 ->where('created_at', '>=', $windowStart)
                 ->latest('id')
@@ -53,8 +59,7 @@ class BillingStatusController
                 ]);
             }
 
-            $order = Order::query()
-                ->where('user_id', $user->id)
+            $order = $billingOwner->applyToQuery(Order::query())
                 ->where('plan_key', $checkoutSession->plan_key)
                 ->where('created_at', '>=', $windowStart)
                 ->latest('id')
@@ -76,22 +81,19 @@ class BillingStatusController
             ], 202);
         }
 
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
+        $subscription = $billingOwner->applyToQuery(Subscription::query())
             ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
             ->latest('created_at')
             ->first();
 
         if (! $subscription) {
-            $subscription = Subscription::query()
-                ->where('user_id', $user->id)
+            $subscription = $billingOwner->applyToQuery(Subscription::query())
                 ->latest('created_at')
                 ->first();
         }
 
         if (! $subscription) {
-            $order = Order::query()
-                ->where('user_id', $user->id)
+            $order = $billingOwner->applyToQuery(Order::query())
                 ->latest('created_at')
                 ->first();
 

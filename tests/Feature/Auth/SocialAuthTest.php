@@ -50,6 +50,9 @@ class SocialAuthTest extends TestCase
         $user = User::where('email', 'test@example.com')->first();
         $this->assertNotNull($user->password);
         $this->assertNotEmpty($user->password);
+        $this->assertDatabaseHas('accounts', [
+            'personal_for_user_id' => $user->id,
+        ]);
     }
 
     public function test_social_auth_callback_gracefully_handles_provider_configuration_errors(): void

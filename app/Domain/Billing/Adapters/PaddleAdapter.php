@@ -260,6 +260,7 @@ class PaddleAdapter implements BillingRuntimeProvider
 
         $customData = [
             'user_id' => $user?->id,
+            'account_id' => $user?->currentAccountId(),
             'plan_key' => $planKey,
             'price_key' => $priceKey,
         ];
@@ -294,10 +295,16 @@ class PaddleAdapter implements BillingRuntimeProvider
 
         $customerId = null;
         if ($user) {
-            $customerId = BillingCustomer::query()
-                ->where('user_id', $user->id)
-                ->where('provider', $this->provider())
-                ->value('provider_id');
+            $customerLookup = BillingCustomer::query()
+                ->where('provider', $this->provider());
+
+            if ($accountId = $user->currentAccountId()) {
+                $customerLookup->where('account_id', $accountId);
+            } else {
+                $customerLookup->where('user_id', $user->id);
+            }
+
+            $customerId = $customerLookup->value('provider_id');
         }
 
         if ($customerId) {
@@ -500,6 +507,10 @@ class PaddleAdapter implements BillingRuntimeProvider
 
         if (! array_key_exists('user_id', $customData) || $customData['user_id'] === null || $customData['user_id'] === '') {
             $customData['user_id'] = $subscription->user_id;
+        }
+
+        if (! array_key_exists('account_id', $customData) || $customData['account_id'] === null || $customData['account_id'] === '') {
+            $customData['account_id'] = $subscription->account_id;
         }
 
         $resolvedPlanKey = $priceId

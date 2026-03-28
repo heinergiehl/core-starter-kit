@@ -4,6 +4,7 @@ namespace App\Domain\Billing\Adapters\Paddle\Concerns;
 
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Identity\Models\Account;
 use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -52,6 +53,31 @@ trait ResolvesPaddleData
         return $userId;
     }
 
+    protected function resolveAccountId(array $data): ?int
+    {
+        $accountId = data_get($data, 'custom_data.account_id')
+            ?? data_get($data, 'metadata.account_id')
+            ?? data_get($data, 'account_id');
+
+        if ($accountId) {
+            return (int) $accountId;
+        }
+
+        $customerId = data_get($data, 'customer_id') ?? data_get($data, 'customer.id');
+        if ($customerId) {
+            $mappedAccountId = BillingCustomer::query()
+                ->where('provider', \App\Enums\BillingProvider::Paddle->value)
+                ->where('provider_id', (string) $customerId)
+                ->value('account_id');
+
+            if ($mappedAccountId) {
+                return (int) $mappedAccountId;
+            }
+        }
+
+        return $this->resolvePersonalAccountIdForUserId($this->resolveUserId($data));
+    }
+
     /**
      * Resolve plan key from webhook data.
      */
@@ -91,5 +117,10 @@ trait ResolvesPaddleData
         }
 
         return Carbon::parse($timestamp);
+    }
+
+    protected function resolvePersonalAccountIdForUserId(?int $userId): ?int
+    {
+        return Account::resolvePersonalAccountIdForUserId($userId);
     }
 }

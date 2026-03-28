@@ -2,6 +2,7 @@
 
 namespace App\Domain\Billing\Models;
 
+use App\Domain\Identity\Models\Account;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,8 +13,20 @@ class Invoice extends Model
 {
     use HasFactory;
 
+    protected static function booted(): void
+    {
+        static::creating(function (Invoice $invoice): void {
+            if ($invoice->account_id || ! $invoice->user_id) {
+                return;
+            }
+
+            $invoice->account_id = Account::resolvePersonalAccountIdForUserId((int) $invoice->user_id);
+        });
+    }
+
     protected $fillable = [
         'user_id',
+        'account_id',
         'subscription_id',
         'order_id',
         'provider',
@@ -63,6 +76,11 @@ class Invoice extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     public function subscription(): BelongsTo

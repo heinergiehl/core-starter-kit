@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver;
+use App\Domain\Billing\Services\BillingAccessService;
 use App\Domain\Billing\Services\EntitlementService;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
@@ -15,6 +17,8 @@ class DashboardController extends Controller
 {
     public function __construct(
         protected EntitlementService $entitlementService,
+        protected BillingAccessService $billingAccessService,
+        protected BillingOwnerResolver $billingOwnerResolver,
     ) {}
 
     /**
@@ -23,11 +27,12 @@ class DashboardController extends Controller
     public function __invoke(Request $request): View
     {
         $user = $request->user();
+        $billingOwner = $this->billingOwnerResolver->forUser($user);
 
         return view('dashboard', [
             'user' => $user,
-            'subscription' => $user?->activeSubscription(),
-            'entitlements' => $user ? $this->entitlementService->forUser($user) : null,
+            'subscription' => $billingOwner ? $this->billingAccessService->activeSubscriptionForOwner($billingOwner) : null,
+            'entitlements' => $billingOwner ? $this->entitlementService->forOwner($billingOwner) : null,
         ]);
     }
 }

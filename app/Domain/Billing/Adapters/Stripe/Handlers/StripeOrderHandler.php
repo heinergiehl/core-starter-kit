@@ -75,29 +75,32 @@ class StripeOrderHandler implements StripeWebhookHandler
     {
         $userId = $this->resolveUserIdFromMetadata($object);
         $customerId = data_get($object, 'customer');
+        $accountId = $this->resolveAccountIdFromMetadata($object)
+            ?? $this->resolveAccountIdFromCustomerId($customerId)
+            ?? $this->resolvePersonalAccountIdForUserId($userId);
         $email = data_get($object, 'customer_details.email') ?? data_get($object, 'customer_email');
 
         if ($userId) {
-            $this->syncBillingCustomer($userId, $customerId, $email);
+            $this->syncBillingCustomer($userId, $accountId, $customerId, $email);
         }
 
         $mode = data_get($object, 'mode');
 
         if ($mode === 'subscription') {
-            $this->handleSubscriptionCheckout($object, $userId);
+            $this->handleSubscriptionCheckout($object, $userId, $accountId);
 
             return;
         }
 
         if ($mode === 'payment') {
-            $this->handlePaymentCheckout($object, $userId);
+            $this->handlePaymentCheckout($object, $userId, $accountId);
         }
     }
 
     /**
      * Handle subscription checkout completion.
      */
-    private function handleSubscriptionCheckout(array $object, ?int $userId): void
+    private function handleSubscriptionCheckout(array $object, ?int $userId, ?int $accountId): void
     {
         $subscriptionId = data_get($object, 'subscription');
 
@@ -132,6 +135,7 @@ class StripeOrderHandler implements StripeWebhookHandler
             ],
             [
                 'user_id' => $userId,
+                'account_id' => $accountId,
                 'plan_key' => $planKey,
                 'status' => $status,
                 'quantity' => (int) (data_get($object, 'quantity') ?? 1),
@@ -153,7 +157,7 @@ class StripeOrderHandler implements StripeWebhookHandler
     /**
      * Handle payment (one-time) checkout completion.
      */
-    private function handlePaymentCheckout(array $object, ?int $userId): void
+    private function handlePaymentCheckout(array $object, ?int $userId, ?int $accountId): void
     {
         $providerId = data_get($object, 'payment_intent') ?: data_get($object, 'id');
 
@@ -174,6 +178,7 @@ class StripeOrderHandler implements StripeWebhookHandler
             ],
             [
                 'user_id' => $userId,
+                'account_id' => $accountId,
                 'plan_key' => $planKey,
                 'status' => $isPaid ? OrderStatus::Paid : OrderStatus::Pending,
                 'amount' => $amount,
@@ -319,6 +324,8 @@ class StripeOrderHandler implements StripeWebhookHandler
     private function handleCheckoutSessionAsyncPaymentFailed(array $object): void
     {
         $userId = $this->resolveUserIdFromMetadata($object);
+        $accountId = $this->resolveAccountIdFromMetadata($object)
+            ?? $this->resolvePersonalAccountIdForUserId($userId);
         $providerId = data_get($object, 'payment_intent') ?: data_get($object, 'id');
 
         if (! $providerId || ! $userId) {
@@ -341,6 +348,7 @@ class StripeOrderHandler implements StripeWebhookHandler
             ],
             [
                 'user_id' => $userId,
+                'account_id' => $accountId,
                 'plan_key' => $this->resolvePlanKey($object),
                 'status' => OrderStatus::Failed,
                 'amount' => (int) (data_get($object, 'amount_total') ?? 0),

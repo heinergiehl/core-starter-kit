@@ -128,10 +128,12 @@ class BillingCheckoutController
         }
 
         $user = $resolved->user;
+        $accountId = $user->currentAccountId();
 
         Log::info('billing.checkout.user_resolved', [
             'request_id' => $checkoutRequestId,
             'user_id' => $user->id,
+            'account_id' => $accountId,
             'user_created' => $resolved->created,
         ]);
 
@@ -184,6 +186,7 @@ class BillingCheckoutController
                     providers: $providers,
                     provider: $provider,
                     userId: $user->id,
+                    accountId: $accountId,
                     planKey: $data['plan'],
                     priceKey: $data['price'],
                     currency: $priceCurrency,
@@ -222,6 +225,7 @@ class BillingCheckoutController
         Log::info('billing.checkout.session_created', [
             'request_id' => $checkoutRequestId,
             'user_id' => $user->id,
+            'account_id' => $accountId,
             'session_uuid' => $checkoutSession->uuid,
             'provider' => $provider,
             'plan_key' => $data['plan'],
@@ -278,6 +282,7 @@ class BillingCheckoutController
             Log::info('billing.checkout.provider_redirect', [
                 'request_id' => $checkoutRequestId,
                 'user_id' => $user->id,
+                'account_id' => $accountId,
                 'session_uuid' => $checkoutSession->uuid,
                 'provider' => $provider,
                 'provider_session_id' => $transactionId,
@@ -307,6 +312,7 @@ class BillingCheckoutController
             Log::info('billing.checkout.provider_redirect', [
                 'request_id' => $checkoutRequestId,
                 'user_id' => $user->id,
+                'account_id' => $accountId,
                 'session_uuid' => $checkoutSession->uuid,
                 'provider' => $provider,
                 'provider_session_id' => $checkoutDto->id,
@@ -317,6 +323,7 @@ class BillingCheckoutController
             Log::error('billing.checkout.provider_failed', [
                 'request_id' => $checkoutRequestId,
                 'user_id' => $user->id,
+                'account_id' => $accountId,
                 'session_uuid' => $checkoutSession->uuid,
                 'provider' => $provider,
                 'plan_key' => $data['plan'],
@@ -334,6 +341,7 @@ class BillingCheckoutController
         BillingProviderManager $providers,
         string $provider,
         int $userId,
+        ?int $accountId,
         string $planKey,
         string $priceKey,
         string $currency,
@@ -344,16 +352,17 @@ class BillingCheckoutController
             'billing',
             'upgrade-credit',
             strtolower($provider),
-            $userId,
+            $accountId ?: $userId,
             strtolower($planKey),
             strtolower($priceKey),
         ]);
 
         try {
-            return Cache::lock($lockKey, 10)->block(3, function () use ($providers, $provider, $userId, $planKey, $priceKey, $currency, $creditAmount, $requestId): Discount {
+            return Cache::lock($lockKey, 10)->block(3, function () use ($providers, $provider, $userId, $accountId, $planKey, $priceKey, $currency, $creditAmount, $requestId): Discount {
                 $existing = $this->findReusableOneTimeUpgradeCreditDiscount(
                     provider: $provider,
                     userId: $userId,
+                    accountId: $accountId,
                     planKey: $planKey,
                     priceKey: $priceKey,
                     creditAmount: $creditAmount,
@@ -363,6 +372,7 @@ class BillingCheckoutController
                     Log::info('billing.checkout.upgrade_credit_reused', [
                         'request_id' => $requestId,
                         'user_id' => $userId,
+                        'account_id' => $accountId,
                         'provider' => $provider,
                         'plan_key' => $planKey,
                         'price_key' => $priceKey,
@@ -390,6 +400,7 @@ class BillingCheckoutController
                     'metadata' => [
                         'auto_upgrade_credit' => true,
                         'user_id' => $userId,
+                        'account_id' => $accountId,
                         'checkout_request_id' => $requestId,
                     ],
                 ]);
@@ -405,6 +416,7 @@ class BillingCheckoutController
                 Log::info('billing.checkout.upgrade_credit_created', [
                     'request_id' => $requestId,
                     'user_id' => $userId,
+                    'account_id' => $accountId,
                     'provider' => $provider,
                     'plan_key' => $planKey,
                     'price_key' => $priceKey,
@@ -421,6 +433,7 @@ class BillingCheckoutController
     private function findReusableOneTimeUpgradeCreditDiscount(
         string $provider,
         int $userId,
+        ?int $accountId,
         string $planKey,
         string $priceKey,
         int $creditAmount,
@@ -445,13 +458,18 @@ class BillingCheckoutController
             ->take(25)
             ->get();
 
-        return $candidates->first(function (Discount $discount) use ($userId, $planKey, $priceKey): bool {
+        return $candidates->first(function (Discount $discount) use ($userId, $accountId, $planKey, $priceKey): bool {
             $metadata = $discount->metadata ?? [];
             if (! data_get($metadata, 'auto_upgrade_credit')) {
                 return false;
             }
 
-            if ((int) data_get($metadata, 'user_id') !== $userId) {
+            $metadataAccountId = (int) data_get($metadata, 'account_id', 0);
+            if ($metadataAccountId > 0) {
+                if ($metadataAccountId !== (int) $accountId) {
+                    return false;
+                }
+            } elseif ((int) data_get($metadata, 'user_id') !== $userId) {
                 return false;
             }
 

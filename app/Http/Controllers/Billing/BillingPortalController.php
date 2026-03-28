@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingProviderManager;
@@ -14,6 +16,10 @@ use Stripe\StripeClient;
 
 class BillingPortalController
 {
+    public function __construct(
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
+    ) {}
+
     public function __invoke(Request $request, ?string $provider = null): RedirectResponse
     {
         $user = $request->user();
@@ -22,8 +28,9 @@ class BillingPortalController
             abort(403);
         }
 
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
+        $billingOwner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+
+        $subscription = $billingOwner->applyToQuery(Subscription::query())
             ->latest('id')
             ->first();
 
@@ -35,7 +42,7 @@ class BillingPortalController
 
         try {
             if ($providerSlug === 'stripe') {
-                return $this->stripePortal($user->id);
+                return $this->stripePortal($billingOwner);
             }
 
             if ($providerSlug === 'paddle') {
@@ -53,7 +60,7 @@ class BillingPortalController
         }
     }
 
-    private function stripePortal(int $userId): RedirectResponse
+    private function stripePortal(BillingOwner $owner): RedirectResponse
     {
         $secret = config('services.stripe.secret');
 
@@ -61,8 +68,7 @@ class BillingPortalController
             throw new RuntimeException('Stripe secret is not configured.');
         }
 
-        $customerId = BillingCustomer::query()
-            ->where('user_id', $userId)
+        $customerId = $owner->applyToQuery(BillingCustomer::query())
             ->where('provider', 'stripe')
             ->value('provider_id');
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Unit\Domain\Billing;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Services\BillingDashboardService;
 use App\Domain\Billing\Services\BillingPlanService;
@@ -41,7 +42,7 @@ class BillingDashboardServiceTest extends TestCase
             ->with('agency')
             ->andThrow(new \ValueError('Invalid catalog data'));
 
-        $service = new BillingDashboardService($planService);
+        $service = new BillingDashboardService($planService, app(BillingOwnerResolverContract::class));
         $data = $service->getData($user);
 
         $this->assertNotNull($data['recentOneTimeOrder']);

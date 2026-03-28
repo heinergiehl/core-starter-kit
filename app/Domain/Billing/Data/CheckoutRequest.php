@@ -46,12 +46,21 @@ readonly class CheckoutRequest
             'price_key' => $this->priceKey,
         ];
 
+        if ($accountId = $this->accountId()) {
+            $metadata['account_id'] = (string) $accountId;
+        }
+
         if ($this->discount) {
             $metadata['discount_id'] = (string) $this->discount->id;
             $metadata['discount_code'] = $this->discount->code;
         }
 
         return $metadata;
+    }
+
+    public function accountId(): ?int
+    {
+        return $this->user->currentAccountId();
     }
 
     /**

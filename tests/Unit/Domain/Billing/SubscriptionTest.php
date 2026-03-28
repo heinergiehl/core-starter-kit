@@ -2,7 +2,9 @@
 
 namespace Tests\Unit\Domain\Billing;
 
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Services\EntitlementService;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
@@ -35,7 +37,9 @@ class SubscriptionTest extends TestCase
     public function it_clears_entitlement_cache_on_save()
     {
         $user = User::factory()->create();
-        $cacheKey = "entitlements:user:{$user->id}";
+        $cacheKey = EntitlementService::cacheKeyForOwner(
+            BillingOwner::forAccountId($user->currentAccountId(), $user->id, $user)
+        );
 
         Cache::shouldReceive('remember')
             ->andReturn(null);
@@ -55,7 +59,9 @@ class SubscriptionTest extends TestCase
     public function it_clears_entitlement_cache_on_delete()
     {
         $user = User::factory()->create();
-        $cacheKey = "entitlements:user:{$user->id}";
+        $cacheKey = EntitlementService::cacheKeyForOwner(
+            BillingOwner::forAccountId($user->currentAccountId(), $user->id, $user)
+        );
 
         $subscription = Subscription::factory()->create(['user_id' => $user->id]);
 

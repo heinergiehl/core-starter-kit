@@ -2,6 +2,8 @@
 
 namespace App\Domain\Billing\Services;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Data\Entitlements;
 use App\Domain\Billing\Data\Plan;
 use App\Domain\Billing\Models\Order;
@@ -16,27 +18,55 @@ class EntitlementService
     public const CACHE_KEY_PREFIX = 'entitlements:user:';
 
     public function __construct(
-        private readonly BillingPlanService $planService
+        private readonly BillingPlanService $planService,
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
     ) {}
+
+    public function forOwner(BillingOwner $owner): Entitlements
+    {
+        return Cache::remember(
+            self::cacheKeyForOwner($owner),
+            now()->addMinutes(30),
+            fn () => $this->calculateEntitlementsForOwner($owner)
+        );
+    }
 
     public function forUser(User $user): Entitlements
     {
-        return Cache::remember(
-            self::CACHE_KEY_PREFIX.$user->id,
-            now()->addMinutes(30),
-            fn () => $this->calculateEntitlements($user)
-        );
+        $owner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+
+        return $this->forOwner($owner);
+    }
+
+    public static function cacheKeyForOwner(BillingOwner $owner): string
+    {
+        if ($owner->isUser()) {
+            return self::cacheKeyForUserId($owner->id);
+        }
+
+        return 'entitlements:'.$owner->cacheKeySuffix();
+    }
+
+    public static function cacheKeyForUserId(int $userId): string
+    {
+        return self::CACHE_KEY_PREFIX.$userId;
+    }
+
+    public function clearOwnerCache(BillingOwner $owner): void
+    {
+        Cache::forget(self::cacheKeyForOwner($owner));
     }
 
     public function clearCache(User $user): void
     {
-        Cache::forget(self::CACHE_KEY_PREFIX.$user->id);
+        $owner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+
+        $this->clearOwnerCache($owner);
     }
 
-    protected function calculateEntitlements(User $user): Entitlements
+    protected function calculateEntitlementsForOwner(BillingOwner $owner): Entitlements
     {
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
+        $subscription = $owner->applyToQuery(Subscription::query())
             ->whereIn('status', [
                 SubscriptionStatus::Active->value,
                 SubscriptionStatus::Trialing->value,
@@ -46,8 +76,7 @@ class EntitlementService
             ->first();
 
         if (! $subscription) {
-            $order = Order::query()
-                ->where('user_id', $user->id)
+            $order = $owner->applyToQuery(Order::query())
                 ->whereIn('status', [
                     OrderStatus::Paid->value,
                     OrderStatus::Completed->value,

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
@@ -17,7 +19,8 @@ class BillingController
         private readonly BillingPlanService $planService,
         private readonly \App\Domain\Billing\Services\BillingDashboardService $dashboardService,
         private readonly \App\Domain\Billing\Services\SubscriptionService $subscriptionService,
-        private readonly RepoAccessService $repoAccessService
+        private readonly RepoAccessService $repoAccessService,
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
     ) {}
 
     /**
@@ -103,18 +106,17 @@ class BillingController
     {
         $user = $request->user();
         abort_unless($user, 403);
+        $billingOwner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
 
         // Find subscription pending cancellation (has canceled_at but still active)
-        $subscription = Subscription::query()
-            ->where('user_id', $user->id)
+        $subscription = $billingOwner->applyToQuery(Subscription::query())
             ->pendingCancellation()
             ->latest('id')
             ->first();
 
         if (! $subscription) {
             // Check if it's already active (user might have double clicked or race condition)
-            $activeSub = Subscription::query()
-                ->where('user_id', $user->id)
+            $activeSub = $billingOwner->applyToQuery(Subscription::query())
                 ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
                 ->whereNull('canceled_at')
                 ->latest('id')

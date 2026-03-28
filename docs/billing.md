@@ -3,7 +3,8 @@
 This kit implements a provider-agnostic billing domain with adapter implementations per provider.
 
 ## 1) Overview
-- Billing is attached to the User
+- Billing is attached to the current `Account` in the core, while `user_id` is still carried for purchaser/audit identity
+- The current core UX is single-account; shared workspace / multi-tenancy behavior is not bundled
 - Provider webhooks are the source of truth
 - Feature access is determined by Entitlements, not plan-name checks
 - Provider-specific logic lives in adapters, not core domain code
@@ -150,8 +151,8 @@ If any required key is missing, provider actions should fail with a clear config
 ### 6.1 Subscription checkout
 Requirements:
 - user selects plan/price (monthly/yearly)
-- checkout session is created for the user
-- session metadata includes: `user_id`, `plan_key`, `price_key`, and `quantity`
+- checkout session is created for the current account on behalf of the user
+- session metadata includes: `account_id`, `user_id`, `plan_key`, `price_key`, and `quantity`
 
 ### 6.2 One-time purchase checkout
 Requirements:

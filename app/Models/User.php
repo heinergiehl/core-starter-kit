@@ -6,6 +6,9 @@ use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Traits\HasEntitlements;
 use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
+use App\Domain\Identity\Contracts\CurrentAccountResolver as CurrentAccountResolverContract;
+use App\Domain\Identity\Models\Account;
+use App\Domain\Identity\Models\AccountMembership;
 use App\Domain\Identity\Models\SocialAccount;
 use App\Domain\Identity\Models\TwoFactorAuth;
 use App\Domain\RepoAccess\Models\RepoAccessGrant;
@@ -15,9 +18,12 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -30,6 +36,10 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
     protected static function booted(): void
     {
+        static::created(function (self $user): void {
+            $user->ensurePersonalAccount();
+        });
+
         static::saving(function (self $user): void {
             if (! $user->exists || ! $user->isDirty('is_admin')) {
                 return;
@@ -127,9 +137,90 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
         return $this->hasMany(Subscription::class);
     }
 
+    public function personalAccount(): HasOne
+    {
+        return $this->hasOne(Account::class, 'personal_for_user_id');
+    }
+
+    public function accountMemberships(): HasMany
+    {
+        return $this->hasMany(AccountMembership::class);
+    }
+
+    public function accounts(): BelongsToMany
+    {
+        return $this->belongsToMany(Account::class, 'account_memberships')
+            ->withPivot('role')
+            ->withTimestamps();
+    }
+
+    public function currentAccount(): ?Account
+    {
+        if (! $this->exists || ! Schema::hasTable('accounts')) {
+            return null;
+        }
+
+        if (app()->bound(CurrentAccountResolverContract::class)) {
+            $account = app(CurrentAccountResolverContract::class)->forUser($this);
+
+            if ($account) {
+                return $account;
+            }
+        }
+
+        return $this->personalAccount()->first() ?? $this->ensurePersonalAccount();
+    }
+
+    public function currentAccountId(): ?int
+    {
+        if (! $this->exists) {
+            return null;
+        }
+
+        if (app()->bound(CurrentAccountResolverContract::class)) {
+            return app(CurrentAccountResolverContract::class)->idForUser($this);
+        }
+
+        return $this->personalAccount()->value('id') ?? $this->ensurePersonalAccount()?->id;
+    }
+
+    public function ensurePersonalAccount(): ?Account
+    {
+        if (! $this->exists || ! Schema::hasTable('accounts') || ! Schema::hasTable('account_memberships')) {
+            return null;
+        }
+
+        $account = $this->personalAccount()->firstOrCreate(
+            ['personal_for_user_id' => $this->id],
+            ['name' => $this->personalAccountName()]
+        );
+
+        AccountMembership::query()->firstOrCreate(
+            [
+                'account_id' => $account->id,
+                'user_id' => $this->id,
+            ],
+            [
+                'role' => 'owner',
+            ]
+        );
+
+        return $account;
+    }
+
     public function activeSubscription(): ?Subscription
     {
-        return $this->subscriptions()
+        $accountId = $this->currentAccountId();
+
+        if (! $accountId) {
+            return $this->subscriptions()
+                ->isActive()
+                ->latest('id')
+                ->first();
+        }
+
+        return Subscription::query()
+            ->where('account_id', $accountId)
             ->isActive()
             ->latest('id')
             ->first();
@@ -213,5 +304,12 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     public function publicAuthorInitial(): string
     {
         return Str::upper(Str::substr($this->publicAuthorName(), 0, 1));
+    }
+
+    private function personalAccountName(): string
+    {
+        $name = trim((string) $this->name);
+
+        return $name !== '' ? "{$name} Personal" : 'Personal Account';
     }
 }

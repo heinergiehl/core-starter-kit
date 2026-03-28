@@ -4,6 +4,8 @@ namespace Tests\Feature\Billing;
 
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Identity\Models\Account;
+use App\Domain\Identity\Models\AccountMembership;
 use App\Enums\BillingProvider;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
@@ -82,6 +84,39 @@ class BillingStatusControllerTest extends TestCase
                 'type' => 'subscription',
                 'status' => SubscriptionStatus::Active->value,
                 'plan_key' => 'pro',
+            ]);
+    }
+
+    public function test_it_ignores_checkout_sessions_from_other_accounts(): void
+    {
+        $user = User::factory()->create();
+        $secondaryAccount = Account::factory()->create();
+
+        AccountMembership::factory()->create([
+            'account_id' => $secondaryAccount->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        $checkoutSession = CheckoutSession::query()->create([
+            'user_id' => $user->id,
+            'account_id' => $secondaryAccount->id,
+            'provider' => BillingProvider::Stripe->value,
+            'plan_key' => 'agency',
+            'price_key' => 'monthly',
+            'quantity' => 1,
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $response = $this->actingAs($user)->getJson(route('billing.status', [
+            'session' => $checkoutSession->uuid,
+        ]));
+
+        $response
+            ->assertStatus(202)
+            ->assertJson([
+                'type' => 'checkout',
+                'status' => 'processing',
             ]);
     }
 }

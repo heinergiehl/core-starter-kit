@@ -2,6 +2,8 @@
 
 namespace App\Domain\Billing\Services;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
 use App\Enums\OrderStatus;
@@ -12,7 +14,8 @@ use Illuminate\Support\Collection;
 class BillingDashboardService
 {
     public function __construct(
-        private readonly BillingPlanService $planService
+        private readonly BillingPlanService $planService,
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
     ) {}
 
     /**
@@ -32,6 +35,7 @@ class BillingDashboardService
      */
     public function getData(User $user): array
     {
+        $owner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
         $subscription = $user->activeSubscription();
         $plan = null;
         $invoices = collect();
@@ -47,16 +51,14 @@ class BillingDashboardService
                 $plan = null;
             }
 
-            $invoices = Invoice::query()
-                ->where('user_id', $user->id)
+            $invoices = $owner->applyToQuery(Invoice::query())
                 ->latest('issued_at')
                 ->take(5)
                 ->get();
         } else {
             // Check for recent completed subscription order (provisioning race condition)
             // We determine one-time vs subscription by checking if the associated product has type='one_time'
-            $pendingOrder = Order::query()
-                ->where('user_id', $user->id)
+            $pendingOrder = $owner->applyToQuery(Order::query())
                 ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
                 ->where('created_at', '>=', now()->subMinutes(10))
                 // Exclude one-time product orders or orders without subscription_id in metadata
@@ -80,8 +82,7 @@ class BillingDashboardService
         }
 
         // Check for recent one-time purchases to show success banner (within 10 minutes)
-        $recentOneTimeOrder = Order::query()
-            ->where('user_id', $user->id)
+        $recentOneTimeOrder = $owner->applyToQuery(Order::query())
             ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->where('created_at', '>=', now()->subMinutes(10))
             ->latest('id')
@@ -103,8 +104,7 @@ class BillingDashboardService
         }
 
         // Get all one-time orders for purchase history
-        $oneTimeOrders = Order::query()
-            ->where('user_id', $user->id)
+        $oneTimeOrders = $owner->applyToQuery(Order::query())
             ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->with('product')
             ->latest('id')

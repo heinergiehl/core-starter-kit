@@ -56,6 +56,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
     {
         $subscriptionId = data_get($data, 'id') ?? data_get($data, 'subscription_id');
         $userId = $this->resolveUserId($data);
+        $accountId = $this->resolveAccountId($data);
 
         if (! $subscriptionId || ! $userId) {
             return null;
@@ -91,12 +92,14 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                     'ends_at' => $endsAt,
                     'canceled_at' => $canceledAt,
                 ],
-                metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'scheduled_change', 'customer_id', 'customer'])
+                metadata: Arr::only($data, ['id', 'status', 'items', 'custom_data', 'management_urls', 'scheduled_change', 'customer_id', 'customer']),
+                accountId: $accountId,
             )
         );
 
         $this->syncBillingCustomer(
             $userId,
+            $accountId,
             data_get($data, 'customer_id') ?? data_get($data, 'customer.id'),
             data_get($data, 'customer_email') ?? data_get($data, 'customer.email')
         );
@@ -119,7 +122,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
     /**
      * Sync billing customer from webhook data.
      */
-    private function syncBillingCustomer(int $userId, ?string $providerId, ?string $email): void
+    private function syncBillingCustomer(int $userId, ?int $accountId, ?string $providerId, ?string $email): void
     {
         if ($providerId) {
             $existing = BillingCustomer::query()
@@ -127,11 +130,17 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                 ->where('provider_id', $providerId)
                 ->first();
 
-            if ($existing && $existing->user_id !== $userId) {
+            $hasConflict = $existing
+                && ($existing->user_id !== $userId
+                    || ($accountId && (int) $existing->account_id !== $accountId));
+
+            if ($hasConflict) {
                 \Illuminate\Support\Facades\Log::warning('Paddle webhook customer id already mapped', [
                     'provider_id' => $providerId,
                     'existing_user_id' => $existing->user_id,
                     'incoming_user_id' => $userId,
+                    'existing_account_id' => $existing->account_id,
+                    'incoming_account_id' => $accountId,
                 ]);
 
                 return;
@@ -144,6 +153,7 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
                 ],
                 [
                     'user_id' => $userId,
+                    'account_id' => $accountId,
                     'email' => $email,
                 ]
             );
@@ -151,15 +161,18 @@ class PaddleSubscriptionHandler implements PaddleWebhookHandler
             return;
         }
 
-        BillingCustomer::query()->updateOrCreate(
-            [
-                'user_id' => $userId,
-                'provider' => BillingProvider::Paddle->value,
-            ],
-            [
-                'email' => $email,
-            ]
-        );
+        $attributes = ['provider' => BillingProvider::Paddle->value];
+        if ($accountId) {
+            $attributes['account_id'] = $accountId;
+        } else {
+            $attributes['user_id'] = $userId;
+        }
+
+        BillingCustomer::query()->updateOrCreate($attributes, [
+            'user_id' => $userId,
+            'account_id' => $accountId,
+            'email' => $email,
+        ]);
     }
 
     /**

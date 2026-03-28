@@ -98,6 +98,10 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
 
         $userId = $this->resolveUserIdFromMetadata($object)
             ?? $this->resolveUserIdFromCustomerId($customerId);
+        $accountId = $this->resolveAccountIdFromMetadata($object)
+            ?? $existingSubscription?->account_id
+            ?? $this->resolveAccountIdFromCustomerId($customerId)
+            ?? $this->resolvePersonalAccountIdForUserId($userId);
 
         if (! $userId) {
             return;
@@ -143,11 +147,12 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
                     'ends_at' => $endsAt,
                     'canceled_at' => $canceledAt,
                 ],
-                metadata: $metadata
+                metadata: $metadata,
+                accountId: $accountId,
             )
         );
 
-        $this->syncBillingCustomer($userId, $customerId, data_get($object, 'customer_email'));
+        $this->syncBillingCustomer($userId, $accountId, $customerId, data_get($object, 'customer_email'));
 
         if ($status === 'active') {
             $this->checkoutService->verifyUserAfterPayment($userId);
@@ -265,6 +270,10 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
         $userId = $this->resolveUserIdFromMetadata($object)
             ?? $this->resolveUserIdFromCustomerId($customerId)
             ?? $this->resolveUserIdFromSubscriptionId($subscriptionId);
+        $accountId = $this->resolveAccountIdFromMetadata($object)
+            ?? $this->resolveAccountIdFromCustomerId($customerId)
+            ?? $this->resolveAccountIdFromSubscriptionId($subscriptionId)
+            ?? $this->resolvePersonalAccountIdForUserId($userId);
 
         if (! $userId) {
             return null;
@@ -286,6 +295,7 @@ class StripeSubscriptionHandler implements StripeWebhookHandler
             ],
             [
                 'user_id' => $userId,
+                'account_id' => $accountId,
                 'subscription_id' => $subscription?->id,
                 'status' => $status,
                 'number' => data_get($object, 'number'),

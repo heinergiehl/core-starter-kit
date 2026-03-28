@@ -7,7 +7,8 @@ This document explains the architecture of the SaaS kit: boundaries, core domain
 - Clear domain boundaries with minimal coupling
 - Billing is event-driven; webhooks are the source of truth
 - Entitlements are centralized and drive access
-- User is the billing entity
+- Core is sellable standalone; shared workspace / tenancy behavior is not bundled in the base kit
+- `Account` is the canonical owner for customer-owned data; `User` remains the authenticated actor and audit identity
 
 ---
 
@@ -15,7 +16,10 @@ This document explains the architecture of the SaaS kit: boundaries, core domain
 
 ### Identity
 - `User`
+- `Account`
+- `AccountMembership`
 - Session auth, password reset, optional Socialite providers
+- `CurrentAccountResolver` selects the active account from session state and falls back to the user's hidden personal account in the core kit
 
 ### Billing (canonical)
 Canonical tables (provider-agnostic):
@@ -64,7 +68,7 @@ Examples:
 
 ### 4.2 Single source of truth
 Implement one service:
-- `EntitlementService::forUser(User $user): EntitlementsDTO`
+- `EntitlementService::forOwner(BillingOwner $owner): EntitlementsDTO`
 
 Everything else reads from it:
 - UI gating in Blade/Filament
@@ -73,7 +77,39 @@ Everything else reads from it:
 
 ---
 
-## 5) Billing webhook pipeline
+## 5) Ownership boundaries
+
+### 5.1 Platform-global in core
+- marketing pages
+- pricing pages
+- blog, docs, sitemap, RSS, OG assets
+- public roadmap listing and announcements
+- webhook endpoints
+- operator/admin tooling
+
+### 5.2 User-owned in core
+- authentication, profile, password reset, email verification
+- social accounts
+- 2FA
+- impersonation identity
+- repository access automation
+- roadmap submission/voting identity
+
+### 5.3 Account-owned in core
+- billing customers
+- checkout sessions
+- subscriptions, orders, invoices
+- entitlements and billing access
+- current customer app access state
+
+### 5.4 Package seam for future tenancy
+- `CurrentAccountResolver` is the primary extension seam for selecting the active account/workspace
+- core defaults to one hidden personal account per user
+- a future tenancy package can override account selection, add workspace switching, and introduce shared accounts without rewriting core ownership
+
+---
+
+## 6) Billing webhook pipeline
 
 ### 5.1 Pipeline overview
 1) Provider sends webhook to `/webhooks/{provider}`
@@ -96,20 +132,20 @@ After checkout redirect, show a page that:
 
 ---
 
-## 6) Background jobs and scheduling
+## 7) Background jobs and scheduling
 - Webhook processing runs on the queue
 - Use scheduler for recurring jobs (e.g., cleanup, emails)
 
 ---
 
-## 7) Observability and audit
+## 8) Observability and audit
 - `webhook_events` provides an audit log and retry surface
 - Admin Panel should expose event status and error messages
 - Domain services should log important transitions (minimal PII)
 
 ---
 
-## 8) Folder structure (suggested)
+## 9) Folder structure (suggested)
 
 ```
 app/
@@ -133,7 +169,7 @@ tests/
 
 ---
 
-## 9) Extension guidelines
+## 10) Extension guidelines
 - Add new domains under `app/Domain` and keep dependencies explicit
 - Avoid plan-name checks; use entitlements instead
 - Keep provider-specific logic inside adapters

@@ -5,6 +5,7 @@ namespace App\Domain\Billing\Adapters\Stripe\Concerns;
 use App\Domain\Billing\Models\BillingCustomer;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Identity\Models\Account;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -32,6 +33,13 @@ trait ResolvesStripeData
         $userId = data_get($object, 'metadata.user_id');
 
         return $userId ? (int) $userId : null;
+    }
+
+    protected function resolveAccountIdFromMetadata(array $object): ?int
+    {
+        $accountId = data_get($object, 'metadata.account_id');
+
+        return $accountId ? (int) $accountId : null;
     }
 
     /**
@@ -66,15 +74,36 @@ trait ResolvesStripeData
 
             if ($customer && isset($customer->metadata['user_id'])) {
                 $userId = (int) $customer->metadata['user_id'];
+                $accountId = isset($customer->metadata['account_id'])
+                    ? (int) $customer->metadata['account_id']
+                    : $this->resolvePersonalAccountIdForUserId($userId);
 
                 // Self-heal: Create the mapping immediately
-                $this->syncBillingCustomer($userId, $customerId, $customer->email);
+                $this->syncBillingCustomer($userId, $accountId, $customerId, $customer->email);
 
                 return $userId;
             }
         } catch (\Throwable $e) {
             // Settle for null if API fails
             report($e);
+        }
+
+        return null;
+    }
+
+    protected function resolveAccountIdFromCustomerId(?string $customerId): ?int
+    {
+        if (! $customerId) {
+            return null;
+        }
+
+        $accountId = BillingCustomer::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $customerId)
+            ->value('account_id');
+
+        if ($accountId) {
+            return (int) $accountId;
         }
 
         return null;
@@ -93,6 +122,20 @@ trait ResolvesStripeData
             ->where('provider', $this->provider())
             ->where('provider_id', $subscriptionId)
             ->value('user_id');
+    }
+
+    protected function resolveAccountIdFromSubscriptionId(?string $subscriptionId): ?int
+    {
+        if (! $subscriptionId) {
+            return null;
+        }
+
+        $accountId = Subscription::query()
+            ->where('provider', $this->provider())
+            ->where('provider_id', $subscriptionId)
+            ->value('account_id');
+
+        return $accountId ? (int) $accountId : null;
     }
 
     /**
@@ -142,7 +185,7 @@ trait ResolvesStripeData
     /**
      * Sync or create billing customer record.
      */
-    protected function syncBillingCustomer(int $userId, ?string $providerId, ?string $email): void
+    protected function syncBillingCustomer(int $userId, ?int $accountId, ?string $providerId, ?string $email): void
     {
         if ($providerId) {
             $existing = BillingCustomer::query()
@@ -150,11 +193,17 @@ trait ResolvesStripeData
                 ->where('provider_id', $providerId)
                 ->first();
 
-            if ($existing && $existing->user_id !== $userId) {
+            $hasConflict = $existing
+                && ($existing->user_id !== $userId
+                    || ($accountId && (int) $existing->account_id !== $accountId));
+
+            if ($hasConflict) {
                 Log::warning('Stripe webhook customer id already mapped', [
                     'provider_id' => $providerId,
                     'existing_user_id' => $existing->user_id,
                     'incoming_user_id' => $userId,
+                    'existing_account_id' => $existing->account_id,
+                    'incoming_account_id' => $accountId,
                 ]);
 
                 return;
@@ -167,6 +216,7 @@ trait ResolvesStripeData
                 ],
                 [
                     'user_id' => $userId,
+                    'account_id' => $accountId,
                     'email' => $email,
                 ]
             );
@@ -174,14 +224,22 @@ trait ResolvesStripeData
             return;
         }
 
-        BillingCustomer::query()->updateOrCreate(
-            [
-                'user_id' => $userId,
-                'provider' => $this->provider(),
-            ],
-            [
-                'email' => $email,
-            ]
-        );
+        $attributes = ['provider' => $this->provider()];
+        if ($accountId) {
+            $attributes['account_id'] = $accountId;
+        } else {
+            $attributes['user_id'] = $userId;
+        }
+
+        BillingCustomer::query()->updateOrCreate($attributes, [
+            'user_id' => $userId,
+            'account_id' => $accountId,
+            'email' => $email,
+        ]);
+    }
+
+    protected function resolvePersonalAccountIdForUserId(?int $userId): ?int
+    {
+        return Account::resolvePersonalAccountIdForUserId($userId);
     }
 }

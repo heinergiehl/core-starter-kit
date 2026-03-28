@@ -10,6 +10,7 @@ use App\Domain\Billing\Events\Subscription\SubscriptionStarted;
 use App\Domain\Billing\Events\Subscription\SubscriptionTrialStarted;
 use App\Domain\Billing\Exceptions\BillingException;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Identity\Models\Account;
 use App\Enums\BillingProvider;
 use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
@@ -141,6 +142,9 @@ class SubscriptionService
             ],
             [
                 'user_id' => $data->userId,
+                'account_id' => $data->accountId
+                    ?? $existingSubscription?->account_id
+                    ?? Account::resolvePersonalAccountIdForUserId($data->userId),
                 'plan_key' => $data->planKey,
                 'status' => $normalizedStatus,
                 'quantity' => max($data->quantity, 1),

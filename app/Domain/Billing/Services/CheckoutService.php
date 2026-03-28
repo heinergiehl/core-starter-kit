@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Billing\Services;
 
 use App\Domain\Billing\Adapters\PaddleAdapter;
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Data\CheckoutEligibility;
 use App\Domain\Billing\Data\CheckoutUserDTO;
 use App\Domain\Billing\Data\Plan;
@@ -39,6 +41,7 @@ class CheckoutService
     public function __construct(
         private readonly BillingProviderManager $providerManager,
         private readonly BillingPlanService $planService,
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
     ) {}
 
     /**
@@ -95,8 +98,8 @@ class CheckoutService
      */
     public function hasActiveSubscription(User $user): bool
     {
-        return Subscription::query()
-            ->where('user_id', $user->id)
+        return $this->ownerForUser($user)
+            ->applyToQuery(Subscription::query())
             ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
             ->exists();
     }
@@ -109,22 +112,24 @@ class CheckoutService
      */
     public function hasAnyPurchase(User $user): bool
     {
+        $owner = $this->ownerForUser($user);
+
         // Check for active subscription
         if ($this->hasActiveSubscription($user)) {
             return true;
         }
 
         // Check for any paid one-time order
-        return Order::query()
-            ->where('user_id', $user->id)
+        return $owner->applyToQuery(Order::query())
             ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->exists();
     }
 
     public function latestPaidOneTimeOrder(User $user): ?Order
     {
-        $order = Order::query()
-            ->where('user_id', $user->id)
+        $owner = $this->ownerForUser($user);
+
+        $order = $owner->applyToQuery(Order::query())
             ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->where(function ($query): void {
                 $query->whereNull('metadata->subscription_id')
@@ -137,8 +142,7 @@ class CheckoutService
             return $order;
         }
 
-        return Order::query()
-            ->where('user_id', $user->id)
+        return $owner->applyToQuery(Order::query())
             ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
             ->latest('id')
             ->cursor()
@@ -349,6 +353,7 @@ class CheckoutService
         if ($user) {
             $data['custom_data'] = array_filter([
                 'user_id' => $user->id,
+                'account_id' => $this->currentAccountIdForUser($user),
                 'plan_key' => $planKey,
                 'price_key' => $priceKey,
                 'discount_id' => $discount?->id,
@@ -372,6 +377,7 @@ class CheckoutService
     ): CheckoutSession {
         return CheckoutSession::create([
             'user_id' => $user->id,
+            'account_id' => $this->currentAccountIdForUser($user),
             'provider' => $provider,
             'provider_session_id' => $providerSessionId,
             'plan_key' => $planKey,
@@ -446,6 +452,7 @@ class CheckoutService
         $payload = implode('|', [
             $session->uuid,
             $session->user_id,
+            $session->account_id ?? 0,
             $session->expires_at?->timestamp ?? 0,
         ]);
 
@@ -571,5 +578,15 @@ class CheckoutService
             ?? data_get($order->metadata, 'custom_data.price_key')
             ?? ''
         );
+    }
+
+    private function ownerForUser(User $user): BillingOwner
+    {
+        return $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+    }
+
+    private function currentAccountIdForUser(User $user): ?int
+    {
+        return $this->ownerForUser($user)->accountId() ?? $user->currentAccountId();
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Models\Invoice;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,6 +14,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class InvoiceController
 {
+    public function __construct(
+        private readonly BillingOwnerResolverContract $billingOwnerResolver,
+    ) {}
+
     /**
      * Download invoice PDF for an order.
      */
@@ -23,8 +29,9 @@ class InvoiceController
             abort(403);
         }
 
-        $invoice = Invoice::query()
-            ->where('user_id', $user->id)
+        $billingOwner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+
+        $invoice = $billingOwner->applyToQuery(Invoice::query())
             ->where('order_id', $order)
             ->firstOrFail();
 
@@ -42,9 +49,10 @@ class InvoiceController
             abort(403);
         }
 
-        $invoiceModel = Invoice::query()
+        $billingOwner = $this->billingOwnerResolver->forUser($user) ?? BillingOwner::forUser($user);
+
+        $invoiceModel = $billingOwner->applyToQuery(Invoice::query())
             ->where('id', $invoice)
-            ->where('user_id', $user->id)
             ->firstOrFail();
 
         return $this->downloadPdf($invoiceModel);

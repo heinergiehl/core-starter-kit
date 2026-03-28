@@ -58,6 +58,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
     {
         $orderId = data_get($data, 'id') ?? data_get($data, 'transaction_id');
         $userId = $this->resolveUserId($data);
+        $accountId = $this->resolveAccountId($data);
 
         if (! $orderId || ! $userId) {
             return null;
@@ -83,6 +84,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             ],
             [
                 'user_id' => $userId,
+                'account_id' => $accountId,
                 'plan_key' => $this->resolvePlanKey($data),
                 'status' => $normalizedStatus,
                 'amount' => $amount,
@@ -95,7 +97,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             $order->forceFill(['paid_at' => now()])->save();
         }
 
-        $invoice = $this->syncInvoiceFromOrder($data, $userId, $order, $normalizedStatus, $amount, $currency);
+        $invoice = $this->syncInvoiceFromOrder($data, $userId, $accountId, $order, $normalizedStatus, $amount, $currency);
 
         $this->maybeNotifyPaymentFailed($order, $invoice, $normalizedStatus, $eventType, $data);
 
@@ -138,6 +140,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
     private function syncInvoiceFromOrder(
         array $data,
         int $userId,
+        ?int $accountId,
         Order $order,
         string $status,
         int $amount,
@@ -178,6 +181,7 @@ class PaddleOrderHandler implements PaddleWebhookHandler
             ],
             [
                 'user_id' => $userId,
+                'account_id' => $accountId,
                 'order_id' => $order->id,
                 'invoice_number' => $invoiceNumber,
                 'provider_invoice_id' => $invoiceId,

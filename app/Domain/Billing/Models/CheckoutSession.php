@@ -2,6 +2,7 @@
 
 namespace App\Domain\Billing\Models;
 
+use App\Domain\Identity\Models\Account;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,6 +13,7 @@ class CheckoutSession extends Model
     protected $fillable = [
         'uuid',
         'user_id',
+        'account_id',
         'provider',
         'provider_session_id',
         'plan_key',
@@ -31,6 +33,10 @@ class CheckoutSession extends Model
     protected static function booted(): void
     {
         static::creating(function (CheckoutSession $session) {
+            if (! $session->account_id && $session->user_id) {
+                $session->account_id = Account::resolvePersonalAccountIdForUserId((int) $session->user_id);
+            }
+
             if (! $session->uuid) {
                 $session->uuid = (string) Str::uuid();
             }
@@ -51,6 +57,11 @@ class CheckoutSession extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     /**

@@ -2,7 +2,9 @@
 
 namespace App\Domain\Billing\Models;
 
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Services\EntitlementService;
+use App\Domain\Identity\Models\Account;
 use App\Enums\BillingProvider;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
@@ -21,32 +23,46 @@ class Subscription extends Model
 
     protected static function booted(): void
     {
+        static::creating(function (Subscription $subscription): void {
+            if ($subscription->account_id || ! $subscription->user_id) {
+                return;
+            }
+
+            $subscription->account_id = Account::resolvePersonalAccountIdForUserId((int) $subscription->user_id);
+        });
+
         static::saved(function (Subscription $subscription) {
-            self::forgetUserEntitlements($subscription->user_id, $subscription->id);
+            self::forgetEntitlements($subscription->account_id, $subscription->user_id, $subscription->id);
         });
 
         static::deleted(function (Subscription $subscription) {
-            self::forgetUserEntitlements($subscription->user_id, $subscription->id);
+            self::forgetEntitlements($subscription->account_id, $subscription->user_id, $subscription->id);
         });
     }
 
-    private static function forgetUserEntitlements(?int $userId, ?int $subscriptionId = null): void
+    private static function forgetEntitlements(?int $accountId, ?int $userId, ?int $subscriptionId = null): void
     {
         try {
-            if ($userId) {
-                \Illuminate\Support\Facades\Cache::forget(EntitlementService::CACHE_KEY_PREFIX.$userId);
+            if ($accountId && $userId) {
+                \Illuminate\Support\Facades\Cache::forget(
+                    EntitlementService::cacheKeyForOwner(BillingOwner::forAccountId($accountId, $userId))
+                );
+            } elseif ($userId) {
+                \Illuminate\Support\Facades\Cache::forget(EntitlementService::cacheKeyForUserId($userId));
             }
         } catch (\Throwable $e) {
             report($e);
             \Illuminate\Support\Facades\Log::warning('clearUserCache failed', [
                 'subscription_id' => $subscriptionId,
                 'user_id' => $userId,
+                'account_id' => $accountId,
             ]);
         }
     }
 
     protected $fillable = [
         'user_id',
+        'account_id',
         'provider',
         'provider_id',
         'plan_key',
@@ -79,6 +95,11 @@ class Subscription extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(Account::class);
     }
 
     /**

@@ -2,8 +2,11 @@
 
 namespace Tests\Unit\Domain\Billing;
 
+use App\Domain\Billing\Data\BillingOwner;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\EntitlementService;
+use App\Domain\Identity\Models\Account;
+use App\Domain\Identity\Models\AccountMembership;
 use App\Enums\PriceType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,7 +31,9 @@ class EntitlementServiceTest extends TestCase
     public function it_caches_entitlements()
     {
         $user = User::factory()->create();
-        $cacheKey = "entitlements:user:{$user->id}";
+        $cacheKey = EntitlementService::cacheKeyForOwner(
+            BillingOwner::forAccountId($user->currentAccountId(), $user->id, $user)
+        );
         $dummyEntitlements = new \App\Domain\Billing\Data\Entitlements([]);
 
         Cache::shouldReceive('remember')
@@ -39,6 +44,29 @@ class EntitlementServiceTest extends TestCase
         $result = $this->service->forUser($user);
 
         $this->assertSame($dummyEntitlements, $result);
+    }
+
+    #[Test]
+    public function it_returns_entitlements_for_a_billing_owner(): void
+    {
+        $user = User::factory()->create();
+        Config::set('saas.billing.plans.basic', [
+            'name' => 'Basic',
+            'entitlements' => ['storage_limit_mb' => 512],
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'plan_key' => 'basic',
+            'status' => 'active',
+        ]);
+
+        Cache::shouldReceive('remember')
+            ->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
+
+        $entitlements = $this->service->forOwner(BillingOwner::forUser($user));
+
+        $this->assertSame(512, $entitlements->storage_limit_mb);
     }
 
     #[Test]
@@ -135,5 +163,37 @@ class EntitlementServiceTest extends TestCase
         $entitlements = $this->service->forUser($user);
 
         $this->assertSame(8192, $entitlements->storage_limit_mb);
+    }
+
+    #[Test]
+    public function it_does_not_leak_entitlements_from_non_current_accounts(): void
+    {
+        $user = User::factory()->create();
+        $secondaryAccount = Account::factory()->create();
+
+        AccountMembership::factory()->create([
+            'account_id' => $secondaryAccount->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        Config::set('saas.billing.plans.agency', [
+            'name' => 'Agency',
+            'entitlements' => ['storage_limit_mb' => 16384],
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'account_id' => $secondaryAccount->id,
+            'plan_key' => 'agency',
+            'status' => 'active',
+        ]);
+
+        Cache::shouldReceive('remember')
+            ->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
+
+        $entitlements = $this->service->forUser($user);
+
+        $this->assertNull($entitlements->storage_limit_mb);
     }
 }

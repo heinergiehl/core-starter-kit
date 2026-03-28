@@ -17,7 +17,8 @@ class SubscriptionData
         public ?Carbon $renewsAt = null,
         public ?Carbon $endsAt = null,
         public ?Carbon $canceledAt = null,
-        public array $metadata = []
+        public array $metadata = [],
+        public ?int $accountId = null,
     ) {}
 
     public static function fromProvider(
@@ -28,7 +29,8 @@ class SubscriptionData
         string $status,
         int $quantity,
         array $dates = [],
-        array $metadata = []
+        array $metadata = [],
+        ?int $accountId = null
     ): self {
         return new self(
             provider: $provider,
@@ -41,7 +43,8 @@ class SubscriptionData
             renewsAt: $dates['renews_at'] ?? null,
             endsAt: $dates['ends_at'] ?? null,
             canceledAt: $dates['canceled_at'] ?? null,
-            metadata: $metadata
+            metadata: $metadata,
+            accountId: $accountId,
         );
     }
 }

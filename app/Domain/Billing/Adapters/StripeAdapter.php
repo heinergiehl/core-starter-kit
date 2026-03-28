@@ -265,7 +265,7 @@ class StripeAdapter implements BillingRuntimeProvider
             ],
             'success_url' => $request->successUrl,
             'cancel_url' => $request->cancelUrl,
-            'client_reference_id' => (string) $request->user->id,
+            'client_reference_id' => (string) ($request->accountId() ?? $request->user->id),
             'metadata' => $metadata,
             // Customize the submit button based on payment type
             'submit_type' => $mode === PaymentMode::Subscription ? 'auto' : 'pay',
@@ -291,10 +291,16 @@ class StripeAdapter implements BillingRuntimeProvider
         }
 
         // Set customer or customer email
-        $customerId = BillingCustomer::query()
-            ->where('user_id', $request->user->id)
-            ->where('provider', $this->provider())
-            ->value('provider_id');
+        $customerLookup = BillingCustomer::query()
+            ->where('provider', $this->provider());
+
+        if ($request->accountId()) {
+            $customerLookup->where('account_id', $request->accountId());
+        } else {
+            $customerLookup->where('user_id', $request->user->id);
+        }
+
+        $customerId = $customerLookup->value('provider_id');
 
         if ($customerId) {
             $params['customer'] = $customerId;
@@ -383,6 +389,10 @@ class StripeAdapter implements BillingRuntimeProvider
 
             if (! array_key_exists('user_id', $metadata) || $metadata['user_id'] === null || $metadata['user_id'] === '') {
                 $metadata['user_id'] = (string) $subscription->user_id;
+            }
+
+            if (! array_key_exists('account_id', $metadata) || $metadata['account_id'] === null || $metadata['account_id'] === '') {
+                $metadata['account_id'] = (string) ($subscription->account_id ?? '');
             }
 
             data_set($payload, 'metadata', $metadata);

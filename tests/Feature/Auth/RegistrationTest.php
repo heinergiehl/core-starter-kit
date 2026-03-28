@@ -28,5 +28,12 @@ class RegistrationTest extends TestCase
 
         $this->assertAuthenticated();
         $response->assertRedirect(route('dashboard', absolute: false));
+        $this->assertDatabaseHas('accounts', [
+            'personal_for_user_id' => auth()->id(),
+        ]);
+        $this->assertDatabaseHas('account_memberships', [
+            'user_id' => auth()->id(),
+            'role' => 'owner',
+        ]);
     }
 }

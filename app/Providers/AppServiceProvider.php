@@ -2,11 +2,15 @@
 
 namespace App\Providers;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver as BillingOwnerResolverContract;
+use App\Domain\Billing\Services\BillingAccessService;
+use App\Domain\Billing\Services\CurrentBillingOwnerResolver;
 use App\Domain\Billing\Services\EntitlementService;
+use App\Domain\Identity\Contracts\CurrentAccountResolver as CurrentAccountResolverContract;
+use App\Domain\Identity\Services\SessionCurrentAccountResolver;
 use App\Domain\Settings\Services\AppSettingsService;
 use App\Domain\Settings\Services\BrandingService;
 use App\Domain\Settings\Services\MailSettingsService;
-use App\Enums\OrderStatus;
 use App\Support\Authorization\PermissionGuardrails;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Support\Facades\Event;
@@ -25,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(CurrentAccountResolverContract::class, SessionCurrentAccountResolver::class);
+        $this->app->bind(BillingOwnerResolverContract::class, CurrentBillingOwnerResolver::class);
+
         if ($this->app->environment('local')
             && class_exists(\Laravel\Telescope\TelescopeApplicationServiceProvider::class)
         ) {
@@ -63,27 +70,32 @@ class AppServiceProvider extends ServiceProvider
         // Entitlements only for authenticated app layout
         View::composer(['layouts.app', 'components.app-layout'], function ($view): void {
             $user = request()->user();
-            if ($user) {
-                $entitlements = app(EntitlementService::class)->forUser($user);
+            $billingOwner = app(BillingOwnerResolverContract::class)->forUser($user);
+
+            if ($billingOwner) {
+                $entitlements = app(EntitlementService::class)->forOwner($billingOwner);
                 $view->with('entitlements', $entitlements);
             }
         });
 
         View::composer(['partials.marketing-nav'], function ($view): void {
             $user = request()->user();
+            $billingOwnerResolver = app(BillingOwnerResolverContract::class);
+            $billingAccessService = app(BillingAccessService::class);
             $hasSubscription = false;
             $hasPurchase = false;
             $isAdmin = false;
 
             if ($user) {
-                $hasSubscription = $user->hasActiveSubscription();
                 $isAdmin = (bool) $user->is_admin;
+                $billingOwner = $billingOwnerResolver->forUser($user);
 
-                if (! $hasSubscription && ! $isAdmin) {
-                    $hasPurchase = \App\Domain\Billing\Models\Order::query()
-                        ->where('user_id', $user->id)
-                        ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
-                        ->exists();
+                if ($billingOwner) {
+                    $hasSubscription = $billingAccessService->hasActiveSubscriptionForOwner($billingOwner);
+
+                    if (! $hasSubscription && ! $isAdmin) {
+                        $hasPurchase = $billingAccessService->hasCompletedOrderForOwner($billingOwner);
+                    }
                 }
             }
 

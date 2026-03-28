@@ -2,12 +2,19 @@
 
 namespace App\Http\Middleware;
 
+use App\Domain\Billing\Contracts\BillingOwnerResolver;
+use App\Domain\Billing\Services\BillingAccessService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class EnsureSubscription
 {
+    public function __construct(
+        protected BillingAccessService $billingAccessService,
+        protected BillingOwnerResolver $billingOwnerResolver,
+    ) {}
+
     /**
      * Handle an incoming request.
      *
@@ -20,17 +27,9 @@ class EnsureSubscription
         if (! $user) {
             return redirect()->route('login');
         }
-        $hasSubscription = $user->hasActiveSubscription();
+        $billingOwner = $this->billingOwnerResolver->forUser($user);
 
-        $hasOrder = \App\Domain\Billing\Models\Order::query()
-            ->where('user_id', $user->id)
-            ->whereIn('status', [
-                \App\Enums\OrderStatus::Paid->value,
-                \App\Enums\OrderStatus::Completed->value,
-            ])
-            ->exists();
-
-        if (! $hasSubscription && ! $hasOrder) {
+        if (! $billingOwner || ! $this->billingAccessService->hasBillingAccessForOwner($billingOwner)) {
             return redirect()
                 ->route('pricing')
                 ->with('warning', __('Please complete your subscription to access the app.'));
