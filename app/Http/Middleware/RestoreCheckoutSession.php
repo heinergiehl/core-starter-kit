@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Services\CheckoutService;
+use App\Domain\Identity\Contracts\CurrentAccountResolver as CurrentAccountResolverContract;
 use App\Enums\CheckoutStatus;
 use Closure;
 use Illuminate\Http\Request;
@@ -20,7 +21,8 @@ use Symfony\Component\HttpFoundation\Response;
 class RestoreCheckoutSession
 {
     public function __construct(
-        private readonly CheckoutService $checkoutService
+        private readonly CheckoutService $checkoutService,
+        private readonly CurrentAccountResolverContract $currentAccountResolver,
     ) {}
 
     /**
@@ -91,6 +93,10 @@ class RestoreCheckoutSession
             // Log in the guest user and clear session fixation.
             Auth::login($user);
             $request->session()->regenerate();
+        }
+
+        if ($checkoutSession->account) {
+            $this->currentAccountResolver->setForUser($user, $checkoutSession->account);
         }
 
         $request->session()->put('checkout_session_uuid', $sessionUuid);

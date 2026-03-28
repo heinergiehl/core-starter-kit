@@ -22,7 +22,8 @@ Status legend:
 | --- | --- | --- |
 | Admin panel | Done | Filament Admin Panel with billing + catalog resources. |
 | SaaS metrics (MRR, churn, ARPU) | Done | Admin dashboard widget with MRR/ARR/churn/ARPU. |
-| Roadmap / feedback board | Done | Public roadmap page + admin management. |
+| Roadmap / feedback board | Done | Public roadmap stays platform-global; submissions and votes stay user-owned in the core. |
+| Shared workspaces / multi-tenancy | Planned | Not included in the core kit. Intended as a separate installable add-on. |
 
 ## 3) Marketing + Content
 | Feature | Status | Notes |
@@ -32,6 +33,7 @@ Status legend:
 | Localization (marketing + dashboard) | Done | Locale switcher, localized marketing routes, customer-facing translations, admin stays English. |
 | Multilingual blog workflow | Done | Blog posts support linked locale variants with per-locale slug, SEO fields, and publish state. |
 | Multilingual taxonomy landing pages | Not planned by default | Categories and tags currently stay shared filter facets instead of separate localized SEO pages. |
+| Site-wide announcements | Done | Announcements are platform-global content, not tenant-scoped in the core. |
 
 ## 4) Auth + Email
 | Feature | Status | Notes |
@@ -39,6 +41,7 @@ Status legend:
 | Email/password auth | Done | Laravel Breeze. |
 | Social login | Done | Google, GitHub, LinkedIn via Socialite. |
 | Email providers | Partial | Mail drivers supported; branded templates minimal. |
+| Repo access automation | Done | User-owned purchase automation; intentionally stays outside tenancy scope. |
 
 ## 5) Theming + Settings
 | Feature | Status | Notes |

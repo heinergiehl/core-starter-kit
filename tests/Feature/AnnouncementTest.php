@@ -2,7 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Domain\Billing\Models\Subscription;
 use App\Domain\Content\Models\Announcement;
+use App\Domain\Identity\Models\Account;
+use App\Domain\Identity\Models\AccountMembership;
+use App\Domain\Identity\Services\SessionCurrentAccountResolver;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -131,5 +135,38 @@ class AnnouncementTest extends TestCase
 
         $this->assertCount(1, $activeAnnouncements);
         $this->assertEquals($active->id, $activeAnnouncements->first()->id);
+    }
+
+    public function test_active_announcements_stay_platform_global_when_a_shared_account_is_current(): void
+    {
+        $user = User::factory()->create([
+            'onboarding_completed_at' => now(),
+        ]);
+        $sharedAccount = Account::factory()->create();
+
+        AccountMembership::factory()->create([
+            'account_id' => $sharedAccount->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'account_id' => $sharedAccount->id,
+            'status' => 'active',
+        ]);
+
+        Announcement::factory()->create([
+            'title' => 'Global shared-account announcement',
+            'message' => 'Visible regardless of current account.',
+            'is_active' => true,
+        ]);
+
+        $response = $this->withSession([
+            SessionCurrentAccountResolver::SESSION_KEY => $sharedAccount->id,
+        ])->actingAs($user)->get('/dashboard');
+
+        $response->assertOk();
+        $response->assertSee('Global shared-account announcement');
     }
 }

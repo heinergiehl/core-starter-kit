@@ -4,7 +4,10 @@ namespace Tests\Feature\RepoAccess;
 
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Identity\Models\Account;
+use App\Domain\Identity\Models\AccountMembership;
 use App\Domain\Identity\Models\SocialAccount;
+use App\Domain\Identity\Services\SessionCurrentAccountResolver;
 use App\Domain\RepoAccess\Jobs\GrantGitHubRepositoryAccessJob;
 use App\Enums\BillingProvider;
 use App\Enums\OAuthProvider;
@@ -93,6 +96,44 @@ class RepoAccessActionsTest extends TestCase
         $response->assertRedirect('/profile');
         $response->assertSessionHas('error');
         Queue::assertNothingPushed();
+    }
+
+    public function test_manual_repo_access_sync_uses_user_owned_purchase_even_when_a_different_account_is_current(): void
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+        $sharedAccount = Account::factory()->create();
+
+        AccountMembership::factory()->create([
+            'account_id' => $sharedAccount->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'provider' => OAuthProvider::GitHub,
+            'provider_id' => '54321',
+            'provider_email' => $user->email,
+            'provider_name' => 'octocat',
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        $response = $this->withSession([
+            SessionCurrentAccountResolver::SESSION_KEY => $sharedAccount->id,
+        ])->actingAs($user)->from('/profile')->post('/repo-access/sync');
+
+        $response->assertRedirect('/profile');
+        $response->assertSessionHas('success');
+
+        Queue::assertPushed(GrantGitHubRepositoryAccessJob::class, function ($job) use ($user) {
+            return $job->userId === $user->id && $job->source === 'manual_sync';
+        });
     }
 
     public function test_repo_access_status_endpoint_returns_realtime_state(): void

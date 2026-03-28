@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
+use App\Domain\Identity\Models\Account;
+use App\Domain\Identity\Models\AccountMembership;
+use App\Domain\Identity\Services\SessionCurrentAccountResolver;
 use App\Enums\FeatureCategory;
 use App\Enums\FeatureStatus;
 use App\Models\User;
@@ -103,5 +106,35 @@ class RoadmapTest extends TestCase
             'user_id' => $user->id,
         ]);
         $this->assertSame(0, $feature->fresh()->votes_count);
+    }
+
+    public function test_feature_requests_remain_user_owned_when_a_secondary_account_is_current(): void
+    {
+        $user = User::factory()->create();
+        $sharedAccount = Account::factory()->create();
+
+        AccountMembership::factory()->create([
+            'account_id' => $sharedAccount->id,
+            'user_id' => $user->id,
+            'role' => 'owner',
+        ]);
+
+        $payload = [
+            'title' => 'Secondary account roadmap request',
+            'description' => 'Still belongs to the user identity.',
+            'category' => FeatureCategory::Feature->value,
+            'idempotency_key' => (string) Str::uuid(),
+        ];
+
+        $response = $this->withSession([
+            SessionCurrentAccountResolver::SESSION_KEY => $sharedAccount->id,
+        ])->actingAs($user)->post(route('roadmap.store'), $payload);
+
+        $response->assertRedirect(route('roadmap'));
+
+        $this->assertDatabaseHas('feature_requests', [
+            'user_id' => $user->id,
+            'title' => 'Secondary account roadmap request',
+        ]);
     }
 }

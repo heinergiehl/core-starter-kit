@@ -3,12 +3,14 @@
 namespace App\Domain\RepoAccess\Services;
 
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Subscription;
 use App\Domain\Identity\Models\SocialAccount;
 use App\Domain\RepoAccess\Jobs\GrantGitHubRepositoryAccessJob;
 use App\Domain\RepoAccess\Models\RepoAccessGrant;
 use App\Enums\OAuthProvider;
 use App\Enums\OrderStatus;
 use App\Enums\RepoAccessGrantStatus;
+use App\Enums\SubscriptionStatus;
 use App\Models\User;
 
 class RepoAccessService
@@ -42,13 +44,25 @@ class RepoAccessService
 
     public function hasEligiblePurchase(User $user): bool
     {
-        if ($user->hasActiveSubscription()) {
+        if ($this->hasUserOwnedActiveSubscription($user)) {
             return true;
         }
 
         return Order::query()
             ->where('user_id', $user->id)
             ->whereIn('status', [OrderStatus::Paid->value, OrderStatus::Completed->value])
+            ->exists();
+    }
+
+    private function hasUserOwnedActiveSubscription(User $user): bool
+    {
+        return Subscription::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [
+                SubscriptionStatus::Active->value,
+                SubscriptionStatus::Trialing->value,
+                SubscriptionStatus::PastDue->value,
+            ])
             ->exists();
     }
 
