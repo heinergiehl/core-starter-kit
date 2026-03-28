@@ -40,6 +40,8 @@ This kit is designed to be a high-quality starting point for:
 - agencies building client SaaS products
 - developers who want an SSR-first stack with billing/auth/admin already integrated
 
+The core package is intentionally a standalone single-account starter. Shared workspace and multi-tenancy features are not bundled in the base product and should be treated as a separate add-on layer.
+
 This kit is not positioned as a fully managed enterprise platform out of the box. You still need to own production infrastructure, monitoring, and deployment operations.
 
 ---

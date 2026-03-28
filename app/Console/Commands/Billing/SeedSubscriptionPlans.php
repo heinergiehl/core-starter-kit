@@ -204,8 +204,8 @@ class SeedSubscriptionPlans extends Command
             ],
             $keys[2] => [
                 'name' => 'Agency',
-                'summary' => 'The ultimate toolkit for agencies and teams.',
-                'description' => 'One-time license with multi-tenancy, team management, and priority support.',
+                'summary' => 'Best fit for agencies and studios shipping multiple client SaaS products.',
+                'description' => 'One-time license for agencies that need unlimited commercial projects plus priority support.',
                 'is_featured' => false,
                 'features' => [
                     'Unlimited Commercial Projects',
@@ -221,10 +221,10 @@ class SeedSubscriptionPlans extends Command
                     'Email Provider Integrations (SES, Mailgun)',
                     'Discord Community & Email Support',
                     'Lifetime Updates Included',
-                    'Full multi-tenancy support',
-                    'Seat-based & flat-rate plans',
-                    'User invitations',
-                    'Team management, roles & permissions',
+                    'Priority Email Support',
+                    'Commercial Use Across Client Builds',
+                    'Best Fit for Agencies & Studios',
+                    'Unlimited Internal Team Usage',
                 ],
                 'entitlements' => [
                     'project_limit' => -1,

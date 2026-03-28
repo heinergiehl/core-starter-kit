@@ -68,8 +68,8 @@ class BillingProductSeeder extends Seeder
             ],
             'agency' => [
                 'name' => 'Agency',
-                'summary' => 'The ultimate toolkit for agencies and teams.',
-                'description' => 'Full multi-tenancy and team management capabilities.',
+                'summary' => 'Best fit for agencies and studios shipping multiple client SaaS products.',
+                'description' => 'One-time license for agencies that need unlimited commercial projects plus priority support.',
                 'type' => 'one_time',
                 'is_featured' => false,
                 'features' => [
@@ -86,10 +86,10 @@ class BillingProductSeeder extends Seeder
                     'Email Provider Integrations (SES, Mailgun)',
                     'Discord Community & Email Support',
                     'Lifetime Updates Included',
-                    'Full multi-tenancy support',
-                    'Seat-based & flat-rate plans',
-                    'User invitations',
-                    'Team management, roles & permissions',
+                    'Priority Email Support',
+                    'Commercial Use Across Client Builds',
+                    'Best Fit for Agencies & Studios',
+                    'Unlimited Internal Team Usage',
                 ],
                 'entitlements' => [
                     'project_limit' => -1,

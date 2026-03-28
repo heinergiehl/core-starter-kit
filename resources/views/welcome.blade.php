@@ -53,7 +53,7 @@
             ],
             [
                 'question' => __('Does the starter include multi-tenancy out of the box?'),
-                'answer' => __('Not by default today. The starter is optimized for a fast production launch now, and account or workspace patterns can be layered in later as your SaaS grows.'),
+                'answer' => __('No. The core starter ships as a single-account product today. Shared workspace or multi-tenancy behavior should be treated as a separate add-on layer.'),
             ],
             [
                 'question' => __('Is this starter SEO-ready for marketing pages?'),
