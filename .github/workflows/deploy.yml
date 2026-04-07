@@ -42,6 +42,7 @@ jobs:
     env:
       DEPLOY_ENV: ${{ github.event_name == 'workflow_run' && 'staging' || github.event.inputs.environment || 'production' }}
       DEPLOY_REF: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.event.inputs.ref || 'main' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || secrets.DEPLOY_PORT || '22' }}
       PADDLE_ENV_DEFAULT: ${{ ((github.event_name == 'workflow_run') || (github.event.inputs.environment == 'staging')) && 'sandbox' || 'production' }}
       VPS_PATH: ${{ vars.VPS_PATH || (((github.event_name == 'workflow_run') || (github.event.inputs.environment == 'staging')) && '/var/www/saas-kit-staging' || '/var/www/saas-kit') }}
       WEB_GROUP: ${{ vars.WEB_GROUP || 'www-data' }}
@@ -197,25 +198,46 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Configure SSH known_hosts
+      - name: Configure SSH client
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+
+          cat >> ~/.ssh/config <<EOF
+          Host deploy-target
+            HostName ${{ secrets.DEPLOY_HOST }}
+            User ${{ secrets.DEPLOY_USER }}
+            Port ${{ env.DEPLOY_PORT }}
+            BatchMode yes
+            ServerAliveInterval 15
+            ServerAliveCountMax 3
+            StrictHostKeyChecking accept-new
+            UserKnownHostsFile ~/.ssh/known_hosts
+          EOF
+
+          ssh-keygen -R "[${{ secrets.DEPLOY_HOST }}]:${{ env.DEPLOY_PORT }}" || true
+          ssh-keygen -R "${{ secrets.DEPLOY_HOST }}" || true
+          ssh-keyscan -p "${{ env.DEPLOY_PORT }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/config
           chmod 600 ~/.ssh/known_hosts
+
+      - name: Verify SSH connectivity
+        run: |
+          ssh deploy-target "printf 'SSH connection established\n'"
 
       - name: Prepare Remote Directory
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+          ssh deploy-target \
             "mkdir -p '${VPS_PATH}'"
 
       - name: Enable maintenance mode
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+          ssh deploy-target \
             "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan down --retry=60 || true; fi"
 
       - name: Sync
         run: |
-          rsync -avz --delete \
+          rsync -avz --delete -e "ssh" \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='.env' \
@@ -223,7 +245,7 @@ jobs:
             --exclude='storage/' \
             --exclude='tests/' \
             --exclude='phpunit.xml' \
-            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
+            ./ deploy-target:${{ env.VPS_PATH }}
 
       - name: Generate .env
         env:
@@ -316,11 +338,11 @@ jobs:
             BRAND_FONT_SANS="Instrument Sans"
             BRAND_FONT_DISPLAY="Instrument Serif"
         run: |
-          printf "%s" "$ENV_FILE" | ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} "cat > ${{ env.VPS_PATH }}/.env && chmod 600 ${{ env.VPS_PATH }}/.env"
+          printf "%s" "$ENV_FILE" | ssh deploy-target "cat > ${{ env.VPS_PATH }}/.env && chmod 600 ${{ env.VPS_PATH }}/.env"
 
       - name: Run Remote Scripts
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
+          ssh deploy-target << 'EOF'
             set -Eeuo pipefail
             cd ${{ env.VPS_PATH }}
 
@@ -388,7 +410,7 @@ jobs:
           INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
           INITIAL_ADMIN_NAME: ${{ vars.INITIAL_ADMIN_NAME || 'System Admin' }}
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
+          ssh deploy-target << EOF
             cd ${{ env.VPS_PATH }}
 
             INITIAL_ADMIN_EMAIL='${INITIAL_ADMIN_EMAIL}' \
@@ -400,5 +422,5 @@ jobs:
       - name: Restore application availability
         if: ${{ always() }}
         run: |
-          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+          ssh deploy-target \
             "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan up || true; fi"
