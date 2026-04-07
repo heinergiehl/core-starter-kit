@@ -206,14 +206,14 @@ jobs:
 
           ssh-keygen -R "[${{ secrets.DEPLOY_HOST }}]:${{ env.DEPLOY_PORT }}" || true
           ssh-keygen -R "${{ secrets.DEPLOY_HOST }}" || true
-          ssh-keyscan -p "${{ env.DEPLOY_PORT }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -t ed25519,rsa -p "${{ env.DEPLOY_PORT }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts || true
           chmod 600 ~/.ssh/known_hosts
 
       - name: Verify SSH connectivity
         run: |
           ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "printf 'SSH connection established\\n'"
@@ -222,7 +222,7 @@ jobs:
         run: |
           ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "mkdir -p '${VPS_PATH}'"
@@ -231,14 +231,14 @@ jobs:
         run: |
           ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan down --retry=60 || true; fi"
 
       - name: Sync
         run: |
-          rsync -avz --delete -e "ssh -p ${{ env.DEPLOY_PORT }} -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts" \
+          rsync -avz --delete -e "ssh -p ${{ env.DEPLOY_PORT }} -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts" \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='.env' \
@@ -260,7 +260,7 @@ jobs:
 
           remote_env="$(ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "if [ -f '${{ env.VPS_PATH }}/.env' ]; then cat '${{ env.VPS_PATH }}/.env'; fi" || true)"
@@ -284,7 +284,7 @@ jobs:
 
           cat <<EOF | ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "cat > ${{ env.VPS_PATH }}/.env && chmod 600 ${{ env.VPS_PATH }}/.env"
@@ -381,7 +381,7 @@ jobs:
         run: |
           ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             set -Eeuo pipefail
@@ -453,7 +453,7 @@ jobs:
         run: |
           ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd ${{ env.VPS_PATH }}
@@ -469,7 +469,7 @@ jobs:
         run: |
           ssh -p "${{ env.DEPLOY_PORT }}" \
             -o BatchMode=yes \
-            -o StrictHostKeyChecking=yes \
+            -o StrictHostKeyChecking=accept-new \
             -o UserKnownHostsFile=~/.ssh/known_hosts \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan up || true; fi"
