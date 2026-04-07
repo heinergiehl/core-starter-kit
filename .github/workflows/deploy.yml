@@ -212,12 +212,25 @@ jobs:
 
       - name: Verify SSH connectivity
         run: |
-          ssh -p "${{ env.DEPLOY_PORT }}" \
-            -o BatchMode=yes \
-            -o StrictHostKeyChecking=accept-new \
-            -o UserKnownHostsFile=~/.ssh/known_hosts \
-            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
-            "printf 'SSH connection established\\n'"
+          for attempt in 1 2 3 4 5; do
+            echo "SSH connectivity attempt ${attempt}/5..."
+            if ssh -p "${{ env.DEPLOY_PORT }}" \
+              -o BatchMode=yes \
+              -o ConnectTimeout=30 \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile=~/.ssh/known_hosts \
+              ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+              "printf 'SSH connection established\\n'"; then
+              echo "Connected successfully."
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::SSH connection failed after 5 attempts."
+              exit 1
+            fi
+            echo "Retrying in 15 seconds..."
+            sleep 15
+          done
 
       - name: Prepare Remote Directory
         run: |
