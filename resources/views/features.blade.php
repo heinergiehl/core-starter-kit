@@ -263,40 +263,48 @@
         ];
     @endphp
 
-    <section class="relative overflow-hidden py-12 sm:py-16">
-        <div class="absolute inset-0 -z-10 pointer-events-none bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.18),_transparent_52%)]"></div>
-        <div class="grid gap-10 lg:grid-cols-[1fr_0.95fr] lg:items-center">
+    <section class="relative overflow-hidden py-16 sm:py-24">
+        <div class="absolute inset-0 -z-10 pointer-events-none">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.18),_transparent_52%)]"></div>
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_bottom_right,_rgba(99,102,241,0.12),_transparent_50%)]"></div>
+        </div>
+        <div class="grid gap-12 lg:grid-cols-[1fr_0.95fr] lg:items-center">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ __('Feature Overview') }}</p>
-                <h1 class="mt-4 max-w-3xl font-display text-4xl font-bold leading-tight text-ink sm:text-6xl">
-                    {{ __('Production features that move users from first visit to paid account.') }}
+                <h1 class="mt-5 max-w-3xl font-display text-4xl font-bold leading-[1.1] text-ink sm:text-5xl lg:text-6xl">
+                    {{ __('Production features that move users from') }}
+                    <span class="text-gradient">{{ __('first visit') }}</span>
+                    {{ __('to paid account.') }}
                 </h1>
-                <p class="mt-6 max-w-2xl text-base leading-7 text-ink/70 sm:text-lg">
+                <p class="mt-6 max-w-2xl text-base leading-7 text-ink/60 sm:text-lg sm:leading-8">
                     {{ __('This feature map covers conversion, operations, and international launch readiness together, so your team can launch, monetize, and expand without assembling disconnected tools.') }}
                 </p>
-                <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div class="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
                     <a href="{{ route('pricing') }}" class="btn-primary text-center">{{ __('See Pricing') }}</a>
                     <a href="{{ route('docs.index') }}" class="btn-secondary text-center">{{ __('Read Docs') }}</a>
                 </div>
-                <div class="mt-7 flex flex-wrap gap-2">
-                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Authentication') }}</span>
-                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Checkout Flow') }}</span>
-                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Billing Providers') }}</span>
-                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Operations') }}</span>
-                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('SEO Ready') }}</span>
-                    <span class="rounded-full border border-ink/15 px-3 py-1 text-xs font-semibold text-ink/70">{{ __('Localization') }}</span>
+                <div class="mt-8 flex flex-wrap gap-2">
+                    <span class="rounded-full border border-ink/12 bg-white/60 px-3 py-1.5 text-xs font-semibold text-ink/60 backdrop-blur-sm dark:bg-white/5">{{ __('Authentication') }}</span>
+                    <span class="rounded-full border border-ink/12 bg-white/60 px-3 py-1.5 text-xs font-semibold text-ink/60 backdrop-blur-sm dark:bg-white/5">{{ __('Checkout Flow') }}</span>
+                    <span class="rounded-full border border-ink/12 bg-white/60 px-3 py-1.5 text-xs font-semibold text-ink/60 backdrop-blur-sm dark:bg-white/5">{{ __('Billing Providers') }}</span>
+                    <span class="rounded-full border border-ink/12 bg-white/60 px-3 py-1.5 text-xs font-semibold text-ink/60 backdrop-blur-sm dark:bg-white/5">{{ __('Operations') }}</span>
+                    <span class="rounded-full border border-ink/12 bg-white/60 px-3 py-1.5 text-xs font-semibold text-ink/60 backdrop-blur-sm dark:bg-white/5">{{ __('SEO Ready') }}</span>
+                    <span class="rounded-full border border-ink/12 bg-white/60 px-3 py-1.5 text-xs font-semibold text-ink/60 backdrop-blur-sm dark:bg-white/5">{{ __('Localization') }}</span>
                 </div>
             </div>
 
-            <figure class="glass-panel rounded-3xl p-3 shadow-xl shadow-ink/10">
-                <img
-                    src="{{ asset('marketing/checkout-form-stripe-focus.webp') }}"
-                    alt="{{ __('Checkout form with plan details and payment continuation') }}"
-                    class="h-full w-full rounded-2xl border border-ink/10 bg-white/95 p-2 object-contain"
-                    loading="eager"
-                    fetchpriority="high"
-                >
-            </figure>
+            <div class="relative">
+                <div class="absolute -inset-4 rounded-[36px] bg-gradient-to-br from-primary/15 via-transparent to-secondary/15 blur-2xl opacity-60 pointer-events-none"></div>
+                <figure class="relative glass-panel rounded-3xl p-3 shadow-xl shadow-ink/10">
+                    <img
+                        src="{{ asset('marketing/checkout-form-stripe-focus.webp') }}"
+                        alt="{{ __('Checkout form with plan details and payment continuation') }}"
+                        class="h-full w-full rounded-2xl border border-ink/10 bg-white/95 p-2 object-contain"
+                        loading="eager"
+                        fetchpriority="high"
+                    >
+                </figure>
+            </div>
         </div>
     </section>
 

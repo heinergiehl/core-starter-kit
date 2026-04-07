@@ -193,7 +193,7 @@
         @livewireStyles
         @vite(['resources/css/app.css', $templateCssEntry, 'resources/js/app.js'])
     </head>
-    <body class="bg-surface text-ink {{ $bodyClass }}">
+    <body class="bg-surface text-ink antialiased {{ $bodyClass }}">
         <div class="min-h-screen bg-hero-glow">
             {{-- Unified Marketing Navigation --}}
             @include('partials.marketing-nav')

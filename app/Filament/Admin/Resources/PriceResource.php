@@ -47,63 +47,94 @@ class PriceResource extends Resource
     {
         return $schema
             ->schema([
-                Section::make('Price')
+                Section::make('Price Identity')
+                    ->description('Core price details synced from your payment provider. Read-only fields are managed by the provider.')
                     ->schema([
-                        Select::make('product_id')
-                            ->relationship('product', 'name')
-                            ->required()
-                            ->searchable()
-                            ->preload(),
-                        TextInput::make('key')
-                            ->label('Key')
-                            ->readOnly()
-                            ->maxLength(64)
-                            ->helperText('Use keys like monthly, yearly, lifetime.'),
-                        TextInput::make('label')
-                            ->maxLength(100),
-                        TextInput::make('interval')
-                            ->label('Interval')
-                            ->maxLength(32)
-                            ->required()
-                            ->readOnly()
-                            ->dehydrateStateUsing(function ($state, Get $get, ?Price $record): string {
-                                $pricingMode = (string) ($get('pricing_mode') ?: self::resolvePricingMode(
-                                    $record?->interval,
-                                    (bool) $record?->allow_custom_amount,
-                                    (bool) $record?->is_metered,
-                                    $record?->product?->type
-                                ));
+                        Grid::make(2)->schema([
+                            Select::make('product_id')
+                                ->relationship('product', 'name')
+                                ->required()
+                                ->searchable()
+                                ->preload(),
+                            TextInput::make('key')
+                                ->label('Key')
+                                ->readOnly()
+                                ->maxLength(64)
+                                ->helperText('Unique slug, e.g. monthly, yearly, lifetime.'),
+                        ]),
+                        Grid::make(2)->schema([
+                            TextInput::make('label')
+                                ->maxLength(100)
+                                ->placeholder('e.g. Monthly, Yearly')
+                                ->helperText('Customer-facing label shown on the pricing card.'),
+                            Select::make('type')
+                                ->options(PriceType::class)
+                                ->disabled()
+                                ->helperText('Set automatically based on the pricing mode.'),
+                        ]),
+                    ])->columns(2),
 
-                                return self::isRecurringPricingMode($pricingMode)
-                                    ? ((string) ($state ?: $record?->interval ?: 'month'))
-                                    : 'once';
-                            })
-                            ->helperText('Recurring prices keep their billing cadence. Switch between flat and usage-based without changing the synced interval.'),
-                        TextInput::make('interval_count')
-                            ->label('Interval count')
-                            ->numeric()
-                            ->minValue(1)
-                            ->default(1)
-                            ->readOnly(),
-                        TextInput::make('currency')
-                            ->label('Currency')
-                            ->maxLength(3)
-                            ->required()
-                            ->readOnly()
-                            ->dehydrateStateUsing(fn (?string $state): ?string => $state ? strtoupper($state) : null),
-                        TextInput::make('amount')
-                            ->label('Amount')
-                            ->numeric()
-                            ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
-                            ->minValue(0)
-                            ->required()
-                            ->readOnly()
-                            ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                            ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                            ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
-                            ->helperText(fn (Get $get): string => $get('pricing_mode') === 'usage_based'
-                                ? 'This is the recurring base fee. Included usage and overage billing are configured below.'
-                                : 'Shown as a normal currency value. Stored in minor units automatically.'),
+                Section::make('Billing & Amount')
+                    ->description('Pricing configuration synced from the payment provider.')
+                    ->schema([
+                        Grid::make(3)->schema([
+                            TextInput::make('amount')
+                                ->label('Price')
+                                ->numeric()
+                                ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                ->minValue(0)
+                                ->required()
+                                ->readOnly()
+                                ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
+                                ->helperText(fn (Get $get): string => $get('pricing_mode') === 'usage_based'
+                                    ? 'Recurring base fee before usage charges.'
+                                    : 'Enter in normal currency units (e.g. 29.99).'),
+                            TextInput::make('currency')
+                                ->label('Currency')
+                                ->maxLength(3)
+                                ->required()
+                                ->readOnly()
+                                ->dehydrateStateUsing(fn (?string $state): ?string => $state ? strtoupper($state) : null)
+                                ->helperText('ISO 4217 code.'),
+                            TextInput::make('interval')
+                                ->label('Interval')
+                                ->maxLength(32)
+                                ->required()
+                                ->readOnly()
+                                ->dehydrateStateUsing(function ($state, Get $get, ?Price $record): string {
+                                    $pricingMode = (string) ($get('pricing_mode') ?: self::resolvePricingMode(
+                                        $record?->interval,
+                                        (bool) $record?->allow_custom_amount,
+                                        (bool) $record?->is_metered,
+                                        $record?->product?->type
+                                    ));
+
+                                    return self::isRecurringPricingMode($pricingMode)
+                                        ? ((string) ($state ?: $record?->interval ?: 'month'))
+                                        : 'once';
+                                })
+                                ->helperText('Billing cadence synced from provider.'),
+                        ]),
+                        Grid::make(2)->schema([
+                            TextInput::make('interval_count')
+                                ->label('Interval count')
+                                ->numeric()
+                                ->minValue(1)
+                                ->default(1)
+                                ->readOnly()
+                                ->helperText('e.g. 3 = quarterly, 6 = semi-annual.'),
+                            Toggle::make('is_active')
+                                ->label('Active')
+                                ->default(false)
+                                ->helperText('Controls local visibility only — does not affect the provider.'),
+                        ]),
+                    ])->columns(2),
+
+                Section::make('Pricing Mode')
+                    ->description('Switch between flat billing and usage-based or pay-what-you-want modes.')
+                    ->schema([
                         ToggleButtons::make('pricing_mode')
                             ->label('Pricing mode')
                             ->options(fn (?Price $record): array => self::pricingModeOptionsForInterval($record?->interval))
@@ -163,54 +194,49 @@ class PriceResource extends Resource
                                     $record?->product?->type
                                 ))
                             )),
-                        Select::make('type')
-                            ->options(PriceType::class)
-                            ->disabled(),
-                        Toggle::make('has_trial')
-                            ->label('Has trial')
-                            ->disabled()
-                            ->visible(fn (Get $get, ?Price $record): bool => filled($record) && self::isRecurringPricingMode(
-                                (string) ($get('pricing_mode') ?: self::resolvePricingMode(
-                                    $record?->interval,
-                                    (bool) $record?->allow_custom_amount,
-                                    (bool) $record?->is_metered,
-                                    $record?->product?->type
-                                ))
-                            )),
-                        TextInput::make('trial_interval')
-                            ->label('Trial interval')
-                            ->maxLength(32)
-                            ->readOnly()
-                            ->visible(fn (Get $get, ?Price $record): bool => filled($record) && self::isRecurringPricingMode(
-                                (string) ($get('pricing_mode') ?: self::resolvePricingMode(
-                                    $record?->interval,
-                                    (bool) $record?->allow_custom_amount,
-                                    (bool) $record?->is_metered,
-                                    $record?->product?->type
-                                ))
-                            )),
-                        TextInput::make('trial_interval_count')
-                            ->label('Trial interval count')
-                            ->numeric()
-                            ->minValue(1)
-                            ->readOnly()
-                            ->visible(fn (Get $get, ?Price $record): bool => filled($record) && self::isRecurringPricingMode(
-                                (string) ($get('pricing_mode') ?: self::resolvePricingMode(
-                                    $record?->interval,
-                                    (bool) $record?->allow_custom_amount,
-                                    (bool) $record?->is_metered,
-                                    $record?->product?->type
-                                ))
-                            )),
-                        Toggle::make('is_active')
-                            ->label('Active')
-                            ->default(false)
-                            ->helperText('Controls local visibility only.'),
+                        Grid::make(3)->schema([
+                            Toggle::make('has_trial')
+                                ->label('Has trial')
+                                ->disabled()
+                                ->visible(fn (Get $get, ?Price $record): bool => filled($record) && self::isRecurringPricingMode(
+                                    (string) ($get('pricing_mode') ?: self::resolvePricingMode(
+                                        $record?->interval,
+                                        (bool) $record?->allow_custom_amount,
+                                        (bool) $record?->is_metered,
+                                        $record?->product?->type
+                                    ))
+                                )),
+                            TextInput::make('trial_interval')
+                                ->label('Trial interval')
+                                ->maxLength(32)
+                                ->readOnly()
+                                ->visible(fn (Get $get, ?Price $record): bool => filled($record) && self::isRecurringPricingMode(
+                                    (string) ($get('pricing_mode') ?: self::resolvePricingMode(
+                                        $record?->interval,
+                                        (bool) $record?->allow_custom_amount,
+                                        (bool) $record?->is_metered,
+                                        $record?->product?->type
+                                    ))
+                                )),
+                            TextInput::make('trial_interval_count')
+                                ->label('Trial days')
+                                ->numeric()
+                                ->minValue(1)
+                                ->readOnly()
+                                ->visible(fn (Get $get, ?Price $record): bool => filled($record) && self::isRecurringPricingMode(
+                                    (string) ($get('pricing_mode') ?: self::resolvePricingMode(
+                                        $record?->interval,
+                                        (bool) $record?->allow_custom_amount,
+                                        (bool) $record?->is_metered,
+                                        $record?->product?->type
+                                    ))
+                                )),
+                        ]),
                         Hidden::make('is_metered')
                             ->dehydrateStateUsing(fn ($state, Get $get): bool => $get('pricing_mode') === 'usage_based'),
-                    ])
-                    ->columns(2),
+                    ]),
                 Section::make('Usage-based billing')
+                    ->description('Configure metering: define the usage unit, included allowance, and what happens when usage exceeds the limit.')
                     ->schema([
                         Placeholder::make('usage_billing_summary')
                             ->label('How this is shown')
@@ -305,6 +331,7 @@ class PriceResource extends Resource
                         ))
                     ) === 'usage_based'),
                 Section::make('Flexible Pricing')
+                    ->description('Configure the pay-what-you-want experience: set a suggested default, optional min/max bounds, and quick-pick amounts.')
                     ->schema([
                         TextInput::make('custom_amount_default')
                             ->label('Default amount')

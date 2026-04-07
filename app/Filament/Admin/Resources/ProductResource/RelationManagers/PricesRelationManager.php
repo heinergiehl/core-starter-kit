@@ -41,118 +41,149 @@ class PricesRelationManager extends RelationManager
     {
         return $schema
             ->schema([
-                TextInput::make('key')
-                    ->required()
-                    ->maxLength(255)
-                    ->unique(ignoreRecord: true),
-                TextInput::make('label')
-                    ->required()
-                    ->maxLength(255),
-                ToggleButtons::make('pricing_mode')
-                    ->label('Pricing mode')
-                    ->options(fn (): array => self::pricingModeOptionsForProductType($this->getOwnerRecord()?->type))
-                    ->default(fn (): string => self::defaultPricingModeForProductType($this->getOwnerRecord()?->type))
-                    ->inline()
-                    ->live()
-                    ->dehydrated(false)
-                    ->afterStateHydrated(function (?string $state, Get $get, Set $set): void {
-                        $resolvedPricingMode = self::resolvePricingMode(
-                            $get('interval'),
-                            (bool) $get('allow_custom_amount'),
-                            (bool) $get('is_metered'),
-                            $this->getOwnerRecord()?->type
-                        );
+                Section::make('Price Identity')
+                    ->compact()
+                    ->schema([
+                        Grid::make(2)->schema([
+                            TextInput::make('key')
+                                ->required()
+                                ->maxLength(255)
+                                ->unique(ignoreRecord: true)
+                                ->placeholder('e.g. monthly, yearly, lifetime')
+                                ->helperText('Unique slug used in API calls and configuration.'),
+                            TextInput::make('label')
+                                ->required()
+                                ->maxLength(255)
+                                ->placeholder('e.g. Monthly, Yearly, Lifetime')
+                                ->helperText('Customer-facing label shown on the pricing card.'),
+                        ]),
+                        ToggleButtons::make('pricing_mode')
+                            ->label('Pricing mode')
+                            ->options(fn (): array => self::pricingModeOptionsForProductType($this->getOwnerRecord()?->type))
+                            ->default(fn (): string => self::defaultPricingModeForProductType($this->getOwnerRecord()?->type))
+                            ->inline()
+                            ->live()
+                            ->dehydrated(false)
+                            ->afterStateHydrated(function (?string $state, Get $get, Set $set): void {
+                                $resolvedPricingMode = self::resolvePricingMode(
+                                    $get('interval'),
+                                    (bool) $get('allow_custom_amount'),
+                                    (bool) $get('is_metered'),
+                                    $this->getOwnerRecord()?->type
+                                );
 
-                        if ($state !== $resolvedPricingMode) {
-                            $set('pricing_mode', $resolvedPricingMode);
-                        }
+                                if ($state !== $resolvedPricingMode) {
+                                    $set('pricing_mode', $resolvedPricingMode);
+                                }
 
-                        self::applyPricingMode($get, $set, $resolvedPricingMode);
-                    })
-                    ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
-                        self::applyPricingMode($get, $set, $state);
-                    }),
-                Placeholder::make('pricing_mode_summary')
-                    ->label('What this mode does')
-                    ->content(fn (Get $get): string => self::pricingModeSummary(
-                        (string) ($get('pricing_mode') ?: self::defaultPricingModeForProductType($this->getOwnerRecord()?->type))
-                    )),
-                Select::make('interval')
-                    ->options([
-                        'month' => 'Month',
-                        'year' => 'Year',
-                        'week' => 'Week',
-                        'day' => 'Day',
-                        'once' => 'One-time',
-                    ])
-                    ->required()
-                    ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
-                    ->live()
-                    ->dehydrateStateUsing(fn ($state, Get $get): string => self::isRecurringPricingMode($get('pricing_mode'))
-                        ? (in_array($state, ['month', 'year', 'week', 'day'], true) ? (string) $state : 'month')
-                        : 'once')
-                    ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
-                        $priceState = self::collectPriceState($get);
-                        $priceState['interval'] = $state;
+                                self::applyPricingMode($get, $set, $resolvedPricingMode);
+                            })
+                            ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
+                                self::applyPricingMode($get, $set, $state);
+                            }),
+                        Placeholder::make('pricing_mode_summary')
+                            ->label('What this mode does')
+                            ->content(fn (Get $get): string => self::pricingModeSummary(
+                                (string) ($get('pricing_mode') ?: self::defaultPricingModeForProductType($this->getOwnerRecord()?->type))
+                            )),
+                    ]),
 
-                        self::fillPriceState($set, self::synchronizePriceStateForMode(
-                            $priceState,
-                            self::isRecurringPricingMode($get('pricing_mode')) ? (string) $get('pricing_mode') : 'subscription'
-                        ));
-                    }),
-                TextInput::make('interval_count')
-                    ->numeric()
-                    ->default(1)
-                    ->required()
+                Section::make('Pricing')
+                    ->compact()
+                    ->schema([
+                        Select::make('interval')
+                            ->label('Billing Frequency')
+                            ->options([
+                                'month' => 'Monthly',
+                                'year' => 'Yearly',
+                                'week' => 'Weekly',
+                                'day' => 'Daily',
+                                'once' => 'One-time',
+                            ])
+                            ->required()
+                            ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
+                            ->live()
+                            ->dehydrateStateUsing(fn ($state, Get $get): string => self::isRecurringPricingMode($get('pricing_mode'))
+                                ? (in_array($state, ['month', 'year', 'week', 'day'], true) ? (string) $state : 'month')
+                                : 'once')
+                            ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
+                                $priceState = self::collectPriceState($get);
+                                $priceState['interval'] = $state;
+
+                                self::fillPriceState($set, self::synchronizePriceStateForMode(
+                                    $priceState,
+                                    self::isRecurringPricingMode($get('pricing_mode')) ? (string) $get('pricing_mode') : 'subscription'
+                                ));
+                            }),
+                        Grid::make(3)->schema([
+                            TextInput::make('amount')
+                                ->label('Price')
+                                ->numeric()
+                                ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                ->required()
+                                ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
+                                ->placeholder('e.g. 29.99')
+                                ->helperText(fn (Get $get): string => $get('pricing_mode') === 'usage_based'
+                                    ? 'Recurring base fee charged each billing cycle.'
+                                    : ($get('allow_custom_amount')
+                                        ? 'Default checkout amount. Customers can override this.'
+                                        : 'Enter in normal currency units (e.g. 29.99).')),
+                            TextInput::make('currency')
+                                ->default('USD')
+                                ->required()
+                                ->maxLength(3)
+                                ->placeholder('USD')
+                                ->helperText('ISO 4217 code.'),
+                            TextInput::make('interval_count')
+                                ->label('Interval Count')
+                                ->numeric()
+                                ->default(1)
+                                ->required()
+                                ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
+                                ->dehydrateStateUsing(fn ($state, Get $get): int => self::isRecurringPricingMode($get('pricing_mode'))
+                                    ? max(1, (int) $state)
+                                    : 1)
+                                ->helperText('Set to 3 for quarterly, 6 for semi-annual.'),
+                        ]),
+                    ]),
+
+                Section::make('Free Trial')
+                    ->compact()
+                    ->collapsed()
                     ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
-                    ->dehydrateStateUsing(fn ($state, Get $get): int => self::isRecurringPricingMode($get('pricing_mode'))
-                        ? max(1, (int) $state)
-                        : 1),
-                TextInput::make('amount')
-                    ->label('Amount')
-                    ->numeric()
-                    ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
-                    ->required()
-                    ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                    ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                    ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
-                    ->helperText(fn (Get $get): string => $get('pricing_mode') === 'usage_based'
-                        ? 'This is the recurring base fee. Included usage and overage billing are configured below.'
-                        : ($get('allow_custom_amount')
-                            ? 'Shown as a normal currency value. Stored in minor units automatically and used as the default checkout amount.'
-                            : 'Shown as a normal currency value. Stored in minor units automatically.')),
-                TextInput::make('currency')
-                    ->default('USD')
-                    ->required()
-                    ->maxLength(3),
-                Toggle::make('has_trial')
-                    ->label('Has Trial')
-                    ->live()
-                    ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
-                    ->dehydrateStateUsing(fn ($state, Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))
-                        ? (bool) $state
-                        : false),
-                Grid::make(2)->schema([
-                    TextInput::make('trial_interval_count')
-                        ->label('Trial Duration')
-                        ->numeric()
-                        ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial'))
-                        ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial')
-                            ? (int) $state
-                            : null),
-                    Select::make('trial_interval')
-                        ->options([
-                            'day' => 'Day',
-                            'month' => 'Month',
-                        ])
-                        ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial'))
-                        ->dehydrateStateUsing(fn ($state, Get $get): ?string => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial')
-                            ? (string) $state
-                            : null),
-                ]),
+                    ->description('Allow new subscribers to try this plan for free before being charged.')
+                    ->schema([
+                        Toggle::make('has_trial')
+                            ->label('Offer Free Trial')
+                            ->live()
+                            ->dehydrateStateUsing(fn ($state, Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))
+                                ? (bool) $state
+                                : false),
+                        Grid::make(2)->schema([
+                            TextInput::make('trial_interval_count')
+                                ->label('Trial Duration')
+                                ->numeric()
+                                ->visible(fn (Get $get): bool => (bool) $get('has_trial'))
+                                ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial')
+                                    ? (int) $state
+                                    : null),
+                            Select::make('trial_interval')
+                                ->options([
+                                    'day' => 'Day',
+                                    'month' => 'Month',
+                                ])
+                                ->visible(fn (Get $get): bool => (bool) $get('has_trial'))
+                                ->dehydrateStateUsing(fn ($state, Get $get): ?string => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial')
+                                    ? (string) $state
+                                    : null),
+                        ]),
+                    ]),
                 Section::make('Usage-based billing')
                     ->compact()
                     ->collapsed()
+                    ->description('Configure metering: define the usage unit, included allowance, and what happens when usage exceeds the limit.')
                     ->visible(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
                     ->schema([
                         Placeholder::make('usage_billing_summary')
@@ -236,6 +267,7 @@ class PricesRelationManager extends RelationManager
                 Section::make('Flexible Pricing')
                     ->compact()
                     ->collapsed()
+                    ->description('Configure the pay-what-you-want experience: set a suggested default, optional min/max bounds, and quick-pick amounts.')
                     ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw')
                     ->schema([
                         Grid::make(3)->schema([

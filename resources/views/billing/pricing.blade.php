@@ -10,6 +10,7 @@
         $canChangeSubscription = (bool) ($canChangeSubscription ?? false);
         $catalog = strtolower((string) ($catalog ?? config('saas.billing.catalog', 'config')));
         $priceStates = is_array($priceStates ?? null) ? $priceStates : [];
+        $priceDisplayData = is_array($priceDisplayData ?? null) ? $priceDisplayData : [];
         $currentSubscriptionContext = is_array($currentSubscriptionContext ?? null) ? $currentSubscriptionContext : [];
         $currentSubscriptionAmountMinor = isset($currentSubscriptionContext['amount_minor']) ? (int) $currentSubscriptionContext['amount_minor'] : null;
         $currentSubscriptionCurrency = (string) ($currentSubscriptionContext['currency'] ?? '');
@@ -32,24 +33,38 @@
         $toggleIntervals = $recurringIntervals->isNotEmpty() ? $recurringIntervals : $allIntervals;
         $defaultInterval = (string) ($toggleIntervals->first() ?? 'month');
         $showAlwaysVisibleOneTimeNote = $recurringIntervals->isNotEmpty() && $allIntervals->contains('once');
-        $intervalLabels = [
-            'month' => __('Monthly'),
-            'year' => __('Yearly'),
-            'week' => __('Weekly'),
-            'day' => __('Daily'),
-            'once' => __('Lifetime'),
-        ];
+        $intervalLabels = app(\App\Domain\Billing\Services\PricePresentationService::class)->intervalLabels();
+
+        $hasSubscription = collect($plans)->contains(fn ($p) => !$p->isOneTime());
+        $hasOneTime = collect($plans)->contains(fn ($p) => $p->isOneTime());
+        $hasUsageBased = collect($plans)->flatMap(fn ($p) => $p->prices)->contains(fn ($pr) => $pr->isMetered ?? false);
+        $hasPwyw = collect($plans)->flatMap(fn ($p) => $p->prices)->contains(fn ($pr) => $pr->allowCustomAmount ?? false);
+
+        $pricingSubtitle = match (true) {
+            $hasSubscription && $hasOneTime && $hasUsageBased => __('Subscriptions, one-time purchases, and usage-based plans — pick what fits your workflow.'),
+            $hasSubscription && $hasOneTime && $hasPwyw => __('Subscriptions, one-time purchases, and flexible pay-what-you-want options available.'),
+            $hasSubscription && $hasOneTime => __('Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.'),
+            $hasSubscription && $hasUsageBased => __('Flat-rate subscriptions and usage-based plans — only pay for what you use.'),
+            $hasOneTime && $hasPwyw => __('One-time purchases and flexible pricing — choose the amount that works for you.'),
+            $hasOneTime => __('One-time purchases with instant access. No recurring fees.'),
+            $hasSubscription => __('Flexible subscription plans that grow with your needs.'),
+            default => __('Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.'),
+        };
     @endphp
 
     <div x-data="{ interval: '{{ $defaultInterval }}' }">
-    <section class="py-12">
-        <div class="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+    <section class="py-16 sm:py-20">
+        <div class="flex flex-col gap-8 sm:flex-row sm:items-end sm:justify-between">
             <div class="max-w-2xl">
-                <div class="inline-flex items-center gap-2 px-3 py-1 mb-4 text-xs font-semibold border rounded-full border-primary/20 bg-primary/10 text-primary backdrop-blur-md">
+                <div class="inline-flex items-center gap-2 px-3 py-1.5 mb-5 text-xs font-semibold border rounded-full border-primary/20 bg-primary/10 text-primary backdrop-blur-md">
+                    <span class="relative flex h-1.5 w-1.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span class="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary"></span>
+                    </span>
                     {{ __('Pricing Plans') }}
                 </div>
-                <h1 class="text-4xl font-bold font-display text-ink sm:text-5xl">{{ __('Plans that scale with your product') }}</h1>
-                <p class="mt-4 text-lg text-ink/60">{{ __('Subscription and one-time options with unified billing data, SEO-ready content workflows, and international launch support.') }}</p>
+                <h1 class="text-4xl font-bold font-display text-ink sm:text-5xl lg:text-6xl leading-[1.1]">{{ __('Plans that scale with your product') }}</h1>
+                <p class="mt-5 text-base text-ink/55 sm:text-lg leading-relaxed">{{ $pricingSubtitle }}</p>
             </div>
             
             @if ($toggleIntervals->count() > 1)
@@ -170,160 +185,107 @@
                     @else
                         @foreach ($plan->prices as $price)
                             @php
-                                $amount = $price->amount ?? null;
-                                $currency = strtoupper((string) ($price->currency ?? 'USD'));
-                                $label = $price->label ?: ucfirst($price->key);
+                                $pd = data_get($priceDisplayData, "{$plan->key}.{$price->key}", []);
+                                $label = $pd['label'] ?? ($price->label ?: ucfirst($price->key));
+                                $currency = $pd['currency'] ?? strtoupper($price->currency ?: 'USD');
                                 $interval = $price->interval ?? null;
-                                $intervalLabelText = $interval
-                                    ? ($intervalLabels[$interval]
-                                        ?? \Illuminate\Support\Str::of($interval)->replace('_', ' ')->title()->value())
-                                    : __('Interval');
-                                $intervalBillingUnit = $interval
-                                    ? \Illuminate\Support\Str::of($interval)->replace('_', ' ')->lower()->value()
-                                    : __('interval');
-                                $supportsCustomAmount = (bool) ($price->allowCustomAmount ?? false);
-                                $isMetered = (bool) ($price->isMetered ?? false);
-                                $usageLimitBehavior = $price->usageLimitBehavior instanceof \App\Enums\UsageLimitBehavior
-                                    ? $price->usageLimitBehavior
-                                    : \App\Enums\UsageLimitBehavior::tryFrom((string) ($price->usageLimitBehavior ?? '')) ?? \App\Enums\UsageLimitBehavior::BillOverage;
-                                $usageBlocksAtLimit = $usageLimitBehavior->blocksUsage();
-                                $usageMeterName = (string) ($price->usageMeterName ?? __('Usage'));
-                                $usageUnitLabel = (string) ($price->usageUnitLabel ?? 'unit');
-                                $usageIncludedUnits = is_numeric($price->usageIncludedUnits ?? null)
-                                    ? (int) $price->usageIncludedUnits
-                                    : null;
-                                $usagePackageSize = max((int) ($price->usagePackageSize ?? 1), 1);
-                                $usageOverageAmountMinor = is_numeric($price->usageOverageAmount ?? null)
-                                    ? (int) $price->usageOverageAmount
-                                    : null;
-                                $defaultCustomAmountMinor = is_numeric($price->customAmountDefault ?? null)
-                                    ? (int) $price->customAmountDefault
-                                    : null;
-                                $minimumCustomAmountMinor = is_numeric($price->customAmountMinimum ?? null)
-                                    ? (int) $price->customAmountMinimum
-                                    : null;
-                                $maximumCustomAmountMinor = is_numeric($price->customAmountMaximum ?? null)
-                                    ? (int) $price->customAmountMaximum
-                                    : null;
+                                $intervalLabelText = $pd['intervalLabel'] ?? ($intervalLabels[$interval] ?? $interval);
+                                $intervalBillingUnit = $pd['intervalBillingUnit'] ?? $interval;
+                                $supportsCustomAmount = $pd['supportsCustomAmount'] ?? false;
+                                $isMetered = $pd['isMetered'] ?? false;
+                                $usageBlocksAtLimit = $pd['usageBlocksAtLimit'] ?? false;
+                                $usageIncludedUnits = $pd['usageIncludedUnits'] ?? null;
+                                $usageUnitLabel = $pd['usageUnitLabel'] ?? 'unit';
+                                $amountDisplay = $pd['amountDisplay'] ?? __('Custom');
+                                $amountMeta = $pd['amountMeta'] ?? null;
+                                $amountCaption = $pd['amountCaption'] ?? null;
+                                $amountSummaryText = $pd['amountSummaryText'] ?? null;
+                                $targetAmountMinor = $pd['targetAmountMinor'] ?? null;
+                                $pricingModeBadge = $pd['pricingModeBadge'] ?? null;
+                                $pricingModeBadgeColor = $pd['pricingModeBadgeColor'] ?? '';
+                                $hasTrial = $pd['hasTrial'] ?? false;
+                                $trialLabel = $pd['trialLabel'] ?? null;
+                                $suggestedAmounts = $pd['suggestedAmounts'] ?? [];
+                                $customAmountMinFormatted = $pd['customAmountMinimumFormatted'] ?? null;
+                                $customAmountMaxFormatted = $pd['customAmountMaximumFormatted'] ?? null;
+                                $customAmountDefaultFormatted = $pd['customAmountDefaultFormatted'] ?? null;
                                 $priceVisibilityExpression = $interval === 'once'
                                     ? 'true'
                                     : 'interval === '.\Illuminate\Support\Js::from($interval);
-                                $amountDisplay = $supportsCustomAmount ? __('Pay what you want') : __('Custom');
-                                $amountMeta = null;
-                                $amountCaption = null;
-                                $amountSummaryText = null;
-                                $targetAmountMinor = null;
-                                if ($supportsCustomAmount) {
-                                    $targetAmountMinor = $defaultCustomAmountMinor
-                                        ?? (is_numeric($amount) ? (int) round((float) $amount) : null);
-                                    $startingAmountMinor = $minimumCustomAmountMinor ?? $targetAmountMinor;
-                                    $startingAmountLabel = !is_null($startingAmountMinor)
-                                        ? \App\Support\Money\CurrencyAmount::formatMinor($startingAmountMinor, $currency, true, true)
-                                        : null;
-                                    $amountSummaryText = $startingAmountLabel
-                                        ? __('Pay what you want from :amount', ['amount' => $startingAmountLabel])
-                                        : __('Pay what you want');
-
-                                    if ($minimumCustomAmountMinor !== null && $maximumCustomAmountMinor !== null) {
-                                        $amountMeta = __('Choose any amount between :min and :max.', [
-                                            'min' => \App\Support\Money\CurrencyAmount::formatMinor($minimumCustomAmountMinor, $currency, true, true),
-                                            'max' => \App\Support\Money\CurrencyAmount::formatMinor($maximumCustomAmountMinor, $currency, true, true),
-                                        ]);
-                                    } elseif ($startingAmountLabel) {
-                                        $amountMeta = __('Starts at :amount.', ['amount' => $startingAmountLabel]);
-                                    }
-                                } elseif ($isMetered && is_numeric($amount)) {
-                                    $amountValue = (float) $amount;
-                                    $amountDisplay = !empty($price->amountIsMinor)
-                                        ? \App\Support\Money\CurrencyAmount::formatMinor($amountValue, $currency)
-                                        : \App\Support\Money\CurrencyAmount::formatMajor($amountValue, $currency);
-                                    $targetAmountMinor = !empty($price->amountIsMinor)
-                                        ? (int) round($amountValue)
-                                        : \App\Support\Money\CurrencyAmount::parseMajorToMinor($amountValue, $currency);
-
-                                    $baseAmountLabel = !empty($price->amountIsMinor)
-                                        ? \App\Support\Money\CurrencyAmount::formatMinor($amountValue, $currency, true, true)
-                                        : \App\Support\Money\CurrencyAmount::formatMajor($amountValue, $currency, true, true);
-                                    $overageLabel = $usageOverageAmountMinor !== null
-                                        ? \App\Support\Money\CurrencyAmount::formatMinor($usageOverageAmountMinor, $currency, true, true)
-                                        : null;
-                                    $packageUnitsLabel = number_format($usagePackageSize).' '.\Illuminate\Support\Str::plural($usageUnitLabel, $usagePackageSize);
-                                    $amountCaption = __('Base / :interval', [
-                                        'interval' => $intervalBillingUnit,
-                                    ]);
-                                    $amountSummaryText = $usageBlocksAtLimit
-                                        ? __(':amount / :interval included usage', [
-                                            'amount' => $baseAmountLabel,
-                                            'interval' => $intervalBillingUnit,
-                                        ])
-                                        : __(':amount / :interval + usage', [
-                                            'amount' => $baseAmountLabel,
-                                            'interval' => $intervalBillingUnit,
-                                        ]);
-
-                                    if ($usageBlocksAtLimit && $usageIncludedUnits !== null && $usageIncludedUnits > 0) {
-                                        $amountMeta = __('Includes :included :units per :interval. New usage is blocked until renewal or upgrade.', [
-                                            'included' => number_format($usageIncludedUnits),
-                                            'units' => \Illuminate\Support\Str::plural($usageUnitLabel, $usageIncludedUnits),
-                                            'interval' => $intervalBillingUnit,
-                                        ]);
-                                    } elseif ($usageIncludedUnits !== null && $usageIncludedUnits > 0 && $overageLabel) {
-                                        $amountMeta = __('Includes :included :units per :interval, then :overage per :package.', [
-                                            'included' => number_format($usageIncludedUnits),
-                                            'units' => \Illuminate\Support\Str::plural($usageUnitLabel, $usageIncludedUnits),
-                                            'interval' => $intervalBillingUnit,
-                                            'overage' => $overageLabel,
-                                            'package' => $packageUnitsLabel,
-                                        ]);
-                                    } elseif ($overageLabel) {
-                                        $amountMeta = __('No included usage. :meter is billed at :overage per :package.', [
-                                            'meter' => $usageMeterName,
-                                            'overage' => $overageLabel,
-                                            'package' => $packageUnitsLabel,
-                                        ]);
-                                    }
-                                } elseif (is_numeric($amount)) {
-                                    $amountValue = (float) $amount;
-                                    $amountDisplay = !empty($price->amountIsMinor)
-                                        ? \App\Support\Money\CurrencyAmount::formatMinor($amountValue, $currency)
-                                        : \App\Support\Money\CurrencyAmount::formatMajor($amountValue, $currency);
-                                    $targetAmountMinor = !empty($price->amountIsMinor)
-                                        ? (int) round($amountValue)
-                                        : \App\Support\Money\CurrencyAmount::parseMajorToMinor($amountValue, $currency);
-                                    $amountSummaryText = trim($currency.' '.$amountDisplay);
-                                }
                             @endphp
                             
                             <!-- Price Option -->
-                            <div x-show="{!! $priceVisibilityExpression !!}" class="p-5 transition card-inner hover:border-primary/30">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div>
-                                        <p class="text-sm font-semibold text-ink">{{ $label }}</p>
-                                        @if ($interval)
-                                            <p class="text-xs capitalize text-ink/50">{{ $interval }}</p>
+                            <div x-show="{!! $priceVisibilityExpression !!}" class="relative overflow-hidden transition border rounded-2xl border-ink/10 bg-surface/30 hover:border-primary/30 hover:shadow-md">
+                                @if ($pricingModeBadge || $hasTrial)
+                                    <div class="flex flex-wrap items-center gap-2 px-5 pt-4 pb-0">
+                                        @if ($pricingModeBadge)
+                                            <span class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider
+                                                {{ $pricingModeBadgeColor === 'violet' ? 'border-violet-500/20 bg-violet-500/10 text-violet-500' : '' }}
+                                                {{ $pricingModeBadgeColor === 'emerald' ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500' : '' }}
+                                            ">
+                                                @if ($isMetered)
+                                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+                                                @elseif ($supportsCustomAmount)
+                                                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                                                @endif
+                                                {{ $pricingModeBadge }}
+                                            </span>
                                         @endif
                                         @if ($isMetered)
-                                            <div class="mt-2 flex flex-wrap gap-2">
-                                                <p class="inline-flex rounded-full border border-primary/15 bg-primary/5 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                                                    {{ __('Usage-based') }}
-                                                </p>
-                                                <p class="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide {{ $usageBlocksAtLimit ? 'border-amber-500/20 bg-amber-500/10 text-amber-600' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600' }}">
-                                                    {{ $usageBlocksAtLimit ? __('Blocks at limit') : __('Bills overages') }}
-                                                </p>
-                                            </div>
+                                            <span class="inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider {{ $usageBlocksAtLimit ? 'border-amber-500/20 bg-amber-500/10 text-amber-600' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-600' }}">
+                                                {{ $usageBlocksAtLimit ? __('Blocks at limit') : __('Bills overages') }}
+                                            </span>
                                         @endif
-                                        @if ($amountMeta)
-                                            <p class="mt-2 max-w-xs text-xs leading-5 text-ink/55">{{ $amountMeta }}</p>
+                                        @if ($hasTrial && $trialLabel)
+                                            <span class="inline-flex items-center gap-1 rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-sky-600">
+                                                <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                {{ $trialLabel }}
+                                            </span>
                                         @endif
                                     </div>
-                                    <div class="text-right">
-                                        <span class="{{ $supportsCustomAmount ? 'text-xl sm:text-2xl' : 'text-3xl' }} font-bold font-display text-ink">{{ $amountDisplay }}</span>
-                                        @if ($amountCaption)
-                                            <p class="text-xs font-medium text-ink/40">{{ $amountCaption }}</p>
-                                        @elseif (!$supportsCustomAmount)
-                                            <span class="text-xs font-medium text-ink/40">{{ $currency }}</span>
-                                        @endif
+                                @endif
+
+                                <div class="p-5">
+                                    <div class="flex items-end justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <p class="text-sm font-semibold text-ink">{{ $label }}</p>
+                                            @if ($interval && !$pricingModeBadge)
+                                                <p class="mt-0.5 text-xs capitalize text-ink/50">{{ $intervalLabelText }}</p>
+                                            @endif
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <span class="{{ $supportsCustomAmount ? 'text-lg sm:text-xl' : 'text-2xl sm:text-3xl' }} font-bold font-display text-ink leading-none">{{ $amountDisplay }}</span>
+                                            @if ($amountCaption)
+                                                <p class="mt-1 text-xs font-medium text-ink/40">{{ $amountCaption }}</p>
+                                            @elseif (!$supportsCustomAmount && !$isMetered)
+                                                <p class="mt-1 text-xs font-medium text-ink/40">{{ $currency }}</p>
+                                            @endif
+                                        </div>
                                     </div>
+
+                                    @if ($amountMeta)
+                                        <p class="mt-3 text-xs leading-5 text-ink/55 border-t border-ink/5 pt-3">{{ $amountMeta }}</p>
+                                    @endif
+
+                                    @if ($supportsCustomAmount && count($suggestedAmounts) > 0)
+                                        <div class="mt-3 flex flex-wrap items-center gap-1.5 border-t border-ink/5 pt-3">
+                                            <span class="text-[10px] font-semibold uppercase tracking-wider text-ink/40 mr-1">{{ __('Quick pick') }}</span>
+                                            @foreach ($suggestedAmounts as $suggested)
+                                                <span class="inline-flex rounded-full border border-violet-500/20 bg-violet-500/5 px-2.5 py-0.5 text-xs font-semibold text-violet-600">
+                                                    {{ $suggested['formatted'] }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                    @if ($isMetered && $usageIncludedUnits !== null && $usageIncludedUnits > 0)
+                                        <div class="mt-3 flex items-center gap-2 border-t border-ink/5 pt-3">
+                                            <svg class="w-4 h-4 text-emerald-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            <span class="text-xs font-medium text-ink/60">
+                                                {{ __(':count :units included', ['count' => number_format($usageIncludedUnits), 'units' => \Illuminate\Support\Str::plural($usageUnitLabel, $usageIncludedUnits)]) }}
+                                            </span>
+                                        </div>
+                                    @endif
                                 </div>
 
                                 @if (!$isComingSoon)
@@ -348,11 +310,6 @@
                                                 $planDirection = 'downgrade';
                                             }
                                         }
-
-                                        $intervalLabel = $interval
-                                            ? ($intervalLabels[$interval]
-                                                ?? \Illuminate\Support\Str::of($interval)->replace('_', ' ')->title()->value())
-                                            : __('Interval');
                                     @endphp
 
                                     @if ($canChangeSubscription && !$isOneTime)
@@ -379,7 +336,7 @@
                                                         formId: @js($formId),
                                                         planName: @js((string) ($plan->name ?: ucfirst($plan->key))),
                                                         priceLabel: @js($label),
-                                                        intervalLabel: @js($intervalLabel),
+                                                        intervalLabel: @js($intervalLabelText),
                                                         amountText: @js($amountSummaryText ?? trim($amountDisplay.' '.$currency)),
                                                         currentPlanName: @js($currentSubscriptionPlanName),
                                                         currentAmountText: @js(!is_null($currentSubscriptionAmountMinor) && $currentSubscriptionCurrency !== '' ? \App\Support\Money\CurrencyAmount::formatMinor($currentSubscriptionAmountMinor, $currentSubscriptionCurrency, true, true) : ''),
@@ -487,14 +444,17 @@
 
     <!-- FAQ / Custom Section -->
     <section class="py-20">
-        <div class="glass-panel rounded-[40px] px-8 py-10 md:p-12 relative overflow-hidden">
-            <div class="absolute inset-0 opacity-50 bg-gradient-to-r from-secondary/10 to-transparent"></div>
+        <div class="glass-panel rounded-[40px] px-8 py-12 md:p-14 relative overflow-hidden">
+            <div class="absolute inset-0 opacity-40 bg-gradient-to-r from-secondary/10 via-transparent to-primary/10"></div>
+            <div class="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-primary/10 blur-3xl"></div>
+            <div class="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-secondary/10 blur-3xl"></div>
             <div class="relative z-10 flex flex-col items-center justify-between gap-8 md:flex-row">
                 <div>
-                    <h2 class="text-3xl font-bold font-display text-ink">{{ __('Need something custom?') }}</h2>
-                    <p class="max-w-xl mt-3 text-lg text-ink/60">{{ __('For higher-volume customers, we offer custom pricing, SLA guarantees, and dedicated support channels.') }}</p>
+                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary mb-3">{{ __('Enterprise') }}</p>
+                    <h2 class="text-3xl font-bold font-display text-ink sm:text-4xl">{{ __('Need something custom?') }}</h2>
+                    <p class="max-w-xl mt-4 text-base text-ink/55 leading-relaxed">{{ __('For higher-volume customers, we offer custom pricing, SLA guarantees, and dedicated support channels.') }}</p>
                 </div>
-                <div class="flex flex-wrap gap-4">
+                <div class="flex flex-wrap gap-4 shrink-0">
                     @if (config('saas.support.email'))
                         <a href="mailto:{{ config('saas.support.email') }}" class="btn-primary">{{ __('Contact Sales') }}</a>
                     @endif

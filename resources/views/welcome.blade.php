@@ -280,61 +280,70 @@
         $visibleFaqItems = $faqItems;
     @endphp
 
-    <section class="relative overflow-hidden py-12 sm:py-16">
-        <div class="absolute inset-0 -z-10 pointer-events-none bg-[radial-gradient(circle_at_top_right,_rgba(99,102,241,0.20),_transparent_50%)]"></div>
-        <div class="grid items-center gap-10 lg:grid-cols-[1.05fr_0.95fr]">
+    <section class="relative overflow-hidden py-16 sm:py-24">
+        <div class="absolute inset-0 -z-10 pointer-events-none">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(99,102,241,0.20),_transparent_50%)]"></div>
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,_rgba(168,85,247,0.10),_transparent_50%)]"></div>
+        </div>
+        <div class="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
             <div class="animate-fade-up">
-                <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                    <span class="inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                <div class="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary backdrop-blur-sm">
+                    <span class="relative flex h-2 w-2">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span class="relative inline-flex h-2 w-2 rounded-full bg-primary"></span>
+                    </span>
                     {{ __('Production-ready foundation for ambitious SaaS teams') }}
                 </div>
 
-                <h1 class="mt-6 max-w-3xl font-display text-4xl font-bold leading-tight text-ink sm:text-6xl">
-                    {{ __('Launch your SaaS with code quality that feels senior from day one.') }}
+                <h1 class="mt-8 max-w-3xl font-display text-4xl font-bold leading-[1.1] text-ink sm:text-5xl lg:text-6xl">
+                    {{ __('Launch your SaaS with') }}
+                    <span class="text-gradient">{{ __('code quality') }}</span>
+                    {{ __('that feels senior from day one.') }}
                 </h1>
 
-                <p class="mt-6 max-w-2xl text-base leading-7 text-ink/70 sm:text-lg">
+                <p class="mt-6 max-w-2xl text-base leading-7 text-ink/65 sm:text-lg sm:leading-8">
                     {{ __('Authentication, billing, admin operations, SEO-ready content, and locale-aware marketing pages are already integrated so your team can focus on product strategy, not plumbing.') }}
                 </p>
 
-                <p class="mt-4 max-w-2xl text-sm font-medium text-ink/60">
+                <p class="mt-4 max-w-2xl text-sm font-medium text-ink/50">
                     {{ __('Tech stack: Laravel 12, PHP 8.2, Livewire 3, Filament 4, Tailwind CSS, Alpine.js, Vite, Stripe, Paddle.') }}
                 </p>
 
-                <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div class="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
                     @auth
                         <a href="{{ url('/app') }}" class="btn-primary text-center">{{ __('Open App') }}</a>
                     @else
                         <a href="{{ route('pricing') }}" class="btn-primary text-center">{{ __('See Pricing') }}</a>
                         <a href="{{ route('features') }}" class="btn-secondary text-center">{{ __('Explore all features') }}</a>
                     @endauth
-                    <a href="{{ route('solutions.index') }}" class="text-sm font-semibold whitespace-nowrap text-ink/70 transition hover:text-ink">
+                    <a href="{{ route('solutions.index') }}" class="text-sm font-semibold whitespace-nowrap text-ink/60 transition hover:text-primary">
                         {{ __('Open Solution Hub') }} ->
                     </a>
                 </div>
 
-                <div class="mt-10 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
-                        <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Architecture') }}</p>
-                        <p class="mt-2 text-sm font-semibold text-ink">{{ __('Domain-driven + modular') }}</p>
+                <div class="mt-12 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div class="group rounded-2xl border border-ink/8 bg-white/60 p-4 backdrop-blur-md transition-all duration-200 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 dark:bg-white/5 dark:hover:bg-white/8">
+                        <p class="text-[10px] uppercase tracking-[0.2em] text-ink/40 font-semibold">{{ __('Architecture') }}</p>
+                        <p class="mt-2 text-sm font-semibold text-ink group-hover:text-primary transition-colors">{{ __('Domain-driven + modular') }}</p>
                     </div>
-                    <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
-                        <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Billing') }}</p>
-                        <p class="mt-2 text-sm font-semibold text-ink">{{ __('Stripe and Paddle ready') }}</p>
+                    <div class="group rounded-2xl border border-ink/8 bg-white/60 p-4 backdrop-blur-md transition-all duration-200 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 dark:bg-white/5 dark:hover:bg-white/8">
+                        <p class="text-[10px] uppercase tracking-[0.2em] text-ink/40 font-semibold">{{ __('Billing') }}</p>
+                        <p class="mt-2 text-sm font-semibold text-ink group-hover:text-primary transition-colors">{{ __('Stripe and Paddle ready') }}</p>
                     </div>
-                    <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
-                        <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Admin UX') }}</p>
-                        <p class="mt-2 text-sm font-semibold text-ink">{{ __('Filament-powered control center') }}</p>
+                    <div class="group rounded-2xl border border-ink/8 bg-white/60 p-4 backdrop-blur-md transition-all duration-200 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 dark:bg-white/5 dark:hover:bg-white/8">
+                        <p class="text-[10px] uppercase tracking-[0.2em] text-ink/40 font-semibold">{{ __('Admin UX') }}</p>
+                        <p class="mt-2 text-sm font-semibold text-ink group-hover:text-primary transition-colors">{{ __('Filament-powered control center') }}</p>
                     </div>
-                    <div class="rounded-2xl border border-ink/10 bg-white/70 p-4 backdrop-blur-md dark:bg-white/5">
-                        <p class="text-xs uppercase tracking-[0.18em] text-ink/45">{{ __('Localization') }}</p>
-                        <p class="mt-2 text-sm font-semibold text-ink">{{ __('International launch ready') }}</p>
+                    <div class="group rounded-2xl border border-ink/8 bg-white/60 p-4 backdrop-blur-md transition-all duration-200 hover:border-primary/20 hover:shadow-lg hover:shadow-primary/5 dark:bg-white/5 dark:hover:bg-white/8">
+                        <p class="text-[10px] uppercase tracking-[0.2em] text-ink/40 font-semibold">{{ __('Localization') }}</p>
+                        <p class="mt-2 text-sm font-semibold text-ink group-hover:text-primary transition-colors">{{ __('International launch ready') }}</p>
                     </div>
                 </div>
             </div>
 
-            <div class="relative">
-                <figure class="glass-panel rounded-3xl p-3 shadow-2xl shadow-ink/10">
+            <div class="relative animate-fade-up" style="animation-delay: 0.2s">
+                <div class="absolute -inset-4 rounded-[40px] bg-gradient-to-br from-primary/20 via-transparent to-secondary/20 blur-3xl opacity-50 pointer-events-none"></div>
+                <figure class="relative glass-panel rounded-3xl p-3 shadow-2xl shadow-ink/10">
                     <img
                         src="{{ asset('marketing/localhost_8000_admin.webp') }}"
                         alt="{{ __('Main admin dashboard with business metrics and management shortcuts') }}"
@@ -344,7 +353,7 @@
                     >
                 </figure>
 
-                <figure class="absolute -bottom-6 -left-6 hidden w-56 overflow-hidden rounded-2xl border border-ink/10 bg-white/80 p-2 shadow-xl shadow-ink/10 backdrop-blur-md lg:block dark:bg-white/10">
+                <figure class="absolute -bottom-6 -left-6 hidden w-56 overflow-hidden rounded-2xl border border-ink/10 bg-white/80 p-2 shadow-xl shadow-ink/10 backdrop-blur-md lg:block dark:bg-white/10 animate-float">
                     <img
                         src="{{ asset('marketing/localhost_8000_admin_stats.webp') }}"
                         alt="{{ __('Admin analytics view showing SaaS performance statistics') }}"
@@ -648,45 +657,50 @@
         </div>
     </section>
 
-    <section id="faq" class="py-12 sm:py-16">
-        <div class="glass-panel rounded-[32px] p-8 sm:p-10">
+    <section id="faq" class="py-16 sm:py-20">
+        <div class="glass-panel rounded-[32px] p-8 sm:p-12">
             <div class="text-center">
-                <p class="text-xs font-semibold uppercase tracking-[0.18em] text-primary">{{ __('FAQ') }}</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ __('FAQ') }}</p>
                 <h2 class="mt-3 font-display text-3xl font-bold text-ink sm:text-4xl">{{ __('Questions teams ask before shipping') }}</h2>
-                <p class="mx-auto mt-3 max-w-3xl text-sm leading-7 text-ink/70 sm:text-base">
+                <p class="mx-auto mt-4 max-w-3xl text-sm leading-7 text-ink/60 sm:text-base">
                     {{ __('These are the practical concerns founders and product teams usually validate before committing to a starter foundation.') }}
                 </p>
             </div>
 
-            <div class="mx-auto mt-8 grid max-w-4xl gap-3">
+            <div class="mx-auto mt-10 grid max-w-4xl gap-3">
                 @foreach ($visibleFaqItems as $faq)
-                    <details class="group rounded-2xl border border-ink/10 bg-white/80 p-5 transition hover:border-primary/35 dark:bg-white/5">
+                    <details class="group rounded-2xl border border-ink/8 bg-white/85 p-5 transition-all duration-200 hover:border-primary/25 hover:shadow-md hover:shadow-primary/5 dark:bg-white/5">
                         <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-ink">
-                            <span>{{ $faq['question'] }}</span>
-                            <span class="text-lg leading-none text-ink/45 transition group-open:rotate-45">+</span>
+                            <span class="text-sm sm:text-base">{{ $faq['question'] }}</span>
+                            <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-ink/10 text-sm text-ink/40 transition-all group-open:rotate-45 group-open:border-primary/30 group-open:bg-primary/10 group-open:text-primary">+</span>
                         </summary>
-                        <p class="mt-3 text-sm leading-7 text-ink/70">{{ $faq['answer'] }}</p>
+                        <p class="mt-4 text-sm leading-7 text-ink/65">{{ $faq['answer'] }}</p>
                     </details>
                 @endforeach
             </div>
         </div>
     </section>
 
-    <section class="pb-12 pt-8 sm:pb-16">
-        <div class="relative overflow-hidden rounded-[34px] border border-ink/10 bg-gradient-to-br from-primary/10 via-white/70 to-secondary/10 p-8 text-center shadow-xl shadow-primary/10 sm:p-12 dark:from-primary/20 dark:via-white/5 dark:to-secondary/20">
-            <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl">
-                {{ __('Build your SaaS on a foundation that already feels production-grade') }}
-            </h2>
-            <p class="mx-auto mt-4 max-w-2xl text-ink/70">
-                {{ __('Ship product value faster by starting with an integrated stack for authentication, monetization, and operations.') }}
-            </p>
-            <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-                @auth
-                    <a href="{{ url('/app') }}" class="btn-primary">{{ __('Open App') }}</a>
-                @else
-                    <a href="{{ route('pricing') }}" class="btn-primary">{{ __('See Pricing') }}</a>
-                    <a href="{{ route('features') }}" class="btn-secondary">{{ __('Explore all features') }}</a>
-                @endauth
+    <section class="pb-16 pt-8 sm:pb-20">
+        <div class="relative overflow-hidden rounded-[34px] border border-ink/10 bg-gradient-to-br from-primary/10 via-white/70 to-secondary/10 p-10 text-center shadow-2xl shadow-primary/10 sm:p-16 dark:from-primary/20 dark:via-white/5 dark:to-secondary/20">
+            <div class="pointer-events-none absolute -right-20 -top-20 h-60 w-60 rounded-full bg-primary/15 blur-3xl"></div>
+            <div class="pointer-events-none absolute -bottom-20 -left-20 h-60 w-60 rounded-full bg-secondary/15 blur-3xl"></div>
+            <div class="relative">
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary mb-4">{{ __('Start Building Today') }}</p>
+                <h2 class="font-display text-3xl font-bold text-ink sm:text-4xl lg:text-5xl">
+                    {{ __('Build your SaaS on a foundation that already feels production-grade') }}
+                </h2>
+                <p class="mx-auto mt-5 max-w-2xl text-base text-ink/65 sm:text-lg">
+                    {{ __('Ship product value faster by starting with an integrated stack for authentication, monetization, and operations.') }}
+                </p>
+                <div class="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
+                    @auth
+                        <a href="{{ url('/app') }}" class="btn-primary">{{ __('Open App') }}</a>
+                    @else
+                        <a href="{{ route('pricing') }}" class="btn-primary">{{ __('See Pricing') }}</a>
+                        <a href="{{ route('features') }}" class="btn-secondary">{{ __('Explore all features') }}</a>
+                    @endauth
+                </div>
             </div>
         </div>
     </section>

@@ -22,7 +22,7 @@ class RedirectIfSubscribed
     {
         $user = $request->user();
 
-        if ($user && $this->checkoutService->hasAnyPurchase($user)) {
+        if ($user && $this->checkoutService->hasActiveSubscription($user)) {
             return redirect()->route('billing.index')
                 ->with('info', __('You already have an active plan. Use billing to manage your account.'));
         }

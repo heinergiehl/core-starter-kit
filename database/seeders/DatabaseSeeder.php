@@ -8,7 +8,6 @@ use App\Domain\Content\Models\BlogTag;
 use App\Enums\SystemRoleName;
 use App\Models\User;
 use App\Support\Authorization\PermissionGuardrails;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
@@ -18,8 +17,6 @@ use Spatie\Permission\PermissionRegistrar;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
@@ -126,6 +123,8 @@ MD,
                     'published_at' => now(),
                     'author_id' => $admin->id,
                     'category_id' => $category->id,
+                    'translation_group_uuid' => (string) Str::uuid(),
+                    'locale' => config('saas.locales.default', config('app.locale', 'en')),
                 ],
             );
 

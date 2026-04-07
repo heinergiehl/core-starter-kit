@@ -57,25 +57,34 @@ class ProductResource extends Resource
         return $schema
             ->schema([
                 Section::make('Product Details')
+                    ->description('Define the product identity and billing type. Names and descriptions are synced to payment providers.')
                     ->schema([
-                        TextInput::make('key')
-                            ->label('Key')
-                            ->required()
-                            ->maxLength(64)
-                            ->unique(ignoreRecord: true),
-                        TextInput::make('name')
-                            ->required()
-                            ->maxLength(255)
-                            ->helperText('This name will be synced to payment providers'),
+                        Grid::make(2)->schema([
+                            TextInput::make('key')
+                                ->label('Key')
+                                ->required()
+                                ->maxLength(64)
+                                ->unique(ignoreRecord: true)
+                                ->placeholder('e.g. pro, starter, agency')
+                                ->helperText('Unique slug used in URLs, API calls, and configuration files.'),
+                            TextInput::make('name')
+                                ->required()
+                                ->maxLength(255)
+                                ->placeholder('e.g. Pro Plan')
+                                ->helperText('Customer-facing name — synced to Stripe / Paddle.'),
+                        ]),
                         TextInput::make('summary')
                             ->maxLength(255)
-                            ->helperText('Local marketing summary (not synced)'),
+                            ->placeholder('A short tagline for the pricing card')
+                            ->helperText('Shown on the pricing page below the plan name. Not synced to providers.')
+                            ->columnSpanFull(),
                         Textarea::make('description')
-                            ->rows(4)
+                            ->rows(3)
                             ->columnSpanFull()
-                            ->helperText('This description will be synced to payment providers'),
+                            ->placeholder('Detailed product description for payment provider dashboards')
+                            ->helperText('Synced to payment providers. Visible in Stripe/Paddle product dashboards.'),
                         ToggleButtons::make('type')
-                            ->label('Billing family')
+                            ->label('Billing type')
                             ->options(self::billingFamilyOptions())
                             ->required()
                             ->default('subscription')
@@ -119,24 +128,24 @@ class ProductResource extends Resource
 
                                 $set('prices', $updatedPrices);
                             }),
-                        Placeholder::make('usage_based_status')
-                            ->label('Usage-based pricing')
-                            ->content('Usage-based pricing is available on recurring offers. Configure included units, overage rate, and the meter details inside each recurring price.')
-                            ->columnSpanFull(),
-                        Toggle::make('is_featured')
-                            ->label('Featured'),
-                        Toggle::make('is_active')
-                            ->label('Active')
-                            ->default(false),
+                        Grid::make(2)->schema([
+                            Toggle::make('is_featured')
+                                ->label('Featured')
+                                ->helperText('Highlighted on the pricing page with a "Most Popular" badge.'),
+                            Toggle::make('is_active')
+                                ->label('Active')
+                                ->default(false)
+                                ->helperText('Inactive products are hidden from the pricing page.'),
+                        ]),
                     ])->columns(2),
 
                 Section::make('Pricing')
-                    ->description('Manage prices for this product. They will be synced automatically.')
+                    ->description('Add one or more price tiers. Each price can have its own billing frequency, currency, and pricing model. Prices are synced to your payment provider automatically.')
                     ->schema([
                         Repeater::make('prices')
                             ->hiddenOn('edit')
                             ->relationship()
-                            ->helperText('Choose a clear pricing mode for each offer. Usage-based prices stay recurring and add included usage plus overage tracking.')
+                            ->helperText('Add at least one price. You can add more tiers (e.g. Monthly + Yearly) by clicking "Add to prices".')
                             ->mutateRelationshipDataBeforeCreateUsing(fn (array $data): array => self::normalizePriceDataForPersistence(
                                 $data,
                                 $data['pricing_mode'] ?? null
@@ -204,39 +213,47 @@ class ProductResource extends Resource
                                                 self::isRecurringPricingMode($get('pricing_mode')) ? (string) $get('pricing_mode') : 'subscription'
                                             ));
                                         }),
+                                ])->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))),
 
+                                Grid::make(3)->schema([
                                     TextInput::make('amount')
-                                        ->label('Amount')
+                                        ->label('Price')
                                         ->numeric()
                                         ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
                                         ->required()
                                         ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
                                         ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
                                         ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
+                                        ->placeholder('e.g. 29.99')
                                         ->helperText(fn (Get $get): string => $get('pricing_mode') === 'usage_based'
-                                            ? 'This is the recurring base fee. Included usage and overage billing are configured below.'
+                                            ? 'Recurring base fee charged each billing cycle, before any usage charges.'
                                             : ($get('allow_custom_amount')
-                                                ? 'Shown as a normal currency value. Stored in minor units automatically and used as the default checkout amount.'
-                                                : 'Shown as a normal currency value. Stored in minor units automatically.')),
+                                                ? 'Default checkout amount. Customers can override this.'
+                                                : 'Enter in normal currency units (e.g. 29.99). Stored as cents automatically.')),
 
                                     TextInput::make('label')
                                         ->required()
-                                        ->placeholder('e.g. Monthly'),
-                                ])->columns(3),
+                                        ->placeholder('e.g. Monthly, Yearly, Lifetime')
+                                        ->helperText('Customer-facing label shown on the pricing card.'),
 
-                                Section::make('Advanced Config')
+                                    TextInput::make('currency')
+                                        ->default('USD')
+                                        ->maxLength(3)
+                                        ->required()
+                                        ->placeholder('USD')
+                                        ->helperText('ISO 4217 code, e.g. USD, EUR, GBP.'),
+                                ]),
+
+                                Section::make('Billing Details')
                                     ->collapsed()
                                     ->compact()
+                                    ->description('Optional overrides for API key, billing intervals, and free trials.')
                                     ->schema([
-                                        Grid::make(3)->schema([
-                                            TextInput::make('currency')
-                                                ->default('USD')
-                                                ->maxLength(3)
-                                                ->required(),
+                                        Grid::make(2)->schema([
                                             TextInput::make('key')
                                                 ->unique(ignoreRecord: true)
                                                 ->placeholder('Leave empty to auto-generate')
-                                                ->helperText('Unique ID for API usage'),
+                                                ->helperText('Unique slug for API usage and config references. Auto-generated from the label if left empty.'),
                                             TextInput::make('interval_count')
                                                 ->numeric()
                                                 ->default(1)
@@ -245,7 +262,7 @@ class ProductResource extends Resource
                                                 ->dehydrateStateUsing(fn ($state, Get $get): int => self::isRecurringPricingMode($get('pricing_mode'))
                                                     ? max(1, (int) $state)
                                                     : 1)
-                                                ->helperText('e.g. "3" for Quarterly'),
+                                                ->helperText('Number of intervals per billing cycle. Set to 3 for quarterly, 6 for semi-annual.'),
                                         ]),
 
                                         Grid::make(2)->schema([
@@ -255,7 +272,8 @@ class ProductResource extends Resource
                                                 ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
                                                 ->dehydrateStateUsing(fn ($state, Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))
                                                     ? (bool) $state
-                                                    : false),
+                                                    : false)
+                                                ->helperText('Allow new subscribers to try this plan for free before being charged.'),
                                             TextInput::make('trial_interval_count')
                                                 ->label('Trial Days')
                                                 ->numeric()
@@ -267,6 +285,7 @@ class ProductResource extends Resource
                                         ]),
 
                                         Section::make('Usage-based billing')
+                                            ->description('Configure metering: define the usage unit, included allowance, and what happens when usage exceeds the limit.')
                                             ->collapsed()
                                             ->compact()
                                             ->visible(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
@@ -351,6 +370,7 @@ class ProductResource extends Resource
                                             ]),
 
                                         Section::make('Flexible Pricing')
+                                            ->description('Configure the pay-what-you-want experience: set a suggested default, optional min/max bounds, and quick-pick amounts.')
                                             ->collapsed()
                                             ->compact()
                                             ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw')

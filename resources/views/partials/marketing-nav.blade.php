@@ -5,25 +5,30 @@
     $hasPurchase = $marketingNavHasPurchase ?? false;
     $isAdmin = $marketingNavIsAdmin ?? ($user?->is_admin ?? false);
 @endphp
-<header class="flex items-center justify-between max-w-6xl px-6 py-6 mx-auto">
+<header
+    class="sticky top-0 z-40 flex items-center justify-between max-w-6xl px-6 py-4 mx-auto transition-all duration-300"
+    x-data="{ scrolled: false }"
+    x-init="window.addEventListener('scroll', () => { scrolled = window.scrollY > 20 })"
+    :class="scrolled ? 'py-3' : 'py-4'"
+>
     <a href="{{ route('home') }}" class="group flex items-center gap-2.5">
-        <x-application-logo class="block object-contain object-center w-12 h-12 transition-transform duration-200 shrink-0 group-hover:scale-110" />
-        <span class="text-xl font-bold leading-none tracking-tight font-display text-ink sm:translate-y-px">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
+        <x-application-logo class="block object-contain object-center w-10 h-10 transition-transform duration-200 shrink-0 group-hover:scale-110" />
+        <span class="text-lg font-bold leading-none tracking-tight font-display text-ink sm:text-xl sm:translate-y-px">{{ $appBrandName ?? config('app.name', 'SaaS Kit') }}</span>
     </a>
 
     {{-- Desktop Navigation --}}
-    <nav class="items-center hidden gap-1 p-1 border rounded-full md:flex border-ink/5 bg-surface-highlight/30 backdrop-blur-lg">
-        <a href="{{ route('home') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('home') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Home') }}</a>
-        <a href="{{ route('features') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('features') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Features') }}</a>
-        <a href="{{ route('solutions.index') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('solutions.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Solutions') }}</a>
-        <a href="{{ route('pricing') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('pricing') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Pricing') }}</a>
+    <nav class="items-center hidden gap-0.5 p-1 border rounded-full md:flex border-ink/8 bg-surface-highlight/40 backdrop-blur-xl shadow-sm shadow-ink/5">
+        <a href="{{ route('home') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('home') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Home') }}</a>
+        <a href="{{ route('features') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('features') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Features') }}</a>
+        <a href="{{ route('solutions.index') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('solutions.*') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Solutions') }}</a>
+        <a href="{{ route('pricing') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('pricing') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Pricing') }}</a>
         @if (config('saas.features.roadmap', true))
-            <a href="{{ route('roadmap') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('roadmap') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Roadmap') }}</a>
+            <a href="{{ route('roadmap') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('roadmap') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Roadmap') }}</a>
         @endif
         @if (config('saas.features.blog', true))
-            <a href="{{ route('blog.index') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('blog.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Blog') }}</a>
+            <a href="{{ route('blog.index') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('blog.*') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Blog') }}</a>
         @endif
-        <a href="{{ route('docs.index') }}" class="px-3 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition hover:text-ink rounded-full hover:bg-surface/50 {{ request()->routeIs('docs.*') ? 'bg-surface/50 text-ink' : '' }}">{{ __('Docs') }}</a>
+        <a href="{{ route('docs.index') }}" class="px-3.5 py-2 text-sm font-medium whitespace-nowrap text-ink/70 transition-all duration-200 hover:text-ink rounded-full hover:bg-surface/60 {{ request()->routeIs('docs.*') ? 'bg-surface/70 text-ink shadow-sm' : '' }}">{{ __('Docs') }}</a>
     </nav>
 
     {{-- Right Side Actions --}}

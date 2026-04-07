@@ -10,6 +10,7 @@ export default defineConfig({
             input: [
                 'resources/css/app.css',
                 'resources/css/templates/default.css',
+                'resources/css/templates/docs.css',
                 'resources/css/templates/void.css',
                 'resources/css/templates/aurora.css',
                 'resources/css/templates/prism.css',

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Billing;
 
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\CheckoutService;
+use App\Domain\Billing\Services\PricePresentationService;
 use App\Enums\SubscriptionStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -15,6 +16,7 @@ class PricingController
         Request $request,
         BillingPlanService $plans,
         CheckoutService $checkoutService,
+        PricePresentationService $pricePresentation,
     ): View {
         $planCollection = $plans->plans();
         $user = $request->user();
@@ -69,6 +71,7 @@ class PricingController
         );
 
         $priceStates = [];
+        $priceDisplayData = [];
         foreach ($planCollection as $plan) {
             foreach ($plan->prices as $price) {
                 $priceIdForActiveProvider = $activeProvider ? ($price->providerIds[$activeProvider] ?? null) : null;
@@ -97,6 +100,8 @@ class PricingController
                     'plan_change_pending' => $hasPendingPlanChange,
                     'pending_cancellation' => $isPendingCancellation,
                 ];
+
+                $priceDisplayData[$plan->key][$price->key] = $pricePresentation->forPricingCard($price);
             }
         }
 
@@ -106,6 +111,7 @@ class PricingController
             'canChangeSubscription' => $canChangeSubscription,
             'catalog' => strtolower((string) config('saas.billing.catalog', 'config')),
             'priceStates' => $priceStates,
+            'priceDisplayData' => $priceDisplayData,
             'currentSubscriptionContext' => $currentSubscriptionContext,
             'hasPendingPlanChange' => $hasPendingPlanChange,
             'pendingPlanName' => $pendingPlanName,

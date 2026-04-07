@@ -49,16 +49,24 @@
     @endphp
 
     <section class="py-16">
-        <div class="glass-panel rounded-3xl p-8">
+        <div class="glass-panel rounded-3xl p-8 sm:p-10">
             <div class="flex flex-col gap-3 text-center">
                 <p class="text-sm font-semibold uppercase tracking-[0.2em] text-secondary">{{ __('Checkout') }}</p>
-                <h1 class="font-display text-3xl">{{ __('Complete your checkout') }}</h1>
-                <p class="text-sm text-ink/70">
-                    @auth
+                <h1 class="font-display text-3xl sm:text-4xl font-bold text-ink">
+                    @if ($supportsCustomAmount)
+                        {{ __('Support this project') }}
+                    @else
+                        {{ __('Complete your checkout') }}
+                    @endif
+                </h1>
+                <p class="text-sm text-ink/60 max-w-lg mx-auto">
+                    @if ($supportsCustomAmount)
+                        {{ __('Choose an amount that feels right to you. Every contribution helps keep this project growing.') }}
+                    @elseif (auth()->check())
                         {{ __('Confirm your details to continue to payment.') }}
                     @else
                         {{ __('Enter your email or sign in to continue to payment.') }}
-                    @endauth
+                    @endif
                 </p>
             </div>
 
@@ -169,22 +177,25 @@
 
                             @if ($supportsCustomAmount)
                                 <div>
-                                    <label class="text-xs uppercase tracking-[0.2em] text-ink/40">{{ __('Custom amount') }}</label>
-                                    <input
-                                        id="custom-amount-input"
-                                        type="number"
-                                        name="custom_amount"
-                                        value="{{ $customAmountValue }}"
-                                        min="{{ $customAmountMinimum !== null ? \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMinimum, $currencyCode) : $currencyStep }}"
-                                        @if ($customAmountMaximum !== null)
-                                            max="{{ \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMaximum, $currencyCode) }}"
-                                        @endif
-                                        step="{{ $currencyStep }}"
-                                        class="mt-2 w-full rounded-xl border border-ink/10 bg-surface/50 px-4 py-2.5 text-sm text-ink focus:border-primary focus:ring-1 focus:ring-primary"
-                                        required
-                                        data-pwyw-input
-                                    >
-                                    <p class="mt-2 text-xs text-ink/55">
+                                    <label class="text-xs uppercase tracking-[0.2em] text-ink/40">{{ __('Your contribution') }}</label>
+                                    <div class="relative mt-2">
+                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink/40">{{ $currencyCode }}</span>
+                                        <input
+                                            id="custom-amount-input"
+                                            type="number"
+                                            name="custom_amount"
+                                            value="{{ $customAmountValue }}"
+                                            min="{{ $customAmountMinimum !== null ? \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMinimum, $currencyCode) : $currencyStep }}"
+                                            @if ($customAmountMaximum !== null)
+                                                max="{{ \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMaximum, $currencyCode) }}"
+                                            @endif
+                                            step="{{ $currencyStep }}"
+                                            class="w-full rounded-xl border border-ink/10 bg-surface/50 pl-14 pr-4 py-3 text-lg font-semibold text-ink focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                            required
+                                            data-pwyw-input
+                                        >
+                                    </div>
+                                    <p class="mt-2 text-xs text-ink/50">
                                         @if ($customAmountMinimum !== null && $customAmountMaximum !== null)
                                             {{ __('Choose any amount between :min and :max.', ['min' => $formatMoney($customAmountMinimum, true).' '.$currencyCode, 'max' => $formatMoney($customAmountMaximum, true).' '.$currencyCode]) }}
                                         @elseif ($customAmountMinimum !== null)
@@ -195,7 +206,7 @@
                                     </p>
 
                                     @if ($suggestedAmounts->isNotEmpty())
-                                        <div class="mt-3 flex flex-wrap gap-2">
+                                        <div class="mt-4 flex flex-wrap gap-2">
                                             @foreach ($suggestedAmounts as $suggestedAmount)
                                                 @php
                                                     $suggestedValue = \App\Support\Money\CurrencyAmount::formatMinorForInput($suggestedAmount, $currencyCode);
@@ -203,7 +214,7 @@
                                                 <button
                                                     type="button"
                                                     data-suggested-amount="{{ $suggestedValue }}"
-                                                    class="rounded-full border border-ink/10 bg-surface/40 px-3 py-1.5 text-xs font-semibold text-ink/70 transition hover:border-primary/30 hover:text-ink"
+                                                    class="rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-bold text-primary transition-all duration-200 hover:bg-primary hover:text-white hover:shadow-md hover:shadow-primary/20 hover:scale-105 active:scale-95"
                                                 >
                                                     {{ $formatMoney($suggestedAmount, true) }} {{ $currencyCode }}
                                                 </button>

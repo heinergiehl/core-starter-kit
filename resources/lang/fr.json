@@ -630,14 +630,12 @@
   "Current archive": "Archive actuelle",
   "Open archive": "Ouvrir l'archive",
   "Written by": "Écrit par",
-
   "All rights reserved.": "Tous droits réservés.",
   "Questions?": "Questions ?",
   "Contact support": "Contacter le support",
   "Visit :appName": "Visiter :appName",
   "Hi :name,": "Bonjour :name,",
   "there": "là",
-
   "Welcome to :appName!": "Bienvenue sur :appName !",
   "Thanks for signing up! We are excited to have you on board.": "Merci pour votre inscription ! Nous sommes ravis de vous accueillir.",
   "Here are a few things you can do to get started:": "Voici quelques actions pour bien débuter :",
@@ -646,7 +644,6 @@
   "Explore our features": "Découvrir nos fonctionnalités",
   "Go to Dashboard": "Accéder au tableau de bord",
   "If you have any questions, feel free to reach out to our support team. We are here to help.": "Si vous avez des questions, n'hésitez pas à contacter notre équipe de support. Nous sommes là pour vous aider.",
-
   "Action Required: Payment Failed": "Action requise : Échec du paiement",
   "We were not able to process your payment for :plan.": "Nous n'avons pas pu traiter votre paiement pour :plan.",
   "Payment Failed": "Paiement échoué",
@@ -659,14 +656,12 @@
   "Insufficient funds": "Fonds insuffisants",
   "Bank declined the transaction": "La banque a refusé la transaction",
   "If you need help, our support team is here for you. We will retry the payment automatically in a few days.": "Si vous avez besoin d'aide, notre équipe de support est à votre disposition. Nous réessaierons le paiement automatiquement dans quelques jours.",
-
   "Payment successful": "Paiement réussi",
   "Payment Successful": "Paiement réussi",
   "We have received your payment for :plan.": "Nous avons reçu votre paiement pour :plan.",
   "Payment confirmed": "Paiement confirmé",
   "View Receipt": "Voir le reçu",
   "Thank you for your purchase. If you have any questions, feel free to reply to this email.": "Merci pour votre achat. Si vous avez des questions, n'hésitez pas à répondre à cet e-mail.",
-
   "Your subscription is active": "Votre abonnement est actif",
   "Your subscription is now active!": "Votre abonnement est maintenant actif !",
   "Great news. Your :plan is now active.": "Bonne nouvelle. Votre :plan est maintenant actif.",
@@ -676,7 +671,6 @@
   "Regular updates": "Mises à jour régulières",
   "Start Using :appName": "Commencer à utiliser :appName",
   "You can manage your subscription anytime from your account settings.": "Vous pouvez gérer votre abonnement à tout moment depuis les paramètres de votre compte.",
-
   "We are sorry to see you go": "Nous sommes désolés de vous voir partir",
   "Your subscription has been cancelled": "Votre abonnement a été annulé",
   "Your :plan has been cancelled.": "Votre :plan a été annulé.",
@@ -686,7 +680,6 @@
   "If you cancelled by mistake or changed your mind, you can reactivate your subscription at any time.": "Si vous avez annulé par erreur ou changé d'avis, vous pouvez réactiver votre abonnement à tout moment.",
   "Reactivate Subscription": "Réactiver l'abonnement",
   "We would love to hear your feedback. If there is anything we could have done better, please let us know.": "Vos commentaires nous intéressent. S'il y a quelque chose que nous aurions pu mieux faire, n'hésitez pas à nous le dire.",
-
   "Your trial has started": "Votre essai a commencé",
   "Your :plan trial is now active.": "Votre essai de :plan est maintenant actif.",
   "Trial started": "Essai commencé",
@@ -696,7 +689,6 @@
   "Complete your profile": "Compléter votre profil",
   "Start using the app": "Commencer à utiliser l'application",
   "Start Your Trial": "Démarrer votre essai",
-
   "Welcome back": "Bon retour",
   "Your subscription has been resumed": "Votre abonnement a été repris",
   "Great news. Your :plan has been resumed.": "Bonne nouvelle. Votre :plan a été repris.",
@@ -704,7 +696,6 @@
   "You have full access to all your features again.": "Vous avez de nouveau accès à toutes vos fonctionnalités.",
   "Thank you for continuing with us. We are happy to have you back.": "Merci de rester avec nous. Nous sommes heureux de vous retrouver.",
   "View Your Subscription": "Voir votre abonnement",
-
   "Your plan has been updated": "Votre plan a été mis à jour",
   "Your plan changed from :oldPlan to :newPlan.": "Votre plan est passé de :oldPlan à :newPlan.",
   "Your plan is now :plan.": "Votre plan est maintenant :plan.",
@@ -714,7 +705,6 @@
   "If you have any questions about this change, you can review your billing details below.": "Si vous avez des questions sur ce changement, vous pouvez consulter vos détails de facturation ci-dessous.",
   "Manage Billing": "Gérer la facturation",
   "Thank you for continuing with :appName.": "Merci de continuer à utiliser :appName.",
-
   "Processing Billing": "Traitement de la facturation",
   "Confirming your billing status and activating your plan.": "Confirmation de votre statut de facturation et activation de votre plan.",
   "Billing": "Facturation",
@@ -727,7 +717,6 @@
   "Log in": "Se connecter",
   "View pricing": "Voir les tarifs",
   "We are still waiting for confirmation. If this takes longer than a few minutes, check the webhook logs in the Admin Panel.": "Nous attendons toujours la confirmation. Si cela prend plus de quelques minutes, vérifiez les logs de webhook dans le panneau d'administration.",
-
   "subscription": "abonnement",
   "Product": "Produit",
   "You already have an active plan. Use billing to manage your account.": "Vous avez déjà un plan actif. Utilisez la facturation pour gérer votre compte.",
