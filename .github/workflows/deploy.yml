@@ -134,6 +134,7 @@ jobs:
           if [ "${DEPLOY_ENV}" != "staging" ]; then
             required_vars+=(
               DB_HOST
+              DB_PORT
               DB_DATABASE
               DB_USERNAME
               DB_PASSWORD
@@ -148,9 +149,9 @@ jobs:
           done
 
           if [ "${DEPLOY_ENV}" = "staging" ]; then
-            for var in DB_HOST DB_DATABASE DB_USERNAME DB_PASSWORD; do
+            for var in DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD; do
               if [ -z "${!var:-}" ]; then
-                echo "::warning::${var} is not set for staging. Falling back to docker-compose defaults."
+                echo "::warning::${var} is not set for staging. Existing remote .env value will be preserved if available."
               fi
             done
           fi
@@ -198,46 +199,46 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Configure SSH client
+      - name: Configure SSH known_hosts
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          cat >> ~/.ssh/config <<EOF
-          Host deploy-target
-            HostName ${{ secrets.DEPLOY_HOST }}
-            User ${{ secrets.DEPLOY_USER }}
-            Port ${{ env.DEPLOY_PORT }}
-            BatchMode yes
-            ServerAliveInterval 15
-            ServerAliveCountMax 3
-            StrictHostKeyChecking accept-new
-            UserKnownHostsFile ~/.ssh/known_hosts
-          EOF
-
           ssh-keygen -R "[${{ secrets.DEPLOY_HOST }}]:${{ env.DEPLOY_PORT }}" || true
           ssh-keygen -R "${{ secrets.DEPLOY_HOST }}" || true
           ssh-keyscan -p "${{ env.DEPLOY_PORT }}" -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/config
           chmod 600 ~/.ssh/known_hosts
 
       - name: Verify SSH connectivity
         run: |
-          ssh deploy-target "printf 'SSH connection established\n'"
+          ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "printf 'SSH connection established\\n'"
 
       - name: Prepare Remote Directory
         run: |
-          ssh deploy-target \
+          ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "mkdir -p '${VPS_PATH}'"
 
       - name: Enable maintenance mode
         run: |
-          ssh deploy-target \
+          ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan down --retry=60 || true; fi"
 
       - name: Sync
         run: |
-          rsync -avz --delete -e "ssh" \
+          rsync -avz --delete -e "ssh -p ${{ env.DEPLOY_PORT }} -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=~/.ssh/known_hosts" \
             --exclude='.git/' \
             --exclude='.github/' \
             --exclude='.env' \
@@ -245,104 +246,144 @@ jobs:
             --exclude='storage/' \
             --exclude='tests/' \
             --exclude='phpunit.xml' \
-            ./ deploy-target:${{ env.VPS_PATH }}
+            ./ ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:${{ env.VPS_PATH }}
 
       - name: Generate .env
         env:
-          ENV_FILE: |
-            APP_NAME="${{ vars.APP_NAME || 'SaaS Kit' }}"
-            APP_ENV=${{ env.DEPLOY_ENV }}
-            APP_KEY=${{ secrets.APP_KEY || vars.APP_KEY }}
-            APP_DEBUG=false
-            APP_URL=${{ secrets.APP_URL || vars.APP_URL }}
-            CSP_ALLOW_UNSAFE_EVAL=${{ vars.CSP_ALLOW_UNSAFE_EVAL || 'true' }}
-            
-            APP_LOCALE=en
-            APP_FALLBACK_LOCALE=en
-            APP_FAKER_LOCALE=en_US
-            
-            APP_MAINTENANCE_DRIVER=file
-            BCRYPT_ROUNDS=12
-            
-            LOG_CHANNEL=stack
-            LOG_STACK=single
-            LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
-            
-            DB_CONNECTION=pgsql
-            DB_HOST=${{ secrets.DB_HOST || vars.DB_HOST || (github.event_name == 'workflow_run' && '127.0.0.1' || '') }}
-            DB_PORT=5432
-            DB_DATABASE=${{ secrets.DB_DATABASE || vars.DB_DATABASE || (github.event_name == 'workflow_run' && 'laravel' || '') }}
-            DB_USERNAME=${{ secrets.DB_USERNAME || vars.DB_USERNAME || (github.event_name == 'workflow_run' && 'root' || '') }}
-            DB_PASSWORD=${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || (github.event_name == 'workflow_run' && 'secret' || '') }}
-            DB_SSLMODE=${{ vars.DB_SSLMODE || (github.event_name == 'workflow_run' && 'prefer' || 'require') }}
-            
-            SESSION_DRIVER=database
-            SESSION_LIFETIME=120
-            SESSION_ENCRYPT=false
-            SESSION_SECURE_COOKIE=true
-            SESSION_PATH=/
-            SESSION_DOMAIN=null
-            
-            BROADCAST_CONNECTION=log
-            FILESYSTEM_DISK=public
-            QUEUE_CONNECTION=database
-            DB_QUEUE_RETRY_AFTER=120
-            
-            CACHE_STORE=database
-            
-            MEMCACHED_HOST=127.0.0.1
-            REDIS_CLIENT=phpredis
-            REDIS_HOST=127.0.0.1
-            REDIS_PASSWORD=null
-            REDIS_PORT=6379
-            
-            MAIL_MAILER=mailgun
-            MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN || secrets.MAILGUN_DOMAIN }}
-            MAILGUN_SECRET=${{ secrets.MAILGUN_SECRET }}
-            MAILGUN_ENDPOINT=${{ vars.MAILGUN_ENDPOINT || 'api.eu.mailgun.net' }}
-            MAIL_FROM_ADDRESS="${{ secrets.MAIL_FROM_ADDRESS || 'hello@shipsolid.heinerdevelops.tech' }}"
-            MAIL_FROM_NAME="${APP_NAME}"
-            
-            GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
-            GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
-            
-            GITHUB_CLIENT_ID=${{ vars.GH_OAUTH_CLIENT_ID || secrets.GH_OAUTH_CLIENT_ID || vars.GITHUB_CLIENT_ID || secrets.GITHUB_CLIENT_ID || '' }}
-            GITHUB_CLIENT_SECRET=${{ secrets.GH_OAUTH_CLIENT_SECRET || secrets.GITHUB_CLIENT_SECRET || '' }}
-            GITHUB_REDIRECT_URI=${{ vars.GH_OAUTH_REDIRECT_URI || secrets.GH_OAUTH_REDIRECT_URI || vars.GITHUB_REDIRECT_URI || secrets.GITHUB_REDIRECT_URI || '' }}
-            
-            VITE_APP_NAME="${APP_NAME}"
-            
-            BILLING_CATALOG=database
-            BILLING_CANCEL_URL=${{ secrets.APP_URL || vars.APP_URL }}/pricing
-            
-            STRIPE_KEY=${{ secrets.STRIPE_KEY || vars.STRIPE_KEY }}
-            STRIPE_SECRET=${{ secrets.STRIPE_SECRET || vars.STRIPE_SECRET }}
-            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET || vars.STRIPE_WEBHOOK_SECRET }}
-            
-            PADDLE_VENDOR_ID=${{ secrets.PADDLE_VENDOR_ID || vars.PADDLE_VENDOR_ID }}
-            PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY || vars.PADDLE_API_KEY }}
-            PADDLE_CLIENT_SIDE_TOKEN=${{ secrets.PADDLE_CLIENT_SIDE_TOKEN || vars.PADDLE_CLIENT_SIDE_TOKEN || '' }}
-            PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET || vars.PADDLE_WEBHOOK_SECRET }}
-            PADDLE_WEBHOOK_TOLERANCE_SECONDS=${{ vars.PADDLE_WEBHOOK_TOLERANCE_SECONDS || '300' }}
-            PADDLE_ENV=${{ secrets.PADDLE_ENV || vars.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
-
-            REPO_ACCESS_ENABLED=${{ secrets.REPO_ACCESS_ENABLED || vars.REPO_ACCESS_ENABLED || 'false' }}
-            REPO_ACCESS_PROVIDER=${{ secrets.REPO_ACCESS_PROVIDER || vars.REPO_ACCESS_PROVIDER || 'github' }}
-            REPO_ACCESS_QUEUE=${{ secrets.REPO_ACCESS_QUEUE || vars.REPO_ACCESS_QUEUE || '' }}
-            GITHUB_REPO_ACCESS_TOKEN=${{ secrets.GH_REPO_ACCESS_TOKEN || secrets.GITHUB_REPO_ACCESS_TOKEN || '' }}
-            GITHUB_REPO_OWNER=${{ vars.GH_REPO_OWNER || secrets.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER || secrets.GITHUB_REPO_OWNER || '' }}
-            GITHUB_REPO_NAME=${{ vars.GH_REPO_NAME || secrets.GH_REPO_NAME || vars.GITHUB_REPO_NAME || secrets.GITHUB_REPO_NAME || '' }}
-            GITHUB_REPO_PERMISSION=${{ vars.GH_REPO_PERMISSION || secrets.GH_REPO_PERMISSION || vars.GITHUB_REPO_PERMISSION || secrets.GITHUB_REPO_PERMISSION || 'pull' }}
-            GITHUB_API_URL=${{ vars.GH_API_URL || secrets.GH_API_URL || vars.GITHUB_API_URL || secrets.GITHUB_API_URL || 'https://api.github.com' }}
-            
-            BRAND_FONT_SANS="Instrument Sans"
-            BRAND_FONT_DISPLAY="Instrument Serif"
+          DB_HOST_INPUT: ${{ secrets.DB_HOST || vars.DB_HOST || '' }}
+          DB_PORT_INPUT: ${{ secrets.DB_PORT || vars.DB_PORT || '' }}
+          DB_DATABASE_INPUT: ${{ secrets.DB_DATABASE || vars.DB_DATABASE || '' }}
+          DB_USERNAME_INPUT: ${{ secrets.DB_USERNAME || vars.DB_USERNAME || '' }}
+          DB_PASSWORD_INPUT: ${{ secrets.DB_PASSWORD || vars.DB_PASSWORD || '' }}
         run: |
-          printf "%s" "$ENV_FILE" | ssh deploy-target "cat > ${{ env.VPS_PATH }}/.env && chmod 600 ${{ env.VPS_PATH }}/.env"
+          set -Eeuo pipefail
+
+          remote_env="$(ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "if [ -f '${{ env.VPS_PATH }}/.env' ]; then cat '${{ env.VPS_PATH }}/.env'; fi" || true)"
+
+          remote_env_value() {
+            printf '%s\n' "$remote_env" | sed -n "s/^$1=//p" | tail -n 1
+          }
+
+          DB_HOST_VALUE="${DB_HOST_INPUT:-$(remote_env_value DB_HOST)}"
+          DB_PORT_VALUE="${DB_PORT_INPUT:-$(remote_env_value DB_PORT)}"
+          DB_DATABASE_VALUE="${DB_DATABASE_INPUT:-$(remote_env_value DB_DATABASE)}"
+          DB_USERNAME_VALUE="${DB_USERNAME_INPUT:-$(remote_env_value DB_USERNAME)}"
+          DB_PASSWORD_VALUE="${DB_PASSWORD_INPUT:-$(remote_env_value DB_PASSWORD)}"
+
+          for value_name in DB_HOST_VALUE DB_PORT_VALUE DB_DATABASE_VALUE DB_USERNAME_VALUE DB_PASSWORD_VALUE; do
+            if [ -z "${!value_name}" ]; then
+              echo "::error::Missing ${value_name%_VALUE}. Set it in GitHub secrets/vars or ensure a valid remote .env already exists."
+              exit 1
+            fi
+          done
+
+          cat <<EOF | ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "cat > ${{ env.VPS_PATH }}/.env && chmod 600 ${{ env.VPS_PATH }}/.env"
+          APP_NAME="${{ vars.APP_NAME || 'SaaS Kit' }}"
+          APP_ENV=${{ env.DEPLOY_ENV }}
+          APP_KEY=${{ secrets.APP_KEY || vars.APP_KEY }}
+          APP_DEBUG=false
+          APP_URL=${{ secrets.APP_URL || vars.APP_URL }}
+          CSP_ALLOW_UNSAFE_EVAL=${{ vars.CSP_ALLOW_UNSAFE_EVAL || 'true' }}
+          
+          APP_LOCALE=en
+          APP_FALLBACK_LOCALE=en
+          APP_FAKER_LOCALE=en_US
+          
+          APP_MAINTENANCE_DRIVER=file
+          BCRYPT_ROUNDS=12
+          
+          LOG_CHANNEL=stack
+          LOG_STACK=single
+          LOG_LEVEL=${{ env.DEPLOY_ENV == 'staging' && 'debug' || 'info' }}
+          
+          DB_CONNECTION=pgsql
+          DB_HOST=${DB_HOST_VALUE}
+          DB_PORT=${DB_PORT_VALUE}
+          DB_DATABASE=${DB_DATABASE_VALUE}
+          DB_USERNAME=${DB_USERNAME_VALUE}
+          DB_PASSWORD=${DB_PASSWORD_VALUE}
+          DB_SSLMODE=${{ vars.DB_SSLMODE || (github.event_name == 'workflow_run' && 'prefer' || 'require') }}
+          
+          SESSION_DRIVER=database
+          SESSION_LIFETIME=120
+          SESSION_ENCRYPT=false
+          SESSION_SECURE_COOKIE=true
+          SESSION_PATH=/
+          SESSION_DOMAIN=null
+          
+          BROADCAST_CONNECTION=log
+          FILESYSTEM_DISK=public
+          QUEUE_CONNECTION=database
+          DB_QUEUE_RETRY_AFTER=120
+          
+          CACHE_STORE=database
+          
+          MEMCACHED_HOST=127.0.0.1
+          REDIS_CLIENT=phpredis
+          REDIS_HOST=127.0.0.1
+          REDIS_PASSWORD=null
+          REDIS_PORT=6379
+          
+          MAIL_MAILER=mailgun
+          MAILGUN_DOMAIN=${{ vars.MAILGUN_DOMAIN || secrets.MAILGUN_DOMAIN }}
+          MAILGUN_SECRET=${{ secrets.MAILGUN_SECRET }}
+          MAILGUN_ENDPOINT=${{ vars.MAILGUN_ENDPOINT || 'api.eu.mailgun.net' }}
+          MAIL_FROM_ADDRESS="${{ secrets.MAIL_FROM_ADDRESS || 'hello@shipsolid.heinerdevelops.tech' }}"
+          MAIL_FROM_NAME="\${APP_NAME}"
+          
+          GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
+          
+          GITHUB_CLIENT_ID=${{ vars.GH_OAUTH_CLIENT_ID || secrets.GH_OAUTH_CLIENT_ID || vars.GITHUB_CLIENT_ID || secrets.GITHUB_CLIENT_ID || '' }}
+          GITHUB_CLIENT_SECRET=${{ secrets.GH_OAUTH_CLIENT_SECRET || secrets.GITHUB_CLIENT_SECRET || '' }}
+          GITHUB_REDIRECT_URI=${{ vars.GH_OAUTH_REDIRECT_URI || secrets.GH_OAUTH_REDIRECT_URI || vars.GITHUB_REDIRECT_URI || secrets.GITHUB_REDIRECT_URI || '' }}
+          
+          VITE_APP_NAME="\${APP_NAME}"
+          
+          BILLING_CATALOG=database
+          BILLING_CANCEL_URL=${{ secrets.APP_URL || vars.APP_URL }}/pricing
+          
+          STRIPE_KEY=${{ secrets.STRIPE_KEY || vars.STRIPE_KEY }}
+          STRIPE_SECRET=${{ secrets.STRIPE_SECRET || vars.STRIPE_SECRET }}
+          STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET || vars.STRIPE_WEBHOOK_SECRET }}
+          
+          PADDLE_VENDOR_ID=${{ secrets.PADDLE_VENDOR_ID || vars.PADDLE_VENDOR_ID }}
+          PADDLE_API_KEY=${{ secrets.PADDLE_API_KEY || vars.PADDLE_API_KEY }}
+          PADDLE_CLIENT_SIDE_TOKEN=${{ secrets.PADDLE_CLIENT_SIDE_TOKEN || vars.PADDLE_CLIENT_SIDE_TOKEN || '' }}
+          PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET || vars.PADDLE_WEBHOOK_SECRET }}
+          PADDLE_WEBHOOK_TOLERANCE_SECONDS=${{ vars.PADDLE_WEBHOOK_TOLERANCE_SECONDS || '300' }}
+          PADDLE_ENV=${{ secrets.PADDLE_ENV || vars.PADDLE_ENV || env.PADDLE_ENV_DEFAULT }}
+
+          REPO_ACCESS_ENABLED=${{ secrets.REPO_ACCESS_ENABLED || vars.REPO_ACCESS_ENABLED || 'false' }}
+          REPO_ACCESS_PROVIDER=${{ secrets.REPO_ACCESS_PROVIDER || vars.REPO_ACCESS_PROVIDER || 'github' }}
+          REPO_ACCESS_QUEUE=${{ secrets.REPO_ACCESS_QUEUE || vars.REPO_ACCESS_QUEUE || '' }}
+          GITHUB_REPO_ACCESS_TOKEN=${{ secrets.GH_REPO_ACCESS_TOKEN || secrets.GITHUB_REPO_ACCESS_TOKEN || '' }}
+          GITHUB_REPO_OWNER=${{ vars.GH_REPO_OWNER || secrets.GH_REPO_OWNER || vars.GITHUB_REPO_OWNER || secrets.GITHUB_REPO_OWNER || '' }}
+          GITHUB_REPO_NAME=${{ vars.GH_REPO_NAME || secrets.GH_REPO_NAME || vars.GITHUB_REPO_NAME || secrets.GITHUB_REPO_NAME || '' }}
+          GITHUB_REPO_PERMISSION=${{ vars.GH_REPO_PERMISSION || secrets.GH_REPO_PERMISSION || vars.GITHUB_REPO_PERMISSION || secrets.GITHUB_REPO_PERMISSION || 'pull' }}
+          GITHUB_API_URL=${{ vars.GH_API_URL || secrets.GH_API_URL || vars.GITHUB_API_URL || secrets.GITHUB_API_URL || 'https://api.github.com' }}
+          
+          BRAND_FONT_SANS="Instrument Sans"
+          BRAND_FONT_DISPLAY="Instrument Serif"
+          EOF
 
       - name: Run Remote Scripts
         run: |
-          ssh deploy-target << 'EOF'
+          ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'EOF'
             set -Eeuo pipefail
             cd ${{ env.VPS_PATH }}
 
@@ -410,7 +451,11 @@ jobs:
           INITIAL_ADMIN_PASSWORD: ${{ secrets.INITIAL_ADMIN_PASSWORD }}
           INITIAL_ADMIN_NAME: ${{ vars.INITIAL_ADMIN_NAME || 'System Admin' }}
         run: |
-          ssh deploy-target << EOF
+          ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << EOF
             cd ${{ env.VPS_PATH }}
 
             INITIAL_ADMIN_EMAIL='${INITIAL_ADMIN_EMAIL}' \
@@ -422,5 +467,9 @@ jobs:
       - name: Restore application availability
         if: ${{ always() }}
         run: |
-          ssh deploy-target \
+          ssh -p "${{ env.DEPLOY_PORT }}" \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile=~/.ssh/known_hosts \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "if [ -f '${VPS_PATH}/artisan' ]; then cd '${VPS_PATH}' && php artisan up || true; fi"
