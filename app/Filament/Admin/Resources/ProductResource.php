@@ -15,7 +15,6 @@ use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\Hidden;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -57,7 +56,6 @@ class ProductResource extends Resource
         return $schema
             ->schema([
                 Section::make('Product Details')
-                    ->description('Define the product identity and billing type. Names and descriptions are synced to payment providers.')
                     ->schema([
                         Grid::make(2)->schema([
                             TextInput::make('key')
@@ -66,23 +64,23 @@ class ProductResource extends Resource
                                 ->maxLength(64)
                                 ->unique(ignoreRecord: true)
                                 ->placeholder('e.g. pro, starter, agency')
-                                ->helperText('Unique slug used in URLs, API calls, and configuration files.'),
+                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Unique slug used in URLs, API calls, and configuration files.'),
                             TextInput::make('name')
                                 ->required()
                                 ->maxLength(255)
                                 ->placeholder('e.g. Pro Plan')
-                                ->helperText('Customer-facing name — synced to Stripe / Paddle.'),
+                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Customer-facing name — synced to Stripe / Paddle.'),
                         ]),
                         TextInput::make('summary')
                             ->maxLength(255)
                             ->placeholder('A short tagline for the pricing card')
-                            ->helperText('Shown on the pricing page below the plan name. Not synced to providers.')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Shown on the pricing page below the plan name. Not synced to providers.')
                             ->columnSpanFull(),
                         Textarea::make('description')
                             ->rows(3)
                             ->columnSpanFull()
                             ->placeholder('Detailed product description for payment provider dashboards')
-                            ->helperText('Synced to payment providers. Visible in Stripe/Paddle product dashboards.'),
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Synced to payment providers. Visible in Stripe/Paddle product dashboards.'),
                         ToggleButtons::make('type')
                             ->label('Billing type')
                             ->options(self::billingFamilyOptions())
@@ -90,7 +88,7 @@ class ProductResource extends Resource
                             ->default('subscription')
                             ->inline()
                             ->live()
-                            ->helperText(fn (Get $get): string => self::billingFamilySummary($get('type')))
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Subscription: recurring plans charged on a schedule. One-time: a single charge with no renewal.')
                             ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
                                 $prices = $get('prices');
 
@@ -131,40 +129,41 @@ class ProductResource extends Resource
                         Grid::make(2)->schema([
                             Toggle::make('is_featured')
                                 ->label('Featured')
-                                ->helperText('Highlighted on the pricing page with a "Most Popular" badge.'),
+                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Highlighted on the pricing page with a "Most Popular" badge.'),
                             Toggle::make('is_active')
                                 ->label('Active')
                                 ->default(false)
-                                ->helperText('Inactive products are hidden from the pricing page.'),
+                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Inactive products are hidden from the pricing page.'),
                         ]),
                     ])->columns(2),
 
                 Section::make('Pricing')
-                    ->description('Add one or more price tiers. Each price can have its own billing frequency, currency, and pricing model. Prices are synced to your payment provider automatically.')
                     ->schema([
                         Repeater::make('prices')
                             ->hiddenOn('edit')
                             ->relationship()
-                            ->helperText('Add at least one price. You can add more tiers (e.g. Monthly + Yearly) by clicking "Add to prices".')
-                            ->mutateRelationshipDataBeforeCreateUsing(fn (array $data): array => self::normalizePriceDataForPersistence(
+                            ->mutateRelationshipDataBeforeCreateUsing(fn(array $data): array => self::normalizePriceDataForPersistence(
                                 $data,
                                 $data['pricing_mode'] ?? null
                             ))
-                            ->mutateRelationshipDataBeforeSaveUsing(fn (array $data): array => self::normalizePriceDataForPersistence(
+                            ->mutateRelationshipDataBeforeSaveUsing(fn(array $data): array => self::normalizePriceDataForPersistence(
                                 $data,
                                 $data['pricing_mode'] ?? null
                             ))
                             ->schema([
                                 ToggleButtons::make('pricing_mode')
                                     ->label('Pricing mode')
-                                    ->options(fn (Get $get): array => self::pricingModeOptionsForProductType(
+                                    ->options(fn(Get $get): array => self::pricingModeOptionsForProductType(
                                         (string) ($get('../../type') ?: 'subscription')
                                     ))
-                                    ->default(fn (Get $get): string => self::defaultPricingModeForProductType(
+                                    ->default(fn(Get $get): string => self::defaultPricingModeForProductType(
                                         (string) ($get('../../type') ?: 'subscription')
                                     ))
                                     ->inline()
                                     ->live()
+                                    ->hintIcon('heroicon-m-information-circle', tooltip: fn(Get $get): string => self::pricingModeSummary(
+                                        (string) ($get('pricing_mode') ?: self::defaultPricingModeForProductType($get('../../type')))
+                                    ))
                                     ->afterStateHydrated(function (?string $state, Get $get, Set $set): void {
                                         $resolvedPricingMode = self::resolvePricingMode(
                                             $get('interval'),
@@ -182,11 +181,6 @@ class ProductResource extends Resource
                                     ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
                                         self::applyPricingMode($get, $set, $state);
                                     }),
-                                Placeholder::make('pricing_mode_summary')
-                                    ->label('What this mode does')
-                                    ->content(fn (Get $get): string => self::pricingModeSummary(
-                                        (string) ($get('pricing_mode') ?: self::defaultPricingModeForProductType($get('../../type')))
-                                    )),
                                 Group::make([
                                     Select::make('interval')
                                         ->label('Billing Frequency')
@@ -200,8 +194,8 @@ class ProductResource extends Resource
                                         ->required()
                                         ->default('month')
                                         ->live()
-                                        ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
-                                        ->dehydrateStateUsing(fn ($state, Get $get): string => self::isRecurringPricingMode($get('pricing_mode'))
+                                        ->visible(fn(Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
+                                        ->dehydrateStateUsing(fn($state, Get $get): string => self::isRecurringPricingMode($get('pricing_mode'))
                                             ? (in_array($state, ['month', 'year', 'week', 'day'], true) ? (string) $state : 'month')
                                             : 'once')
                                         ->afterStateUpdated(function (?string $state, Get $get, Set $set): void {
@@ -213,19 +207,19 @@ class ProductResource extends Resource
                                                 self::isRecurringPricingMode($get('pricing_mode')) ? (string) $get('pricing_mode') : 'subscription'
                                             ));
                                         }),
-                                ])->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))),
+                                ])->visible(fn(Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))),
 
                                 Grid::make(3)->schema([
                                     TextInput::make('amount')
                                         ->label('Price')
                                         ->numeric()
-                                        ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                        ->step(fn(Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
                                         ->required()
-                                        ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                                        ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                                        ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
+                                        ->suffix(fn(Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                        ->formatStateUsing(fn($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                        ->dehydrateStateUsing(fn($state, Get $get): ?int => self::parseMoneyInputToMinor($state, $get('currency')))
                                         ->placeholder('e.g. 29.99')
-                                        ->helperText(fn (Get $get): string => $get('pricing_mode') === 'usage_based'
+                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: fn(Get $get): string => $get('pricing_mode') === 'usage_based'
                                             ? 'Recurring base fee charged each billing cycle, before any usage charges.'
                                             : ($get('allow_custom_amount')
                                                 ? 'Default checkout amount. Customers can override this.'
@@ -234,125 +228,121 @@ class ProductResource extends Resource
                                     TextInput::make('label')
                                         ->required()
                                         ->placeholder('e.g. Monthly, Yearly, Lifetime')
-                                        ->helperText('Customer-facing label shown on the pricing card.'),
+                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Customer-facing label shown on the pricing card.'),
 
                                     TextInput::make('currency')
                                         ->default('USD')
                                         ->maxLength(3)
                                         ->required()
                                         ->placeholder('USD')
-                                        ->helperText('ISO 4217 code, e.g. USD, EUR, GBP.'),
+                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'ISO 4217 code, e.g. USD, EUR, GBP.'),
                                 ]),
 
                                 Section::make('Billing Details')
                                     ->collapsed()
                                     ->compact()
-                                    ->description('Optional overrides for API key, billing intervals, and free trials.')
                                     ->schema([
                                         Grid::make(2)->schema([
                                             TextInput::make('key')
                                                 ->unique(ignoreRecord: true)
                                                 ->placeholder('Leave empty to auto-generate')
-                                                ->helperText('Unique slug for API usage and config references. Auto-generated from the label if left empty.'),
+                                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Unique slug for API usage and config references. Auto-generated from the label if left empty.'),
                                             TextInput::make('interval_count')
                                                 ->numeric()
                                                 ->default(1)
                                                 ->label('Interval Count')
-                                                ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
-                                                ->dehydrateStateUsing(fn ($state, Get $get): int => self::isRecurringPricingMode($get('pricing_mode'))
+                                                ->visible(fn(Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
+                                                ->dehydrateStateUsing(fn($state, Get $get): int => self::isRecurringPricingMode($get('pricing_mode'))
                                                     ? max(1, (int) $state)
                                                     : 1)
-                                                ->helperText('Number of intervals per billing cycle. Set to 3 for quarterly, 6 for semi-annual.'),
+                                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Number of intervals per billing cycle. Set to 3 for quarterly, 6 for semi-annual.'),
                                         ]),
 
                                         Grid::make(2)->schema([
                                             Toggle::make('has_trial')
                                                 ->label('Offer Free Trial')
                                                 ->live()
-                                                ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
-                                                ->dehydrateStateUsing(fn ($state, Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))
+                                                ->visible(fn(Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')))
+                                                ->dehydrateStateUsing(fn($state, Get $get): bool => self::isRecurringPricingMode($get('pricing_mode'))
                                                     ? (bool) $state
                                                     : false)
-                                                ->helperText('Allow new subscribers to try this plan for free before being charged.'),
+                                                ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Allow new subscribers to try this plan for free before being charged.'),
                                             TextInput::make('trial_interval_count')
                                                 ->label('Trial Days')
                                                 ->numeric()
                                                 ->default(7)
-                                                ->visible(fn (Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial'))
-                                                ->dehydrateStateUsing(fn ($state, Get $get): ?int => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial')
+                                                ->visible(fn(Get $get): bool => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial'))
+                                                ->dehydrateStateUsing(fn($state, Get $get): ?int => self::isRecurringPricingMode($get('pricing_mode')) && (bool) $get('has_trial')
                                                     ? (int) $state
                                                     : null),
                                         ]),
 
                                         Section::make('Usage-based billing')
-                                            ->description('Configure metering: define the usage unit, included allowance, and what happens when usage exceeds the limit.')
+
                                             ->collapsed()
                                             ->compact()
-                                            ->visible(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
+                                            ->visible(fn(Get $get): bool => $get('pricing_mode') === 'usage_based')
                                             ->schema([
-                                                Placeholder::make('usage_billing_summary')
-                                                    ->label('How this is shown')
-                                                    ->content(fn (Get $get): string => self::usageLimitBehaviorSummary($get('usage_limit_behavior'))),
                                                 Grid::make(2)->schema([
                                                     TextInput::make('usage_meter_name')
                                                         ->label('Meter name')
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based')
                                                         ->maxLength(255)
                                                         ->placeholder('API requests')
-                                                        ->helperText('Human-readable label shown on pricing and billing pages.'),
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Human-readable label shown on pricing and billing pages.'),
                                                     TextInput::make('usage_meter_key')
                                                         ->label('Meter key')
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based')
                                                         ->maxLength(255)
                                                         ->placeholder('api_requests')
-                                                        ->helperText('Stable identifier used when your app records usage.'),
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Stable identifier used when your app records usage.'),
                                                     TextInput::make('usage_unit_label')
                                                         ->label('Usage unit label')
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based')
                                                         ->maxLength(80)
                                                         ->placeholder('request')
-                                                        ->helperText('Use the singular form, for example request, seat, or GB.'),
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Use the singular form, for example request, seat, or GB.'),
                                                     TextInput::make('usage_included_units')
                                                         ->label('Included units')
                                                         ->numeric()
                                                         ->minValue(0)
                                                         ->placeholder('10000')
                                                         ->rules([self::usageIncludedUnitsRule()])
-                                                        ->helperText(fn (Get $get): string => self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->blocksUsage()
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: fn(Get $get): string => self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->blocksUsage()
                                                             ? 'Required when this plan blocks usage at the included limit.'
                                                             : 'Leave empty if this price is pure pay-as-you-go.'),
                                                     Select::make('usage_limit_behavior')
                                                         ->label('Usage policy')
                                                         ->options(self::usageLimitBehaviorOptions())
                                                         ->default(UsageLimitBehavior::BillOverage->value)
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based')
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based')
                                                         ->native(false)
                                                         ->live()
-                                                        ->helperText('Choose whether usage past the included amount is billed or blocked.'),
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Choose whether usage past the included amount is billed or blocked.'),
                                                     TextInput::make('usage_package_size')
                                                         ->label('Package size')
                                                         ->numeric()
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based'
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based'
                                                             && self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->allowsOverageBilling())
                                                         ->default(1)
                                                         ->minValue(1)
-                                                        ->helperText('Bill overages per package of units, for example 1000 for "per 1,000 requests".')
-                                                        ->visible(fn (Get $get): bool => $get('pricing_mode') === 'usage_based'
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Bill overages per package of units, for example 1000 for "per 1,000 requests".')
+                                                        ->visible(fn(Get $get): bool => $get('pricing_mode') === 'usage_based'
                                                             && self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->allowsOverageBilling()),
                                                     TextInput::make('usage_overage_amount')
                                                         ->label('Overage price')
                                                         ->numeric()
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based'
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based'
                                                             && self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->allowsOverageBilling())
-                                                        ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                                        ->step(fn(Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
                                                         ->minValue(0)
-                                                        ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                                                        ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                                                        ->dehydrateStateUsing(fn ($state, Get $get): ?int => $get('pricing_mode') === 'usage_based'
+                                                        ->suffix(fn(Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                                        ->formatStateUsing(fn($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                                        ->dehydrateStateUsing(fn($state, Get $get): ?int => $get('pricing_mode') === 'usage_based'
                                                             ? self::parseMoneyInputToMinor($state, $get('currency'))
                                                             : null)
-                                                        ->helperText('The charge for each package of overage units.')
-                                                        ->visible(fn (Get $get): bool => $get('pricing_mode') === 'usage_based'
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'The charge for each package of overage units.')
+                                                        ->visible(fn(Get $get): bool => $get('pricing_mode') === 'usage_based'
                                                             && self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->allowsOverageBilling()),
                                                     Select::make('usage_rounding_mode')
                                                         ->label('Package rounding')
@@ -361,85 +351,85 @@ class ProductResource extends Resource
                                                             'down' => 'Round down',
                                                         ])
                                                         ->default('up')
-                                                        ->required(fn (Get $get): bool => $get('pricing_mode') === 'usage_based'
+                                                        ->required(fn(Get $get): bool => $get('pricing_mode') === 'usage_based'
                                                             && self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->allowsOverageBilling())
-                                                        ->helperText('Round overages up for billing-friendly estimates, or down for stricter included usage.')
-                                                        ->visible(fn (Get $get): bool => $get('pricing_mode') === 'usage_based'
+                                                        ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Round overages up for billing-friendly estimates, or down for stricter included usage.')
+                                                        ->visible(fn(Get $get): bool => $get('pricing_mode') === 'usage_based'
                                                             && self::resolveUsageLimitBehavior($get('usage_limit_behavior'))->allowsOverageBilling()),
                                                 ]),
                                             ]),
 
                                         Section::make('Flexible Pricing')
-                                            ->description('Configure the pay-what-you-want experience: set a suggested default, optional min/max bounds, and quick-pick amounts.')
+
                                             ->collapsed()
                                             ->compact()
-                                            ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw')
+                                            ->visible(fn(Get $get): bool => $get('pricing_mode') === 'one_time_pwyw')
                                             ->schema([
                                                 Grid::make(3)->schema([
                                                     TextInput::make('custom_amount_default')
                                                         ->label('Default amount')
                                                         ->numeric()
-                                                        ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
-                                                        ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                                                        ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                                                        ->dehydrateStateUsing(fn ($state, Get $get): ?int => $get('pricing_mode') === 'one_time_pwyw'
+                                                        ->step(fn(Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                                        ->suffix(fn(Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                                        ->formatStateUsing(fn($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                                        ->dehydrateStateUsing(fn($state, Get $get): ?int => $get('pricing_mode') === 'one_time_pwyw'
                                                             ? self::parseMoneyInputToMinor($state, $get('currency'))
                                                             : null)
                                                         ->rules([self::customAmountRangeRule('custom_amount_default')])
-                                                        ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
+                                                        ->visible(fn(Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
                                                     TextInput::make('custom_amount_minimum')
                                                         ->label('Minimum amount')
                                                         ->numeric()
-                                                        ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                                        ->step(fn(Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
                                                         ->minValue(0)
-                                                        ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                                                        ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                                                        ->dehydrateStateUsing(fn ($state, Get $get): ?int => $get('pricing_mode') === 'one_time_pwyw'
+                                                        ->suffix(fn(Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                                        ->formatStateUsing(fn($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                                        ->dehydrateStateUsing(fn($state, Get $get): ?int => $get('pricing_mode') === 'one_time_pwyw'
                                                             ? self::parseMoneyInputToMinor($state, $get('currency'))
                                                             : null)
                                                         ->rules([self::customAmountRangeRule('custom_amount_minimum')])
-                                                        ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
+                                                        ->visible(fn(Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
                                                     TextInput::make('custom_amount_maximum')
                                                         ->label('Maximum amount')
                                                         ->numeric()
-                                                        ->step(fn (Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
+                                                        ->step(fn(Get $get): string => \App\Support\Money\CurrencyAmount::inputStep($get('currency')))
                                                         ->minValue(0)
-                                                        ->suffix(fn (Get $get): string => self::moneyCurrencyCode($get('currency')))
-                                                        ->formatStateUsing(fn ($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
-                                                        ->dehydrateStateUsing(fn ($state, Get $get): ?int => $get('pricing_mode') === 'one_time_pwyw'
+                                                        ->suffix(fn(Get $get): string => self::moneyCurrencyCode($get('currency')))
+                                                        ->formatStateUsing(fn($state, Get $get): ?string => self::formatMinorAmountForInput($state, $get('currency')))
+                                                        ->dehydrateStateUsing(fn($state, Get $get): ?int => $get('pricing_mode') === 'one_time_pwyw'
                                                             ? self::parseMoneyInputToMinor($state, $get('currency'))
                                                             : null)
                                                         ->rules([self::customAmountRangeRule('custom_amount_maximum')])
-                                                        ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
+                                                        ->visible(fn(Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
                                                 ]),
                                                 Textarea::make('suggested_amounts')
                                                     ->label('Suggested amounts')
                                                     ->rows(3)
-                                                    ->visible(fn (Get $get): bool => $get('pricing_mode') === 'one_time_pwyw')
-                                                    ->helperText('One currency amount per line, for example 5.00, 15.00, 30.00.')
+                                                    ->visible(fn(Get $get): bool => $get('pricing_mode') === 'one_time_pwyw')
+                                                    ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'One currency amount per line, for example 5.00, 15.00, 30.00.')
                                                     ->formatStateUsing(function ($state, Get $get): string {
                                                         if (is_array($state)) {
                                                             return implode("\n", array_map(
-                                                                fn ($amount): string => self::formatMinorAmountForInput($amount, $get('currency')) ?? '',
+                                                                fn($amount): string => self::formatMinorAmountForInput($amount, $get('currency')) ?? '',
                                                                 $state
                                                             ));
                                                         }
 
                                                         return (string) $state;
                                                     })
-                                                    ->dehydrateStateUsing(fn ($state, Get $get): ?array => $get('pricing_mode') === 'one_time_pwyw'
+                                                    ->dehydrateStateUsing(fn($state, Get $get): ?array => $get('pricing_mode') === 'one_time_pwyw'
                                                         ? self::parseMoneyLinesToMinor($state, $get('currency'))
                                                         : null)
                                                     ->rules([self::suggestedAmountsRule()]),
                                             ]),
 
                                         Hidden::make('allow_custom_amount')
-                                            ->dehydrateStateUsing(fn ($state, Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
+                                            ->dehydrateStateUsing(fn($state, Get $get): bool => $get('pricing_mode') === 'one_time_pwyw'),
                                         Hidden::make('is_metered')
-                                            ->dehydrateStateUsing(fn ($state, Get $get): bool => $get('pricing_mode') === 'usage_based'),
+                                            ->dehydrateStateUsing(fn($state, Get $get): bool => $get('pricing_mode') === 'usage_based'),
                                         Hidden::make('type')
                                             ->default(PriceType::Recurring->value)
-                                            ->dehydrateStateUsing(fn ($state, Get $get): string => self::isRecurringPricingMode($get('pricing_mode'))
+                                            ->dehydrateStateUsing(fn($state, Get $get): string => self::isRecurringPricingMode($get('pricing_mode'))
                                                 ? PriceType::Recurring->value
                                                 : PriceType::OneTime->value),
                                         Hidden::make('is_active')->default(true),
@@ -451,17 +441,17 @@ class ProductResource extends Resource
                                 $amountLabel = self::formatMajorAmountForPreview($defaultAmount, $currency);
 
                                 if (! empty($state['allow_custom_amount'])) {
-                                    $amountLabel = 'Pay what you want'.($amountLabel !== '' ? " from {$amountLabel}" : '');
+                                    $amountLabel = 'Pay what you want' . ($amountLabel !== '' ? " from {$amountLabel}" : '');
                                 } elseif (! empty($state['is_metered'])) {
                                     $unitLabel = trim((string) ($state['usage_unit_label'] ?? 'unit'));
                                     $includedUnits = $state['usage_included_units'] ?? null;
                                     $usageBehavior = UsageLimitBehavior::tryFrom((string) ($state['usage_limit_behavior'] ?? '')) ?? UsageLimitBehavior::BillOverage;
                                     $amountLabel = $usageBehavior->blocksUsage()
-                                        ? trim($amountLabel.($includedUnits ? " + {$includedUnits} included {$unitLabel}".($includedUnits === 1 ? '' : 's').' cap' : ' + capped usage'))
-                                        : trim($amountLabel.($includedUnits ? " + {$includedUnits} included {$unitLabel}".($includedUnits === 1 ? '' : 's') : ' + usage'));
+                                        ? trim($amountLabel . ($includedUnits ? " + {$includedUnits} included {$unitLabel}" . ($includedUnits === 1 ? '' : 's') . ' cap' : ' + capped usage'))
+                                        : trim($amountLabel . ($includedUnits ? " + {$includedUnits} included {$unitLabel}" . ($includedUnits === 1 ? '' : 's') : ' + usage'));
                                 }
 
-                                return trim(($state['label'] ?? 'Price').' - '.$amountLabel);
+                                return trim(($state['label'] ?? 'Price') . ' - ' . $amountLabel);
                             })
                             ->collapsed(false)
                             ->cloneable()
@@ -494,7 +484,7 @@ class ProductResource extends Resource
                             ->label('Entitlements (JSON)')
                             ->rows(6)
                             ->columnSpanFull()
-                            ->helperText('Example: {"storage_limit_mb": 2048, "support_sla": "priority"}')
+                            ->hintIcon('heroicon-m-question-mark-circle', tooltip: 'Example: {"storage_limit_mb": 2048, "support_sla": "priority"}')
                             ->formatStateUsing(function ($state): ?string {
                                 if (! $state) {
                                     return null;
@@ -528,8 +518,8 @@ class ProductResource extends Resource
                     ->sortable(),
                 TextColumn::make('type')
                     ->badge()
-                    ->formatStateUsing(fn (string $state): string => $state === 'one_time' ? 'One-time' : 'Subscription')
-                    ->color(fn (string $state): string => $state === 'one_time' ? 'warning' : 'primary'),
+                    ->formatStateUsing(fn(string $state): string => $state === 'one_time' ? 'One-time' : 'Subscription')
+                    ->color(fn(string $state): string => $state === 'one_time' ? 'warning' : 'primary'),
                 TextColumn::make('providerMappings.provider')
                     ->label('Providers')
                     ->badge()
@@ -539,30 +529,30 @@ class ProductResource extends Resource
                         if ($activeProviders === null) {
                             $activeProviders = \App\Domain\Billing\Models\PaymentProvider::where('is_active', true)
                                 ->pluck('slug')
-                                ->map(fn ($s) => strtolower($s))
+                                ->map(fn($s) => strtolower($s))
                                 ->toArray();
                         }
 
                         return $record->providerMappings
                             ->pluck('provider')
-                            ->filter(fn ($provider) => in_array(strtolower((string) $provider), $activeProviders))
+                            ->filter(fn($provider) => in_array(strtolower((string) $provider), $activeProviders))
                             ->unique()
                             ->values()
                             ->all();
                     })
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'stripe' => 'primary',
                         'paddle' => 'success',
                         'default' => 'gray', // Added default case to match style
                         default => 'gray',
                     })
-                    ->formatStateUsing(fn (string $state): string => ucfirst($state))
+                    ->formatStateUsing(fn(string $state): string => ucfirst($state))
                     ->toggleable(),
                 TextColumn::make('is_active')
                     ->label('Status')
                     ->badge()
-                    ->formatStateUsing(fn (bool $state): string => $state ? 'Active' : 'Inactive')
-                    ->color(fn (bool $state): string => $state ? 'success' : 'gray'),
+                    ->formatStateUsing(fn(bool $state): string => $state ? 'Active' : 'Inactive')
+                    ->color(fn(bool $state): string => $state ? 'success' : 'gray'),
             ])
             ->filters([
                 TernaryFilter::make('is_active')
@@ -578,14 +568,14 @@ class ProductResource extends Resource
                     ->label('Import Provider Catalog')
                     ->icon('heroicon-o-arrow-path')
                     ->color('gray')
-                    ->disabled(fn () => false) // Placeholder if we had a job status to check
+                    ->disabled(fn() => false) // Placeholder if we had a job status to check
                     ->form([
                         Toggle::make('include_deleted')
                             ->label('Include deleted (override local deletions)')
                             ->default(false),
                     ])
-                    ->disabled(fn () => \Illuminate\Support\Facades\Cache::has('sync_products_job'))
-                    ->tooltip(fn () => \Illuminate\Support\Facades\Cache::has('sync_products_job') ? 'Import is currently running in the background.' : 'Sync products from payment providers')
+                    ->disabled(fn() => \Illuminate\Support\Facades\Cache::has('sync_products_job'))
+                    ->tooltip(fn() => \Illuminate\Support\Facades\Cache::has('sync_products_job') ? 'Import is currently running in the background.' : 'Sync products from payment providers')
                     ->action(function (array $data) {
                         if (Cache::has('sync_products_job')) {
                             Notification::make()
