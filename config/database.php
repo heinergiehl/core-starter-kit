@@ -16,6 +16,8 @@ return [
     |
     */
 
+    'connect_probe_timeout' => (float) env('DB_CONNECT_PROBE_TIMEOUT', 1.0),
+
     'default' => env('DB_CONNECTION', 'sqlite'),
 
     /*

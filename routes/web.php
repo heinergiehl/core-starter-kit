@@ -21,6 +21,7 @@ use App\Http\Controllers\Content\SitemapController;
 use App\Http\Controllers\Content\SolutionPageController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Feedback\RoadmapController;
+use App\Http\Controllers\Feedback\SurveyController;
 use App\Http\Controllers\ImpersonationController;
 use App\Http\Controllers\LocaleController;
 use App\Http\Controllers\ProfileController;
@@ -93,6 +94,12 @@ $marketingRouteDefinitions = [
         'action' => [RoadmapController::class, 'index'],
     ],
     [
+        'uri' => '/surveys/{survey:slug}',
+        'name' => 'surveys.show',
+        'action' => [SurveyController::class, 'show'],
+        'where' => ['survey' => '[A-Za-z0-9-]+'],
+    ],
+    [
         'uri' => '/rss.xml',
         'name' => 'rss',
         'action' => RssController::class,
@@ -135,9 +142,20 @@ Route::prefix('{locale}')
         }
     });
 
+Route::prefix('{locale}')
+    ->where(['locale' => $localePattern])
+    ->group(function () {
+        Route::post('/surveys/{survey:slug}', [SurveyController::class, 'submit'])
+            ->name('surveys.submit');
+    });
+
 Route::post('/locale', LocaleController::class)->name('locale.update');
 Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss'])
     ->name('announcements.dismiss');
+
+// Health check for monitoring tools (load balancers, uptime checks)
+Route::get('/up', \App\Http\Controllers\HealthCheckController::class)->name('health');
+
 Route::get('/robots.txt', RobotsController::class)->name('robots');
 
 // Branding asset fallback route for environments where /storage symlink is unavailable/restricted.

@@ -3,8 +3,10 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\Order;
+use App\Filament\Admin\Exporters\OrderExporter;
 use App\Filament\Admin\Resources\OrderResource\Pages\ListOrders;
 use App\Filament\Admin\Resources\OrderResource\Pages\ViewOrder;
+use Filament\Actions\ExportAction;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -90,6 +92,10 @@ class OrderResource extends Resource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
+            ])
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(OrderExporter::class),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([

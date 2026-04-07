@@ -11,6 +11,11 @@ class Order extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\Domain\Billing\OrderFactory::new();
+    }
+
     protected $fillable = [
         'user_id',
         'provider',

@@ -196,7 +196,8 @@ class PaddleAdapter implements BillingRuntimeProvider
         int $quantity,
         string $successUrl,
         string $cancelUrl,
-        ?Discount $discount = null
+        ?Discount $discount = null,
+        ?int $customAmountMinor = null,
     ): TransactionDTO {
         $payload = $this->buildTransactionPayload(
             $user,
@@ -206,7 +207,9 @@ class PaddleAdapter implements BillingRuntimeProvider
             $successUrl,
             $cancelUrl,
             $discount,
-            []
+            [],
+            null,
+            $customAmountMinor,
         );
 
         return $this->createTransaction($payload);
@@ -221,7 +224,8 @@ class PaddleAdapter implements BillingRuntimeProvider
         string $cancelUrl,
         ?Discount $discount = null,
         array $extraCustomData = [],
-        ?string $customerEmail = null
+        ?string $customerEmail = null,
+        ?int $customAmountMinor = null,
     ): TransactionDTO {
         $payload = $this->buildTransactionPayload(
             $user,
@@ -232,7 +236,8 @@ class PaddleAdapter implements BillingRuntimeProvider
             $cancelUrl,
             $discount,
             $extraCustomData,
-            $customerEmail
+            $customerEmail,
+            $customAmountMinor,
         );
 
         return $this->createTransaction($payload);
@@ -250,11 +255,22 @@ class PaddleAdapter implements BillingRuntimeProvider
         string $cancelUrl,
         ?Discount $discount = null,
         array $extraCustomData = [],
-        ?string $customerEmail = null
+        ?string $customerEmail = null,
+        ?int $customAmountMinor = null
     ): array {
-        $priceId = $this->planService->providerPriceId($this->provider(), $planKey, $priceKey);
+        $plan = $this->planService->plan($planKey);
+        $price = $plan->getPrice($priceKey);
 
-        if (! $priceId) {
+        if (! $price) {
+            throw BillingException::checkoutFailed(BillingProvider::Paddle, 'price configuration could not be resolved');
+        }
+
+        $priceId = null;
+        if ($customAmountMinor === null) {
+            $priceId = $this->planService->providerPriceId($this->provider(), $planKey, $priceKey);
+        }
+
+        if (! $priceId && $customAmountMinor === null) {
             throw BillingException::missingPriceId(BillingProvider::Paddle, $planKey, $priceKey);
         }
 
@@ -263,6 +279,10 @@ class PaddleAdapter implements BillingRuntimeProvider
             'plan_key' => $planKey,
             'price_key' => $priceKey,
         ];
+
+        if ($customAmountMinor !== null) {
+            $customData['custom_amount_minor'] = $customAmountMinor;
+        }
 
         if ($discount) {
             $customData['discount_id'] = $discount->id;
@@ -278,13 +298,31 @@ class PaddleAdapter implements BillingRuntimeProvider
             static fn ($value) => $value !== null && $value !== ''
         );
 
-        $payload = [
-            'items' => [
-                [
-                    'price_id' => $priceId,
-                    'quantity' => max($quantity, 1),
+        $item = [
+            'price_id' => $priceId,
+            'quantity' => max($quantity, 1),
+        ];
+
+        if ($customAmountMinor !== null) {
+            $item = [
+                'quantity' => max($quantity, 1),
+                'price' => [
+                    'name' => $price->label ?: $plan->name ?: $planKey,
+                    'description' => $plan->summary ?: $price->label ?: null,
+                    'product' => [
+                        'name' => $plan->name ?: $planKey,
+                        'description' => $plan->summary ?: $price->label ?: null,
+                    ],
+                    'unit_price' => [
+                        'amount' => (string) $customAmountMinor,
+                        'currency_code' => strtoupper((string) $price->currency),
+                    ],
                 ],
-            ],
+            ];
+        }
+
+        $payload = [
+            'items' => [$item],
             'custom_data' => $customData,
             'checkout' => [
                 'success_url' => $successUrl,

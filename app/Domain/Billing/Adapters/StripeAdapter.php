@@ -140,7 +140,8 @@ class StripeAdapter implements BillingRuntimeProvider
         int $quantity,
         string $successUrl,
         string $cancelUrl,
-        ?Discount $discount = null
+        ?Discount $discount = null,
+        ?int $customAmountMinor = null,
     ): TransactionDTO {
         $request = new CheckoutRequest(
             user: $user,
@@ -150,6 +151,7 @@ class StripeAdapter implements BillingRuntimeProvider
             successUrl: $successUrl,
             cancelUrl: $cancelUrl,
             discount: $discount,
+            customAmountMinor: $customAmountMinor,
         );
 
         return $this->createCheckoutSession($request);
@@ -163,16 +165,29 @@ class StripeAdapter implements BillingRuntimeProvider
     public function createCheckoutSession(CheckoutRequest $request): TransactionDTO
     {
         $plan = $this->planService->plan($request->planKey);
-        $priceId = $this->planService->providerPriceId($this->provider(), $request->planKey, $request->priceKey);
+        $price = $plan->getPrice($request->priceKey);
+        $priceId = null;
 
-        if (! $priceId) {
+        if (! $price) {
+            throw BillingException::checkoutFailed(BillingProvider::Stripe, 'price configuration could not be resolved');
+        }
+
+        if ($request->customAmountMinor === null) {
+            $priceId = $this->planService->providerPriceId($this->provider(), $request->planKey, $request->priceKey);
+        }
+
+        if (! $priceId && $request->customAmountMinor === null) {
             throw BillingException::missingPriceId(BillingProvider::Stripe, $request->planKey, $request->priceKey);
         }
 
         $mode = $request->resolveMode($plan);
+        if ($request->customAmountMinor !== null && $mode !== PaymentMode::OneTime) {
+            throw BillingException::checkoutFailed(BillingProvider::Stripe, 'custom amounts are only supported for one-time payments');
+        }
+
         $metadata = $request->metadata();
 
-        $params = $this->buildCheckoutParams($request, $priceId, $mode, $metadata, $plan);
+        $params = $this->buildCheckoutParams($request, $priceId, $mode, $metadata, $plan, $price);
 
         try {
             $client = $this->stripeClient();
@@ -238,31 +253,47 @@ class StripeAdapter implements BillingRuntimeProvider
      * Build checkout session parameters.
      *
      * @param  CheckoutRequest  $request  The checkout request
-     * @param  string  $priceId  Stripe price ID
+     * @param  string|null  $priceId  Stripe price ID
      * @param  string  $mode  Payment mode (subscription or payment)
      * @param  array<string, string>  $metadata  Session metadata
      * @param  \App\Domain\Billing\Data\Plan  $plan  The plan configuration
+     * @param  \App\Domain\Billing\Data\Price  $price  The price configuration
      * @return array<string, mixed>
      */
     private function buildCheckoutParams(
         CheckoutRequest $request,
-        string $priceId,
+        ?string $priceId,
         PaymentMode $mode,
         array $metadata,
-        \App\Domain\Billing\Data\Plan $plan
+        \App\Domain\Billing\Data\Plan $plan,
+        \App\Domain\Billing\Data\Price $price,
     ): array {
         // Build descriptive payment type info
         $paymentTypeLabel = $mode === PaymentMode::Subscription ? 'Subscription' : 'One-time purchase';
         $planName = $plan->name ?? $request->planKey;
 
+        $lineItem = [
+            'price' => $priceId,
+            'quantity' => max($request->quantity, 1),
+        ];
+
+        if ($request->customAmountMinor !== null) {
+            $lineItem = [
+                'price_data' => [
+                    'currency' => strtolower((string) $price->currency),
+                    'unit_amount' => $request->customAmountMinor,
+                    'product_data' => [
+                        'name' => $planName,
+                        'description' => $price->label ?: $paymentTypeLabel,
+                    ],
+                ],
+                'quantity' => max($request->quantity, 1),
+            ];
+        }
+
         $params = [
             'mode' => $mode->value,
-            'line_items' => [
-                [
-                    'price' => $priceId,
-                    'quantity' => max($request->quantity, 1),
-                ],
-            ],
+            'line_items' => [$lineItem],
             'success_url' => $request->successUrl,
             'cancel_url' => $request->cancelUrl,
             'client_reference_id' => (string) $request->user->id,

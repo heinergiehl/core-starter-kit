@@ -257,10 +257,11 @@ class BillingCheckoutEligibilityTest extends TestCase
             ->andReturn('coupon_upgrade_credit_123');
         $runtime->shouldReceive('createCheckout')
             ->once()
-            ->withArgs(function ($user, $planKey, $priceKey, $quantity, $successUrl, $cancelUrl, $discount): bool {
+            ->withArgs(function ($user, $planKey, $priceKey, $quantity, $successUrl, $cancelUrl, $discount, $customAmountMinor): bool {
                 return $planKey === 'agency'
                     && $priceKey === 'once'
                     && $discount instanceof Discount
+                    && $customAmountMinor === null
                     && (int) $discount->amount === 4900
                     && $discount->provider_id === 'coupon_upgrade_credit_123';
             })
@@ -375,6 +376,7 @@ class BillingCheckoutEligibilityTest extends TestCase
             ->assertSeeText('Upgrade credit')
             ->assertSeeText('Due today')
             ->assertSeeText('Your upgrade credit is applied automatically during payment.')
+            ->assertSee('data-summary-due', false)
             ->assertDontSeeText('Promo Code');
     }
 
@@ -464,11 +466,12 @@ class BillingCheckoutEligibilityTest extends TestCase
         $runtime->shouldNotReceive('createDiscount');
         $runtime->shouldReceive('createCheckout')
             ->once()
-            ->withArgs(function ($checkoutUser, $planKey, $priceKey, $quantity, $successUrl, $cancelUrl, $discount) use ($existingDiscount): bool {
+            ->withArgs(function ($checkoutUser, $planKey, $priceKey, $quantity, $successUrl, $cancelUrl, $discount, $customAmountMinor) use ($existingDiscount): bool {
                 return $checkoutUser->id === $existingDiscount->metadata['user_id']
                     && $planKey === 'agency'
                     && $priceKey === 'once'
                     && $discount instanceof Discount
+                    && $customAmountMinor === null
                     && $discount->id === $existingDiscount->id
                     && $discount->provider_id === 'coupon_existing_upgrade_credit';
             })
@@ -494,5 +497,79 @@ class BillingCheckoutEligibilityTest extends TestCase
 
         $response->assertRedirect('https://checkout.example.test/session/cs_test_upgrade_credit_reuse');
         $this->assertSame(1, Discount::query()->where('provider', 'stripe')->where('provider_id', 'coupon_existing_upgrade_credit')->count());
+    }
+
+    public function test_checkout_start_shows_usage_based_plan_details(): void
+    {
+        $scaleProduct = Product::factory()->create([
+            'key' => 'scale',
+            'type' => 'subscription',
+            'is_active' => true,
+        ]);
+
+        Price::factory()->metered()->create([
+            'product_id' => $scaleProduct->id,
+            'key' => 'metered_monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'usage_meter_name' => 'API requests',
+            'usage_meter_key' => 'api_requests',
+            'usage_unit_label' => 'request',
+            'usage_included_units' => 10000,
+            'usage_package_size' => 1000,
+            'usage_overage_amount' => 500,
+        ]);
+
+        $response = $this->get(route('checkout.start', [
+            'plan' => 'scale',
+            'price' => 'metered_monthly',
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('Included usage')
+            ->assertSeeText('10,000 requests')
+            ->assertSeeText('USD 5.00')
+            ->assertSeeText('/ 1,000 requests')
+            ->assertSeeText('Base + usage per month');
+    }
+
+    public function test_checkout_start_shows_blocking_usage_based_plan_details(): void
+    {
+        $scaleProduct = Product::factory()->create([
+            'key' => 'scale',
+            'type' => 'subscription',
+            'is_active' => true,
+        ]);
+
+        Price::factory()->metered()->create([
+            'product_id' => $scaleProduct->id,
+            'key' => 'metered_monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'usage_meter_name' => 'Tracked seats',
+            'usage_meter_key' => 'tracked_seats',
+            'usage_unit_label' => 'seat',
+            'usage_included_units' => 25,
+            'usage_limit_behavior' => 'block',
+            'usage_package_size' => 5,
+            'usage_overage_amount' => 1900,
+        ]);
+
+        $response = $this->get(route('checkout.start', [
+            'plan' => 'scale',
+            'price' => 'metered_monthly',
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('Usage policy')
+            ->assertSeeText('Blocks at included limit')
+            ->assertSeeText('Base + included usage per month')
+            ->assertSeeText('new usage is blocked once the included amount is exhausted');
     }
 }

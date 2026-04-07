@@ -1,20 +1,20 @@
 @extends('emails.text.layout')
 
 @section('content')
-Your plan has been updated
+{{ __('Your plan has been updated') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
 @if(!empty($previousPlanName))
-Your plan changed from {{ $previousPlanName }} to {{ $newPlanName ?? 'your new plan' }}.
+{{ __('Your plan has been changed from :oldPlan to :newPlan.', ['oldPlan' => $previousPlanName, 'newPlan' => $newPlanName ?? __('your new plan')]) }}
 @else
-Your plan is now {{ $newPlanName ?? 'updated' }}.
+{{ __('Your plan is now :plan.', ['plan' => $newPlanName ?? __('updated')]) }}
 @endif
 
 @if(!empty($effectiveDate))
-Effective date: {{ $effectiveDate }}
+{{ __('Effective date:') }} {{ $effectiveDate }}
 @endif
 
-Review billing details:
+{{ __('Review Billing Details') }}:
 {{ config('app.url') }}/billing
 @endsection

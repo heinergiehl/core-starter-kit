@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Locale\LocaleUpdateRequest;
 use App\Support\Localization\LocalizedRouteService;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 
 class LocaleController extends Controller
@@ -13,22 +13,18 @@ class LocaleController extends Controller
         private readonly LocalizedRouteService $localizedRouteService
     ) {}
 
-    public function __invoke(Request $request): RedirectResponse
+    public function __invoke(LocaleUpdateRequest $request): RedirectResponse
     {
-        $locale = (string) $request->input('locale');
-        $localeEnum = \App\Enums\Locale::tryFrom($locale);
+        $validated = $request->validated();
+        $localeEnum = \App\Enums\Locale::from($validated['locale']);
 
-        if (! $localeEnum) {
-            return redirect()->back();
-        }
-
-        $request->session()->put('locale', $locale);
+        $request->session()->put('locale', $localeEnum->value);
 
         if ($request->user() && Schema::hasColumn('users', 'locale')) {
             $request->user()->update(['locale' => $localeEnum]);
         }
 
-        $redirect = (string) $request->input('redirect', '');
+        $redirect = $validated['redirect'] ?? '';
 
         return redirect()->to(
             $this->localizedRouteService->resolveLocaleSwitchRedirect($request, $localeEnum->value, $redirect)

@@ -5,6 +5,7 @@ namespace Tests\Unit\Domain\Billing;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Services\BillingDashboardService;
 use App\Domain\Billing\Services\BillingPlanService;
+use App\Domain\Billing\Services\UsageMeterService;
 use App\Enums\OrderStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -41,7 +42,12 @@ class BillingDashboardServiceTest extends TestCase
             ->with('agency')
             ->andThrow(new \ValueError('Invalid catalog data'));
 
-        $service = new BillingDashboardService($planService);
+        $usageMeterService = Mockery::mock(UsageMeterService::class);
+        $usageMeterService->shouldNotReceive('summaryFor');
+        $usageMeterService->shouldNotReceive('quotaStatusFor');
+        $usageMeterService->shouldNotReceive('historyFor');
+
+        $service = new BillingDashboardService($planService, $usageMeterService);
         $data = $service->getData($user);
 
         $this->assertNotNull($data['recentOneTimeOrder']);

@@ -25,7 +25,7 @@ class SubscriptionPlanChangedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your plan has been updated',
+            subject: __('Your plan has been updated'),
         );
     }
 

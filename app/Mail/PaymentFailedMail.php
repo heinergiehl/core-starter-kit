@@ -26,7 +26,7 @@ class PaymentFailedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Action Required: Payment Failed',
+            subject: __('Action Required: Payment Failed'),
         );
     }
 

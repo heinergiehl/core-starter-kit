@@ -152,6 +152,10 @@ class CheckoutService
         ?Subscription $activeSubscription = null,
         ?Order $latestOneTimeOrder = null,
     ): CheckoutEligibility {
+        if ($targetPrice->supportsCustomAmount()) {
+            return CheckoutEligibility::allow();
+        }
+
         $activeSubscription ??= $user->activeSubscription();
 
         // Active/trialing subscriptions are managed via change-plan, not fresh checkout.
@@ -273,6 +277,7 @@ class CheckoutService
         ?Discount $discount = null,
         array $extraCustomData = [],
         ?string $customerEmail = null,
+        ?int $customAmountMinor = null,
     ): TransactionDTO|RedirectResponse {
         try {
             /** @var PaddleAdapter $adapter */
@@ -288,6 +293,7 @@ class CheckoutService
                 $discount,
                 $extraCustomData,
                 $customerEmail,
+                $customAmountMinor,
             );
 
             return $dto;
@@ -315,6 +321,7 @@ class CheckoutService
         string $transactionId,
         ?User $user = null,
         ?Discount $discount = null,
+        ?int $customAmountMinor = null,
     ): array {
         $data = [
             'mode' => 'inline',
@@ -323,7 +330,7 @@ class CheckoutService
             'plan_name' => $plan->name ?: $planKey,
             'price_key' => $priceKey,
             'price_label' => $price->label ?: ucfirst($priceKey),
-            'amount' => $price->amount,
+            'amount' => $customAmountMinor ?? $price->amount,
             'amount_is_minor' => $price->amountIsMinor,
             'currency' => $priceCurrency,
             'interval' => $price->interval ?: null,
@@ -353,6 +360,7 @@ class CheckoutService
                 'price_key' => $priceKey,
                 'discount_id' => $discount?->id,
                 'discount_code' => $discount?->code,
+                'custom_amount_minor' => $customAmountMinor,
             ]);
         }
 

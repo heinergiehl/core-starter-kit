@@ -180,6 +180,200 @@
                     @endif
                 </div>
 
+                @if ($usageSummary)
+                    @php
+                        $baseFeeLabel = null;
+                        if ($currentPrice) {
+                            $baseFeeLabel = ($currentPrice->amountIsMinor ?? true)
+                                ? \App\Support\Money\CurrencyAmount::formatMinor($currentPrice->amount, $usageSummary->currency, true, true)
+                                : \App\Support\Money\CurrencyAmount::formatMajor($currentPrice->amount, $usageSummary->currency, true, true);
+                        }
+                        $usageLimitBehavior = $currentPrice?->usageLimitBehavior instanceof \App\Enums\UsageLimitBehavior
+                            ? $currentPrice->usageLimitBehavior
+                            : \App\Enums\UsageLimitBehavior::tryFrom((string) ($currentPrice?->usageLimitBehavior?->value ?? $currentPrice?->usageLimitBehavior ?? '')) ?? \App\Enums\UsageLimitBehavior::BillOverage;
+                        $usageBlocksAtLimit = $usageLimitBehavior->blocksUsage();
+                        $progressPercent = $usageSummary->includedUnits !== null && $usageSummary->includedUnits > 0
+                            ? min(100, (int) round(($usageSummary->usedUnits / max($usageSummary->includedUnits, 1)) * 100))
+                            : null;
+                        $overageRateLabel = ! $usageBlocksAtLimit && $usageSummary->overageAmountMinor !== null
+                            ? \App\Support\Money\CurrencyAmount::formatMinor($usageSummary->overageAmountMinor, $usageSummary->currency, true, true)
+                            : null;
+                        $estimatedOverageLabel = \App\Support\Money\CurrencyAmount::formatMinor($usageSummary->estimatedOverageAmountMinor, $usageSummary->currency, true, true);
+                        $packageUnitsLabel = number_format($usageSummary->packageSize).' '.\Illuminate\Support\Str::plural($usageSummary->unitLabel, $usageSummary->packageSize);
+                        $usageHistoryItems = $usageHistory ?? collect();
+                    @endphp
+
+                    <div class="glass-panel rounded-[32px] p-8 mb-6">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Current Usage') }}</p>
+                                <div class="mt-2 flex flex-wrap items-center gap-3">
+                                    <h3 class="text-2xl font-display font-bold text-ink">{{ $usageSummary->meterName }}</h3>
+                                    <span class="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide {{ $usageBlocksAtLimit ? 'border-amber-500/20 bg-amber-500/10 text-amber-700' : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700' }}">
+                                        {{ $usageBlocksAtLimit ? __('Blocks at limit') : __('Bills overages') }}
+                                    </span>
+                                </div>
+                                <p class="mt-2 text-sm text-ink/60">
+                                    {{ __('Billing cycle: :start to :end', [
+                                        'start' => $usageSummary->cycleStartsAt->format('M j'),
+                                        'end' => $usageSummary->cycleEndsAt->format('M j, Y'),
+                                    ]) }}
+                                </p>
+                            </div>
+
+                            <div class="grid gap-3 sm:grid-cols-3 lg:w-[34rem]">
+                                <div class="rounded-2xl border border-ink/5 bg-surface/30 p-4">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-ink/40">{{ __('Base fee') }}</p>
+                                    <p class="mt-1 text-lg font-semibold text-ink">{{ $baseFeeLabel ?? __('Included') }}</p>
+                                </div>
+                                <div class="rounded-2xl border border-ink/5 bg-surface/30 p-4">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-ink/40">{{ __('Used this cycle') }}</p>
+                                    <p class="mt-1 text-lg font-semibold text-ink">
+                                        {{ number_format($usageSummary->usedUnits) }} {{ \Illuminate\Support\Str::plural($usageSummary->unitLabel, $usageSummary->usedUnits) }}
+                                    </p>
+                                </div>
+                                <div class="rounded-2xl border border-ink/5 bg-surface/30 p-4">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-ink/40">
+                                        {{ $usageBlocksAtLimit ? __('Usage policy') : __('Estimated overage') }}
+                                    </p>
+                                    <p class="mt-1 text-lg font-semibold text-ink">
+                                        {{ $usageBlocksAtLimit ? __('Blocks at limit') : $estimatedOverageLabel }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 rounded-3xl border border-ink/10 bg-surface/20 p-5">
+                            @if ($usageSummary->includedUnits !== null)
+                                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                                    <div>
+                                        <p class="text-sm font-semibold text-ink">
+                                            {{ __(':used of :included included :units used', [
+                                                'used' => number_format($usageSummary->usedUnits),
+                                                'included' => number_format($usageSummary->includedUnits),
+                                                'units' => \Illuminate\Support\Str::plural($usageSummary->unitLabel, $usageSummary->includedUnits),
+                                            ]) }}
+                                        </p>
+                                        <p class="mt-1 text-xs text-ink/55">
+                                            {{ __('Remaining included usage: :remaining', ['remaining' => number_format($usageSummary->remainingUnits ?? 0)]) }}
+                                        </p>
+                                    </div>
+                                    @if ($progressPercent !== null)
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-ink/40">{{ $progressPercent }}%</p>
+                                    @endif
+                                </div>
+
+                                <div class="mt-4 h-3 overflow-hidden rounded-full bg-ink/5">
+                                    <div
+                                        class="h-full rounded-full bg-gradient-to-r from-primary via-secondary to-primary transition-all duration-500"
+                                        style="width: {{ $progressPercent ?? 0 }}%;"
+                                    ></div>
+                                </div>
+                            @else
+                                <p class="text-sm font-semibold text-ink">{{ __('This plan bills usage from the first :unit each cycle.', ['unit' => $usageSummary->unitLabel]) }}</p>
+                                <p class="mt-2 text-xs text-ink/55">
+                                    {{ __('No included usage is configured. Your current cycle total is shown above and overage estimates update as usage records are added.') }}
+                                </p>
+                            @endif
+
+                            @if ($usageBlocksAtLimit && $usageQuotaStatus?->limitReached())
+                                <div class="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700">
+                                    {{ __('Included usage is exhausted. New :units are blocked until the next billing cycle or a plan upgrade.', [
+                                        'units' => \Illuminate\Support\Str::plural($usageSummary->unitLabel, 2),
+                                    ]) }}
+                                </div>
+                            @endif
+
+                            <div class="mt-5 grid gap-3 sm:grid-cols-3">
+                                <div class="rounded-2xl border border-ink/5 bg-white/50 px-4 py-3">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-ink/40">
+                                        {{ $usageBlocksAtLimit ? __('Usage policy') : __('Overage rate') }}
+                                    </p>
+                                    <p class="mt-1 text-sm font-semibold text-ink">
+                                        @if ($usageBlocksAtLimit)
+                                            {{ __('Blocks at included limit') }}
+                                        @elseif ($overageRateLabel)
+                                            {{ $overageRateLabel }} / {{ $packageUnitsLabel }}
+                                        @else
+                                            {{ __('No overage charge') }}
+                                        @endif
+                                    </p>
+                                </div>
+                                <div class="rounded-2xl border border-ink/5 bg-white/50 px-4 py-3">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-ink/40">
+                                        {{ $usageBlocksAtLimit ? __('Remaining before block') : __('Billable overage') }}
+                                    </p>
+                                    <p class="mt-1 text-sm font-semibold text-ink">
+                                        @if ($usageBlocksAtLimit)
+                                            @if ($usageSummary->remainingUnits !== null)
+                                                {{ number_format($usageSummary->remainingUnits) }} {{ \Illuminate\Support\Str::plural($usageSummary->unitLabel, $usageSummary->remainingUnits) }}
+                                            @else
+                                                {{ __('Not configured') }}
+                                            @endif
+                                        @else
+                                            {{ number_format($usageSummary->overageUnits) }} {{ \Illuminate\Support\Str::plural($usageSummary->unitLabel, $usageSummary->overageUnits) }}
+                                        @endif
+                                    </p>
+                                </div>
+                                <div class="rounded-2xl border border-ink/5 bg-white/50 px-4 py-3">
+                                    <p class="text-xs font-medium uppercase tracking-wide text-ink/40">
+                                        {{ $usageBlocksAtLimit ? __('Cycle reset') : __('Package rounding') }}
+                                    </p>
+                                    <p class="mt-1 text-sm font-semibold text-ink">
+                                        {{ $usageBlocksAtLimit ? __('Every :interval', ['interval' => $usageSummary->intervalLabel]) : ($usageSummary->roundingMode === 'down' ? __('Round down') : __('Round up')) }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 rounded-3xl border border-ink/10 bg-white/40 p-5">
+                            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                                <div>
+                                    <p class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ __('Recent usage events') }}</p>
+                                    <h4 class="mt-1 text-lg font-semibold text-ink">{{ __('Latest activity this cycle') }}</h4>
+                                </div>
+                                <p class="text-xs font-medium uppercase tracking-wide text-ink/40">
+                                    {{ trans_choice(':count event|:count events', $usageHistoryItems->count(), ['count' => $usageHistoryItems->count()]) }}
+                                </p>
+                            </div>
+
+                            @if ($usageHistoryItems->isNotEmpty())
+                                <div class="mt-4 space-y-3">
+                                    @foreach ($usageHistoryItems as $record)
+                                        @php
+                                            $source = trim((string) data_get($record->metadata, 'source', ''));
+                                            $sourceLabel = $source !== ''
+                                                ? str_replace(
+                                                    ['Api ', 'Id ', 'Ui ', 'Ip '],
+                                                    ['API ', 'ID ', 'UI ', 'IP '],
+                                                    \Illuminate\Support\Str::headline($source)
+                                                )
+                                                : __('Usage event');
+                                        @endphp
+                                        <div class="flex flex-col gap-3 rounded-2xl border border-ink/5 bg-surface/30 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                            <div>
+                                                <p class="text-sm font-semibold text-ink">
+                                                    {{ number_format($record->quantity) }} {{ \Illuminate\Support\Str::plural($usageSummary->unitLabel, $record->quantity) }}
+                                                </p>
+                                                <p class="mt-1 text-xs text-ink/55">
+                                                    {{ $record->occurred_at?->format('M j, Y H:i') ?? __('Recorded recently') }}
+                                                </p>
+                                            </div>
+                                            <span class="inline-flex items-center rounded-full border border-ink/10 bg-white/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-ink/55">
+                                                {{ $sourceLabel }}
+                                            </span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @else
+                                <div class="mt-4 rounded-2xl border border-dashed border-ink/10 bg-surface/20 px-4 py-5 text-sm text-ink/60">
+                                    {{ __('Usage events from this cycle will appear here after your app records them.') }}
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endif
+
                 <!-- Recent Invoices -->
                 @if ($invoices->isNotEmpty())
                     <div class="glass-panel rounded-[32px] p-8">

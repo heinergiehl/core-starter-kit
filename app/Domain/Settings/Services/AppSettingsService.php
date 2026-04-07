@@ -271,7 +271,7 @@ class AppSettingsService
             return true;
         }
 
-        $timeout = (float) env('DB_CONNECT_PROBE_TIMEOUT', 1.0);
+        $timeout = (float) config('database.connect_probe_timeout', 1.0);
         $socket = @fsockopen($host, (int) $port, $errorCode, $errorMessage, $timeout);
 
         if (! is_resource($socket)) {

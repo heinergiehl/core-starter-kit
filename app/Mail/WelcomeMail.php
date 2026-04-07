@@ -22,7 +22,7 @@ class WelcomeMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Welcome to '.config('app.name').'!',
+            subject: __('Welcome to :appName!', ['appName' => config('app.name')]),
         );
     }
 

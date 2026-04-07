@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Onboarding\OnboardingStepOneRequest;
+use App\Http\Requests\Onboarding\OnboardingStepTwoRequest;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,37 +39,38 @@ class OnboardingController extends Controller
     /**
      * Process the current step and advance.
      */
-    public function update(Request $request): RedirectResponse
+    public function updateStepOne(OnboardingStepOneRequest $request): RedirectResponse
+    {
+        $request->user()->update(['name' => $request->validated('name')]);
+
+        return redirect()->route('onboarding.show', ['step' => 2]);
+    }
+
+    public function updateStepTwo(OnboardingStepTwoRequest $request): RedirectResponse
     {
         $user = $request->user();
+
+        $user->update([
+            'locale' => \App\Enums\Locale::tryFrom($request->validated('locale')) ?? $user->locale,
+            'onboarding_completed_at' => now(),
+        ]);
+
+        return redirect()->route('dashboard')
+            ->with('success', __('Welcome aboard! Your account is all set up.'));
+    }
+
+    /**
+     * @deprecated Use updateStepOne() and updateStepTwo() instead.
+     */
+    public function update(Request $request): RedirectResponse
+    {
         $step = (int) $request->input('step', 1);
 
-        switch ($step) {
-            case 1:
-                // Welcome step - just name confirmation
-                $request->validate([
-                    'name' => ['required', 'string', 'max:255'],
-                ]);
-                $user->update(['name' => $request->name]);
-
-                return redirect()->route('onboarding.show', ['step' => 2]);
-
-            case 2:
-                // Preferences and complete
-                $request->validate([
-                    'locale' => ['nullable', 'string', 'max:10'],
-                ]);
-
-                $user->update([
-                    'locale' => \App\Enums\Locale::tryFrom($request->locale) ?? $user->locale,
-                    'onboarding_completed_at' => now(),
-                ]);
-
-                return redirect()->route('dashboard')
-                    ->with('success', __('Welcome aboard! Your account is all set up.'));
-        }
-
-        return redirect()->route('onboarding.show');
+        return match ($step) {
+            1 => $this->updateStepOne(app(OnboardingStepOneRequest::class)),
+            2 => $this->updateStepTwo(app(OnboardingStepTwoRequest::class)),
+            default => redirect()->route('onboarding.show'),
+        };
     }
 
     /**

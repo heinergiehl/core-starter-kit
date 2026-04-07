@@ -3,8 +3,10 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Billing\Models\Subscription;
+use App\Filament\Admin\Exporters\SubscriptionExporter;
 use App\Filament\Admin\Resources\SubscriptionResource\Pages\ListSubscriptions;
 use App\Filament\Admin\Resources\SubscriptionResource\Pages\ViewSubscription;
+use Filament\Actions\ExportAction;
 use Filament\Actions\ViewAction;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Resources\Resource;
@@ -80,6 +82,10 @@ class SubscriptionResource extends Resource
                     ->dateTime()
                     ->sortable()
                     ->toggleable(),
+            ])
+            ->headerActions([
+                ExportAction::make()
+                    ->exporter(SubscriptionExporter::class),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([

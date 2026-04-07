@@ -1,15 +1,15 @@
 @extends('emails.text.layout')
 
 @section('content')
-We are sorry to see you go
+{{ __('We\'re sorry to see you go') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
-Your {{ $planName ?? 'subscription' }} has been cancelled.
-Access until: {{ $accessUntil ?? 'End of billing period' }}
+{{ __('Your :planName has been cancelled.', ['planName' => $planName ?? __('subscription')]) }}
+{{ __('Access until:') }} {{ $accessUntil ?? __('End of billing period') }}
 
-Reactivate anytime:
+{{ __('Reactivate Anytime') }}:
 {{ config('app.url') }}/billing
 
-If there is anything we could have done better, please let us know.
+{{ __('If there is anything we could have done better, please let us know.') }}
 @endsection

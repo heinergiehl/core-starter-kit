@@ -1,26 +1,26 @@
 @extends('emails.text.layout')
 
 @section('content')
-Your subscription is active
+{{ __('Your subscription is active') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
-Your {{ $planName ?? 'subscription' }} is now active.
+{{ __('Your :planName is now active.', ['planName' => $planName ?? __('subscription')]) }}
 @if(isset($amount) && isset($currency))
-Amount: {{ $currency }} {{ number_format($amount / 100, 2) }}
+{{ __('Amount') }}: {{ $currency }} {{ number_format($amount / 100, 2) }}
 @endif
 
-Included features:
+{{ __('Included features:') }}
 @if(isset($features) && is_array($features) && count($features))
 @foreach($features as $feature)
 - {{ $feature }}
 @endforeach
 @else
-- Access all premium features
-- Priority support
-- Regular updates
+- {{ __('Access all premium features') }}
+- {{ __('Priority support') }}
+- {{ __('Regular updates') }}
 @endif
 
-Start using {{ config('app.name') }}:
+{{ __('Start using :appName', ['appName' => config('app.name')]) }}:
 {{ config('app.url') }}/dashboard
 @endsection

@@ -26,7 +26,7 @@ class PaymentSuccessfulMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Payment successful',
+            subject: __('Payment successful'),
         );
     }
 

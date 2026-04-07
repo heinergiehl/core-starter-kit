@@ -1,25 +1,25 @@
 @extends('emails.text.layout')
 
 @section('content')
-Action Required: Payment Failed
+{{ __('Action Required: Payment Failed') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
-We were not able to process your payment for {{ $planName ?? 'your subscription' }}.
+{{ __('We were unable to process your payment for :planName.', ['planName' => $planName ?? __('your subscription')]) }}
 @if(isset($amount) && isset($currency))
-Amount: {{ $currency }} {{ number_format($amount / 100, 2) }}
+{{ __('Amount') }}: {{ $currency }} {{ number_format($amount / 100, 2) }}
 @endif
 @if(isset($failureReason))
-Reason: {{ $failureReason }}
+{{ __('Reason') }}: {{ $failureReason }}
 @endif
 
-Update your payment method:
+{{ __('Update Payment Method') }}:
 {{ config('app.url') }}/billing
 
-Common reasons:
-- Card expired or cancelled
-- Insufficient funds
-- Bank declined the transaction
+{{ __('Common reasons for payment failure:') }}
+- {{ __('Card expired or cancelled') }}
+- {{ __('Insufficient funds') }}
+- {{ __('Bank declined the transaction') }}
 
-If you need help, our support team is here for you.
+{{ __('If you need help, our support team is here for you.') }}
 @endsection

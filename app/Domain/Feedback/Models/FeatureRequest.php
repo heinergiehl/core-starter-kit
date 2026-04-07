@@ -13,6 +13,11 @@ class FeatureRequest extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\Domain\Feedback\FeatureRequestFactory::new();
+    }
+
     protected static function booted(): void
     {
         static::creating(function (FeatureRequest $request): void {

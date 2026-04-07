@@ -12,6 +12,6 @@
 {{ $appName }}
 {{ $appUrl }}
 @if($supportEmail)
-Support: {{ $supportEmail }}
+{{ __('Contact support') }}: {{ $supportEmail }}
 @endif
 

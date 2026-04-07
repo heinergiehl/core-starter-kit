@@ -41,9 +41,6 @@ return [
             'redispatch_received_after_seconds' => env('BILLING_WEBHOOK_REDISPATCH_RECEIVED_AFTER', 30),
             'processing_stale_after_minutes' => env('BILLING_WEBHOOK_PROCESSING_STALE_AFTER', 15),
         ],
-        'outbox' => [
-            // Reserved for future use
-        ],
         'success_url' => env('BILLING_SUCCESS_URL'),
         'cancel_url' => env('BILLING_CANCEL_URL'),
         'pricing' => [
@@ -88,8 +85,8 @@ return [
         'supported' => [
             'en' => 'English',
             'de' => 'Deutsch',
-            'es' => 'Espanol',
-            'fr' => 'Francais',
+            'es' => 'Español',
+            'fr' => 'Français',
         ],
     ],
     'seo' => [

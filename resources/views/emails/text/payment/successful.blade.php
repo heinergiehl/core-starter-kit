@@ -1,19 +1,19 @@
 @extends('emails.text.layout')
 
 @section('content')
-Payment Successful
+{{ __('Payment Successful') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
-We have received your payment for {{ $planName ?? 'Product' }}.
+{{ __('We\'ve received your payment for :planName.', ['planName' => $planName ?? __('Product')]) }}
 @if(isset($amount) && isset($currency))
-Amount: {{ $currency }} {{ number_format($amount / 100, 2) }}
+{{ __('Amount') }}: {{ $currency }} {{ number_format($amount / 100, 2) }}
 @endif
 
 @if(isset($receiptUrl))
-View receipt:
+{{ __('View Receipt') }}:
 {{ $receiptUrl }}
 @endif
 
-Thank you for your purchase. If you have any questions, feel free to reply to this email.
+{{ __('Thank you for your purchase!') }} {{ __('If you have any questions, feel free to reach out to our support team.') }}
 @endsection

@@ -12,6 +12,11 @@ class Invoice extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\Domain\Billing\InvoiceFactory::new();
+    }
+
     protected $fillable = [
         'user_id',
         'subscription_id',

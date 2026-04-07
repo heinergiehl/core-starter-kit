@@ -9,6 +9,11 @@ class WebhookEvent extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\Domain\Billing\WebhookEventFactory::new();
+    }
+
     protected $table = 'webhook_events';
 
     protected $fillable = [

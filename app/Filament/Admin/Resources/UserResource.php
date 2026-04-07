@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Domain\Identity\Services\ImpersonationService;
+use App\Filament\Admin\Exporters\UserExporter;
 use App\Filament\Admin\Resources\UserResource\Pages\CreateUser;
 use App\Filament\Admin\Resources\UserResource\Pages\EditUser;
 use App\Filament\Admin\Resources\UserResource\Pages\ListUsers;
@@ -12,6 +13,7 @@ use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ExportAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -144,6 +146,8 @@ class UserResource extends Resource
             ])
             ->headerActions([
                 CreateAction::make(),
+                ExportAction::make()
+                    ->exporter(UserExporter::class),
             ])
             ->defaultSort('created_at', 'desc')
             ->actions([

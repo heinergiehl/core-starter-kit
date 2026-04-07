@@ -9,9 +9,10 @@ use App\Domain\Billing\Services\CheckoutService;
 use App\Domain\Billing\Services\DiscountService;
 use App\Enums\DiscountType;
 use App\Enums\PaymentMode;
+use App\Http\Requests\Billing\BillingCheckoutRequest;
+use App\Support\Money\CurrencyAmount;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -21,7 +22,7 @@ use Throwable;
 class BillingCheckoutController
 {
     public function store(
-        Request $request,
+        BillingCheckoutRequest $request,
         BillingPlanService $plans,
         BillingProviderManager $providers,
         DiscountService $discounts,
@@ -29,14 +30,7 @@ class BillingCheckoutController
     ): RedirectResponse {
         $checkoutRequestId = (string) Str::uuid();
 
-        $data = $request->validate([
-            'plan' => ['required', 'string'],
-            'price' => ['required', 'string'],
-            'provider' => ['required', 'string'],
-            'coupon' => ['nullable', 'string'],
-            'email' => ['nullable', 'email'],
-            'name' => ['nullable', 'string', 'max:255'],
-        ]);
+        $data = $request->validated();
 
         $provider = strtolower($data['provider'] ?? $plans->defaultProvider());
         $availableProviders = $plans->providers();
@@ -87,6 +81,39 @@ class BillingCheckoutController
         }
 
         $priceCurrency = $price->currency;
+        $customAmountMinor = null;
+
+        if ($price->supportsCustomAmount()) {
+            $customAmountMinor = $this->resolveCustomAmountMinor($data['custom_amount'] ?? null, $priceCurrency);
+
+            if ($customAmountMinor === null) {
+                return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                    ->withErrors([
+                        'billing' => __('Enter a valid custom amount to continue.'),
+                    ])
+                    ->withInput();
+            }
+
+            if ($price->customAmountMinimum !== null && $customAmountMinor < $price->customAmountMinimum) {
+                return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                    ->withErrors([
+                        'billing' => __('The minimum amount is :amount.', [
+                            'amount' => $this->formatMinorAmount($price->customAmountMinimum, $priceCurrency),
+                        ]),
+                    ])
+                    ->withInput();
+            }
+
+            if ($price->customAmountMaximum !== null && $customAmountMinor > $price->customAmountMaximum) {
+                return redirect()->route('checkout.start', $request->only(['provider', 'plan', 'price']))
+                    ->withErrors([
+                        'billing' => __('The maximum amount is :amount.', [
+                            'amount' => $this->formatMinorAmount($price->customAmountMaximum, $priceCurrency),
+                        ]),
+                    ])
+                    ->withInput();
+            }
+        }
 
         $discount = null;
         if (! empty($data['coupon'])) {
@@ -99,9 +126,11 @@ class BillingCheckoutController
             );
         }
 
-        $providerPriceId = $plans->providerPriceId($provider, $data['plan'], $data['price']);
+        $providerPriceId = $price->supportsCustomAmount()
+            ? null
+            : $plans->providerPriceId($provider, $data['plan'], $data['price']);
 
-        if (! $providerPriceId) {
+        if (! $providerPriceId && ! $price->supportsCustomAmount()) {
             return back()
                 ->withErrors([
                     'billing' => 'This price is not configured for '.ucfirst($provider).'.',
@@ -242,7 +271,8 @@ class BillingCheckoutController
                 $cancelUrl,
                 $discount,
                 [],
-                $user->email
+                $user->email,
+                $customAmountMinor,
             );
 
             if ($transactionDto instanceof RedirectResponse) {
@@ -268,7 +298,8 @@ class BillingCheckoutController
                 $providerPriceId,
                 $transactionId,
                 $user,
-                $discount
+                $discount,
+                $customAmountMinor
             );
             $paddleSession['success_url'] = $successUrl;
             $paddleSession['cancel_url'] = $cancelUrl;
@@ -294,7 +325,8 @@ class BillingCheckoutController
                 $quantity,
                 $successUrl,
                 $cancelUrl,
-                $discount
+                $discount,
+                $customAmountMinor
             );
             $checkoutUrl = $checkoutDto->url;
 
@@ -473,5 +505,21 @@ class BillingCheckoutController
     private function upgradeCreditCode(int $userId): string
     {
         return 'UPG-'.$userId.'-'.Str::upper(Str::random(10));
+    }
+
+    private function resolveCustomAmountMinor(mixed $value, ?string $currency): ?int
+    {
+        $amountMinor = CurrencyAmount::parseMajorToMinor($value, $currency);
+
+        if ($amountMinor === null || $amountMinor <= 0) {
+            return null;
+        }
+
+        return $amountMinor;
+    }
+
+    private function formatMinorAmount(int $amountMinor, string $currency): string
+    {
+        return CurrencyAmount::formatMinor($amountMinor, $currency, true, true);
     }
 }

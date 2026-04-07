@@ -48,7 +48,8 @@ interface BillingRuntimeProvider
         int $quantity,
         string $successUrl,
         string $cancelUrl,
-        ?Discount $discount = null
+        ?Discount $discount = null,
+        ?int $customAmountMinor = null,
     ): \App\Domain\Billing\Data\TransactionDTO;
 
     /**

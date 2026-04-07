@@ -10,6 +10,11 @@ class Discount extends Model
 {
     use HasFactory;
 
+    protected static function newFactory()
+    {
+        return \Database\Factories\Domain\Billing\DiscountFactory::new();
+    }
+
     protected $fillable = [
         'code',
         'name',

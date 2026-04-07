@@ -25,7 +25,7 @@ class SubscriptionTrialStartedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your trial has started',
+            subject: __('Your trial has started'),
         );
     }
 

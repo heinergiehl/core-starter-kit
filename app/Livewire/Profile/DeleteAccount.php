@@ -40,10 +40,12 @@ class DeleteAccount extends Component
 
         Auth::logout();
 
-        $user->delete();
+        if (request()->hasSession()) {
+            request()->session()->invalidate();
+            request()->session()->regenerateToken();
+        }
 
-        request()->session()->invalidate();
-        request()->session()->regenerateToken();
+        $user->delete();
 
         $this->redirect('/', navigate: true);
     }

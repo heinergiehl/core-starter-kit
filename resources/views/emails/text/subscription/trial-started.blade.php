@@ -1,26 +1,26 @@
 @extends('emails.text.layout')
 
 @section('content')
-Your trial has started
+{{ __('Your trial has started!') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
-Your {{ $planName ?? 'subscription' }} trial is now active.
+{{ __('Your :planName trial is now active.', ['planName' => $planName ?? __('subscription')]) }}
 @if(!empty($trialEndsAt))
-Trial ends: {{ $trialEndsAt }}
+{{ __('Trial ends:') }} {{ $trialEndsAt }}
 @endif
 
-Included features:
+{{ __('Included features:') }}
 @if(isset($features) && is_array($features) && count($features))
 @foreach($features as $feature)
 - {{ $feature }}
 @endforeach
 @else
-- Explore all premium features
-- Complete your profile
-- Start using the app
+- {{ __('Explore all premium features') }}
+- {{ __('Complete your profile') }}
+- {{ __('Start using the app') }}
 @endif
 
-Start your trial:
+{{ __('Start Your Trial') }}:
 {{ config('app.url') }}/dashboard
 @endsection

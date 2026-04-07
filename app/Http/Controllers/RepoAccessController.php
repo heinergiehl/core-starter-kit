@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Domain\RepoAccess\Services\GitHubUserLookupService;
 use App\Domain\RepoAccess\Services\RepoAccessService;
+use App\Http\Requests\RepoAccess\SearchGithubUsersRequest;
+use App\Http\Requests\RepoAccess\SelectGithubUsernameRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -85,12 +87,11 @@ class RepoAccessController extends Controller
     }
 
     public function searchGithubUsers(
-        Request $request,
+        SearchGithubUsersRequest $request,
         RepoAccessService $repoAccessService,
         GitHubUserLookupService $lookupService
     ): JsonResponse {
         $user = $request->user();
-        abort_unless($user, 403);
 
         if (! $repoAccessService->isEnabled()) {
             return response()->json([
@@ -106,9 +107,7 @@ class RepoAccessController extends Controller
             ], 422);
         }
 
-        $validated = $request->validate([
-            'q' => ['required', 'string', 'min:2', 'max:39'],
-        ]);
+        $validated = $request->validated();
 
         return response()->json([
             'items' => $lookupService->searchUsers($validated['q']),
@@ -116,12 +115,11 @@ class RepoAccessController extends Controller
     }
 
     public function selectGithubUsername(
-        Request $request,
+        SelectGithubUsernameRequest $request,
         RepoAccessService $repoAccessService,
         GitHubUserLookupService $lookupService
     ): JsonResponse {
         $user = $request->user();
-        abort_unless($user, 403);
 
         if (! $repoAccessService->isEnabled()) {
             return response()->json([
@@ -135,10 +133,7 @@ class RepoAccessController extends Controller
             ], 422);
         }
 
-        $validated = $request->validate([
-            'login' => ['required', 'string', 'max:39', 'regex:/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/'],
-            'id' => ['nullable', 'integer', 'min:1'],
-        ]);
+        $validated = $request->validated();
 
         $resolved = null;
         if (! empty($validated['id'])) {

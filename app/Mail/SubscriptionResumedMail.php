@@ -23,7 +23,7 @@ class SubscriptionResumedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your subscription has been resumed',
+            subject: __('Your subscription has been resumed'),
         );
     }
 

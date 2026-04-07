@@ -23,7 +23,7 @@
     $cardBg = '#ffffff';
 @endphp
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -118,12 +118,12 @@
                                 </tr>
                                 <tr>
                                     <td class="email-footer" style="padding: 24px 32px; text-align: center; color: {{ $mutedColor }}; font-size: 13px; border-top: 1px solid #e2e8f0; line-height: 1.6;">
-                                        <p style="margin: 0 0 8px;">&copy; {{ date('Y') }} {{ $appName }}. All rights reserved.</p>
+                                        <p style="margin: 0 0 8px;">&copy; {{ date('Y') }} {{ $appName }}. {{ __('All rights reserved.') }}</p>
                                         @if($supportEmail)
-                                            <p style="margin: 0 0 8px;">Questions? <a href="mailto:{{ $supportEmail }}" style="color: {{ $secondaryColor }}; text-decoration: underline;">Contact support</a></p>
+                                            <p style="margin: 0 0 8px;">{{ __('Questions?') }} <a href="mailto:{{ $supportEmail }}" style="color: {{ $secondaryColor }}; text-decoration: underline;">{{ __('Contact support') }}</a></p>
                                         @endif
                                         <p style="margin: 8px 0 0;">
-                                            <a href="{{ $appUrl }}" style="color: {{ $secondaryColor }}; text-decoration: underline;">Visit {{ $appName }}</a>
+                                            <a href="{{ $appUrl }}" style="color: {{ $secondaryColor }}; text-decoration: underline;">{{ __('Visit :appName', ['appName' => $appName]) }}</a>
                                         </p>
                                     </td>
                                 </tr>

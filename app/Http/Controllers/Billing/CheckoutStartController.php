@@ -75,7 +75,9 @@ class CheckoutStartController
                 $upgradeCreditAmount = $checkoutService->oneTimeUpgradeCreditAmount($user, $plan, $price);
 
                 if ($upgradeCreditAmount > 0) {
-                    $targetAmount = (int) round((float) $price->amount);
+                    $targetAmount = $price->supportsCustomAmount()
+                        ? (int) ($price->customAmountDefault ?? round((float) $price->amount))
+                        : (int) round((float) $price->amount);
                     $upgradeAmountDue = max($targetAmount - $upgradeCreditAmount, 0);
                     $couponEnabled = false;
                 }

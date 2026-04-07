@@ -26,7 +26,7 @@ class SubscriptionStartedMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your subscription is now active!',
+            subject: __('Your subscription is now active!'),
         );
     }
 

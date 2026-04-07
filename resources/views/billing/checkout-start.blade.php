@@ -9,13 +9,42 @@
         $upgradeCreditAmount = (int) ($upgrade_credit_amount ?? 0);
         $upgradeAmountDue = $upgrade_amount_due;
         $currencyCode = strtoupper((string) ($price_currency ?? $price->currency ?? 'USD'));
+        $currencyScale = \App\Support\Money\CurrencyAmount::fractionDigits($currencyCode);
+        $currencyStep = \App\Support\Money\CurrencyAmount::inputStep($currencyCode);
         $priceAmountRaw = (float) ($price->amount ?? 0);
         $priceAmountMinor = (int) round($priceAmountRaw);
+        $supportsCustomAmount = (bool) ($price->allowCustomAmount ?? false);
+        $isMetered = (bool) ($price->isMetered ?? false);
+        $usageLimitBehavior = $price->usageLimitBehavior instanceof \App\Enums\UsageLimitBehavior
+            ? $price->usageLimitBehavior
+            : \App\Enums\UsageLimitBehavior::tryFrom((string) ($price->usageLimitBehavior ?? '')) ?? \App\Enums\UsageLimitBehavior::BillOverage;
+        $usageBlocksAtLimit = $usageLimitBehavior->blocksUsage();
+        $usageMeterName = (string) ($price->usageMeterName ?? __('Usage'));
+        $usageUnitLabel = (string) ($price->usageUnitLabel ?? 'unit');
+        $usageIncludedUnits = is_numeric($price->usageIncludedUnits ?? null)
+            ? (int) $price->usageIncludedUnits
+            : null;
+        $usagePackageSize = max((int) ($price->usagePackageSize ?? 1), 1);
+        $usageOverageAmountMinor = is_numeric($price->usageOverageAmount ?? null)
+            ? (int) $price->usageOverageAmount
+            : null;
+        $usageIntervalLabel = \Illuminate\Support\Str::of((string) ($price->interval ?? 'month'))->replace('_', ' ')->lower()->value();
+        $customAmountMinimum = $price->customAmountMinimum ?? null;
+        $customAmountMaximum = $price->customAmountMaximum ?? null;
+        $customAmountDefault = $price->customAmountDefault ?? ($priceAmountMinor > 0 ? $priceAmountMinor : null);
+        $customAmountValue = old('custom_amount', $customAmountDefault !== null ? \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountDefault, $currencyCode) : '');
+        $displayAmountMinor = $supportsCustomAmount
+            ? (\App\Support\Money\CurrencyAmount::parseMajorToMinor($customAmountValue, $currencyCode) ?? $priceAmountMinor)
+            : $priceAmountMinor;
+        $suggestedAmounts = collect($price->suggestedAmounts ?? [])
+            ->filter(fn ($amount) => is_numeric($amount))
+            ->map(fn ($amount) => (int) $amount)
+            ->values();
         $isMinorAmount = (bool) ($price->amountIsMinor ?? true);
-        $formatMoney = function (int|float $amount, bool $isMinor) {
-            $display = $isMinor ? ((float) $amount / 100) : (float) $amount;
-
-            return number_format($display, 2);
+        $formatMoney = function (int|float $amount, bool $isMinor) use ($currencyCode) {
+            return $isMinor
+                ? \App\Support\Money\CurrencyAmount::formatMinor($amount, $currencyCode)
+                : \App\Support\Money\CurrencyAmount::formatMajor($amount, $currencyCode);
         };
     @endphp
 
@@ -51,7 +80,16 @@
                 </div>
             @endif
 
-            <div class="mt-10 grid gap-8 lg:grid-cols-2 lg:items-start">
+            <div
+                class="mt-10 grid gap-8 lg:grid-cols-2 lg:items-start"
+                @if ($supportsCustomAmount)
+                    data-pwyw-checkout
+                    data-currency="{{ $currencyCode }}"
+                    data-currency-scale="{{ $currencyScale }}"
+                    data-fallback-amount-minor="{{ $customAmountDefault ?? $priceAmountMinor }}"
+                    data-upgrade-credit-minor="{{ $upgradeCreditAmount }}"
+                @endif
+            >
                 <div class="card-inner p-6">
                     @if (!$provider)
                         <h2 class="text-lg font-semibold text-ink">{{ __('Select Payment Method') }}</h2>
@@ -129,6 +167,52 @@
                                 >
                             </div>
 
+                            @if ($supportsCustomAmount)
+                                <div>
+                                    <label class="text-xs uppercase tracking-[0.2em] text-ink/40">{{ __('Custom amount') }}</label>
+                                    <input
+                                        id="custom-amount-input"
+                                        type="number"
+                                        name="custom_amount"
+                                        value="{{ $customAmountValue }}"
+                                        min="{{ $customAmountMinimum !== null ? \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMinimum, $currencyCode) : $currencyStep }}"
+                                        @if ($customAmountMaximum !== null)
+                                            max="{{ \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMaximum, $currencyCode) }}"
+                                        @endif
+                                        step="{{ $currencyStep }}"
+                                        class="mt-2 w-full rounded-xl border border-ink/10 bg-surface/50 px-4 py-2.5 text-sm text-ink focus:border-primary focus:ring-1 focus:ring-primary"
+                                        required
+                                        data-pwyw-input
+                                    >
+                                    <p class="mt-2 text-xs text-ink/55">
+                                        @if ($customAmountMinimum !== null && $customAmountMaximum !== null)
+                                            {{ __('Choose any amount between :min and :max.', ['min' => $formatMoney($customAmountMinimum, true).' '.$currencyCode, 'max' => $formatMoney($customAmountMaximum, true).' '.$currencyCode]) }}
+                                        @elseif ($customAmountMinimum !== null)
+                                            {{ __('Choose any amount from :min and up.', ['min' => $formatMoney($customAmountMinimum, true).' '.$currencyCode]) }}
+                                        @else
+                                            {{ __('Choose the amount you want to pay.') }}
+                                        @endif
+                                    </p>
+
+                                    @if ($suggestedAmounts->isNotEmpty())
+                                        <div class="mt-3 flex flex-wrap gap-2">
+                                            @foreach ($suggestedAmounts as $suggestedAmount)
+                                                @php
+                                                    $suggestedValue = \App\Support\Money\CurrencyAmount::formatMinorForInput($suggestedAmount, $currencyCode);
+                                                @endphp
+                                                <button
+                                                    type="button"
+                                                    data-suggested-amount="{{ $suggestedValue }}"
+                                                    class="rounded-full border border-ink/10 bg-surface/40 px-3 py-1.5 text-xs font-semibold text-ink/70 transition hover:border-primary/30 hover:text-ink"
+                                                >
+                                                    {{ $formatMoney($suggestedAmount, true) }} {{ $currencyCode }}
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+
                             @if ($coupon_enabled)
                                 <div>
                                     <label class="text-xs uppercase tracking-[0.2em] text-ink/40">{{ __('Promo Code') }}</label>
@@ -156,14 +240,55 @@
                             <span>{{ $plan->name ?? __('Plan') }}</span>
                             <span class="font-semibold text-ink">{{ $price->label ?? $price->key ?? '' }}</span>
                         </div>
-                        @if (!empty($price->amount))
+                        @if (!empty($price->amount) || $supportsCustomAmount)
                             <div class="flex items-center justify-between">
-                                <span>{{ ucfirst($price->interval ?? __('one-time')) }}</span>
-                                <span class="font-semibold text-ink">
-                                    {{ $formatMoney($priceAmountMinor, $isMinorAmount) }}
+                                <span>
+                                    {{ $supportsCustomAmount ? __('Custom amount') : ($isMetered ? __('Base fee') : ucfirst($price->interval ?? __('one-time'))) }}
+                                </span>
+                                <span class="font-semibold text-ink" data-summary-amount>
+                                    {{ $formatMoney($displayAmountMinor, $isMinorAmount) }}
                                     {{ $currencyCode }}
                                 </span>
                             </div>
+
+                            @if ($isMetered)
+                                @php
+                                    $packageUnitsLabel = number_format($usagePackageSize).' '.\Illuminate\Support\Str::plural($usageUnitLabel, $usagePackageSize);
+                                @endphp
+                                <div class="flex items-center justify-between">
+                                    <span>{{ __('Included usage') }}</span>
+                                    <span class="font-semibold text-ink">
+                                        @if ($usageIncludedUnits !== null && $usageIncludedUnits > 0)
+                                            {{ number_format($usageIncludedUnits) }} {{ \Illuminate\Support\Str::plural($usageUnitLabel, $usageIncludedUnits) }}
+                                        @else
+                                            {{ __('No included usage') }}
+                                        @endif
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between">
+                                    <span>{{ __('Usage policy') }}</span>
+                                    <span class="font-semibold text-ink">
+                                        {{ $usageBlocksAtLimit ? __('Blocks at included limit') : __('Bills overages') }}
+                                    </span>
+                                </div>
+                                @if (!$usageBlocksAtLimit && $usageOverageAmountMinor !== null)
+                                    <div class="flex items-center justify-between">
+                                        <span>{{ __('Overage rate') }}</span>
+                                        <span class="font-semibold text-ink">
+                                            {{ \App\Support\Money\CurrencyAmount::formatMinor($usageOverageAmountMinor, $currencyCode, true, true) }}
+                                            / {{ $packageUnitsLabel }}
+                                        </span>
+                                    </div>
+                                @endif
+                                <div class="flex items-center justify-between">
+                                    <span>{{ __('Billing model') }}</span>
+                                    <span class="font-semibold text-ink">
+                                        {{ $usageBlocksAtLimit
+                                            ? __('Base + included usage per :interval', ['interval' => $usageIntervalLabel])
+                                            : __('Base + usage per :interval', ['interval' => $usageIntervalLabel]) }}
+                                    </span>
+                                </div>
+                            @endif
 
                             @if ($upgradeCreditAmount > 0)
                                 <div class="flex items-center justify-between">
@@ -175,7 +300,7 @@
                                 </div>
                                 <div class="flex items-center justify-between border-t border-ink/10 pt-3">
                                     <span class="font-semibold text-ink">{{ __('Due today') }}</span>
-                                    <span class="font-semibold text-ink">
+                                    <span class="font-semibold text-ink" data-summary-due>
                                         {{ $formatMoney((int) ($upgradeAmountDue ?? 0), true) }}
                                         {{ $currencyCode }}
                                     </span>
@@ -187,6 +312,10 @@
                     <div class="mt-6 rounded-xl border border-ink/10 bg-surface/60 px-4 py-3 text-xs text-ink/60">
                         @if ($upgradeCreditAmount > 0)
                             {{ __('Your upgrade credit is applied automatically during payment.') }}
+                        @elseif ($isMetered)
+                            {{ $usageBlocksAtLimit
+                                ? __('Your base fee starts at checkout. Usage is tracked during the billing cycle and new usage is blocked once the included amount is exhausted until renewal or upgrade.')
+                                : __('Your base fee starts at checkout. Usage is tracked during the billing cycle and overages follow the plan terms shown above.') }}
                         @elseif ($provider)
                             {{ __('Payment is securely handled by :provider.', ['provider' => ucfirst($provider)]) }}
                         @else
@@ -197,4 +326,82 @@
             </div>
         </div>
     </section>
+
+    @if ($supportsCustomAmount)
+        <script>
+            (() => {
+                const root = document.querySelector('[data-pwyw-checkout]');
+
+                if (!root) {
+                    return;
+                }
+
+                const amountInput = root.querySelector('[data-pwyw-input]');
+                const amountOutput = root.querySelector('[data-summary-amount]');
+
+                if (!amountInput || !amountOutput) {
+                    return;
+                }
+
+                const dueOutput = root.querySelector('[data-summary-due]');
+                const suggestedButtons = root.querySelectorAll('[data-suggested-amount]');
+                const currency = root.dataset.currency ?? 'USD';
+                const currencyScale = Number.parseInt(root.dataset.currencyScale ?? '2', 10);
+                const fallbackAmountMinor = Number.parseInt(root.dataset.fallbackAmountMinor ?? '0', 10);
+                const upgradeCreditMinor = Number.parseInt(root.dataset.upgradeCreditMinor ?? '0', 10);
+                const formatter = new Intl.NumberFormat(undefined, {
+                    minimumFractionDigits: currencyScale,
+                    maximumFractionDigits: currencyScale,
+                });
+
+                const resolveAmountMinor = () => {
+                    const normalizedValue = amountInput.value.trim();
+
+                    if (!/^\d+(?:\.\d+)?$/.test(normalizedValue)) {
+                        return fallbackAmountMinor;
+                    }
+
+                    const [wholePart, rawFractionPart = ''] = normalizedValue.split('.');
+
+                    if (rawFractionPart.length > currencyScale) {
+                        return fallbackAmountMinor;
+                    }
+
+                    const factor = 10 ** currencyScale;
+                    const fractionPart = rawFractionPart.padEnd(currencyScale, '0');
+                    const resolvedMinor = Number.parseInt(`${wholePart}${fractionPart}`, 10);
+
+                    if (!Number.isFinite(resolvedMinor) || resolvedMinor <= 0) {
+                        return fallbackAmountMinor;
+                    }
+
+                    return resolvedMinor;
+                };
+
+                const formatAmount = (amountMinor) => `${formatter.format(amountMinor / (10 ** currencyScale))} ${currency}`;
+
+                const render = () => {
+                    const selectedAmountMinor = resolveAmountMinor();
+
+                    amountOutput.textContent = formatAmount(selectedAmountMinor);
+
+                    if (dueOutput) {
+                        dueOutput.textContent = formatAmount(Math.max(selectedAmountMinor - upgradeCreditMinor, 0));
+                    }
+                };
+
+                suggestedButtons.forEach((button) => {
+                    button.addEventListener('click', () => {
+                        amountInput.value = button.dataset.suggestedAmount ?? '';
+                        render();
+                    });
+                });
+
+                amountInput.addEventListener('input', render);
+                amountInput.addEventListener('change', render);
+
+                render();
+            })();
+        </script>
+    @endif
 @endsection

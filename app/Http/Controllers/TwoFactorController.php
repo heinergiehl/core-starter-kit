@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Identity\Models\TwoFactorAuth;
+use App\Http\Requests\TwoFactor\TwoFactorDisableRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
@@ -35,14 +36,10 @@ class TwoFactorController extends Controller
         return back()->with('success', __('Two-factor authentication has been enabled.'));
     }
 
-    public function disable(Request $request): RedirectResponse
+    public function disable(TwoFactorDisableRequest $request): RedirectResponse
     {
         $user = $request->user();
         abort_unless($user, 403);
-
-        $request->validate([
-            'password' => ['required'],
-        ]);
 
         if (! Hash::check($request->password, $user->password)) {
             return back()->withErrors(['password' => __('The password is incorrect.')]);

@@ -1,13 +1,13 @@
 @extends('emails.text.layout')
 
 @section('content')
-Welcome back
+{{ __('Welcome Back!') }}
 
-Hi {{ $user->name ?? 'there' }},
+{{ __('Hi :name,', ['name' => $user->name ?? __('there')]) }}
 
-Your {{ $planName ?? 'subscription' }} has been resumed.
-You now have full access to your features again.
+{{ __('Your :planName has been resumed.', ['planName' => $planName ?? __('subscription')]) }}
+{{ __('You now have full access to all your features again.') }}
 
-View your subscription:
+{{ __('View Your Subscription') }}:
 {{ config('app.url') }}/billing
 @endsection

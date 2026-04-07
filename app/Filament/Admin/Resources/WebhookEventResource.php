@@ -7,6 +7,7 @@ use App\Filament\Admin\Resources\WebhookEventResource\Pages\ListWebhookEvents;
 use App\Filament\Admin\Resources\WebhookEventResource\Pages\ViewWebhookEvent;
 use App\Jobs\ProcessWebhookEvent;
 use Filament\Actions\Action;
+use Filament\Actions\BulkAction;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ViewAction;
@@ -105,6 +106,30 @@ class WebhookEventResource extends Resource
             ])
             ->bulkActions([
                 BulkActionGroup::make([
+                    BulkAction::make('retryFailed')
+                        ->label('Retry Failed')
+                        ->icon('heroicon-o-arrow-path')
+                        ->requiresConfirmation()
+                        ->deselectRecordsAfterCompletion()
+                        ->action(function (\Illuminate\Database\Eloquent\Collection $records): void {
+                            $retried = 0;
+                            foreach ($records as $record) {
+                                if ($record->status !== 'failed') {
+                                    continue;
+                                }
+                                $record->update([
+                                    'status' => 'received',
+                                    'error_message' => null,
+                                ]);
+                                ProcessWebhookEvent::dispatch($record->id);
+                                $retried++;
+                            }
+
+                            \Filament\Notifications\Notification::make()
+                                ->title("{$retried} webhook(s) queued for retry")
+                                ->success()
+                                ->send();
+                        }),
                     DeleteBulkAction::make(),
                 ]),
             ]);

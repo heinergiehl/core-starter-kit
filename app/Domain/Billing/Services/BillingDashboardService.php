@@ -2,9 +2,14 @@
 
 namespace App\Domain\Billing\Services;
 
+use App\Domain\Billing\Data\Plan;
+use App\Domain\Billing\Data\Price as BillingPrice;
+use App\Domain\Billing\Data\UsageSummary;
 use App\Domain\Billing\Models\Invoice;
 use App\Domain\Billing\Models\Order;
+use App\Domain\Billing\Models\Subscription;
 use App\Enums\OrderStatus;
+use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -12,7 +17,8 @@ use Illuminate\Support\Collection;
 class BillingDashboardService
 {
     public function __construct(
-        private readonly BillingPlanService $planService
+        private readonly BillingPlanService $planService,
+        private readonly UsageMeterService $usageMeterService,
     ) {}
 
     /**
@@ -21,6 +27,10 @@ class BillingDashboardService
      * @return array{
      *    subscription: ?\App\Domain\Billing\Models\Subscription,
      *    plan: ?\App\Domain\Billing\Data\Plan,
+     *    currentPrice: ?\App\Domain\Billing\Data\Price,
+     *    usageSummary: ?\App\Domain\Billing\Data\UsageSummary,
+     *    usageQuotaStatus: ?\App\Domain\Billing\Data\UsageQuotaStatus,
+     *    usageHistory: Collection,
      *    invoices: Collection,
      *    pendingOrder: ?Order,
      *    recentOneTimeOrder: ?Order,
@@ -34,6 +44,10 @@ class BillingDashboardService
     {
         $subscription = $user->activeSubscription();
         $plan = null;
+        $currentPrice = null;
+        $usageSummary = null;
+        $usageQuotaStatus = null;
+        $usageHistory = collect();
         $invoices = collect();
         $pendingOrder = null;
         $recentOneTimePlanAmount = null;
@@ -45,6 +59,19 @@ class BillingDashboardService
             } catch (\RuntimeException) {
                 // Fallback for deprecated or missing plans
                 $plan = null;
+            }
+
+            if ($plan) {
+                $currentPrice = $this->resolveSubscriptionPrice($plan, $subscription);
+                $usageSummary = $currentPrice
+                    ? $this->usageMeterService->summaryFor($user, $currentPrice, $subscription)
+                    : null;
+                $usageQuotaStatus = $currentPrice
+                    ? $this->usageMeterService->quotaStatusFor($user, $currentPrice, subscription: $subscription)
+                    : null;
+                $usageHistory = $currentPrice
+                    ? $this->usageMeterService->historyFor($user, $currentPrice, $subscription)
+                    : collect();
             }
 
             $invoices = Invoice::query()
@@ -66,6 +93,7 @@ class BillingDashboardService
                 // Ensure it's actually a subscription order by checking metadata or product type relationship
                 ->filter(function ($order) {
                     $meta = $order->metadata ?? [];
+
                     // If we have explicit subscription_id, it is a sub.
                     if (! empty($meta['subscription_id'])) {
                         return true;
@@ -91,6 +119,7 @@ class BillingDashboardService
                 if ($order->product && $order->product->type === 'one_time') {
                     return true;
                 }
+
                 // OR no subscription_id in metadata
                 $meta = $order->metadata ?? [];
 
@@ -114,6 +143,7 @@ class BillingDashboardService
                 if ($order->product && $order->product->type === 'one_time') {
                     return true;
                 }
+
                 // OR no subscription_id in metadata
                 $meta = $order->metadata ?? [];
 
@@ -126,6 +156,10 @@ class BillingDashboardService
         return compact(
             'subscription',
             'plan',
+            'currentPrice',
+            'usageSummary',
+            'usageQuotaStatus',
+            'usageHistory',
             'invoices',
             'pendingOrder',
             'recentOneTimeOrder',
@@ -142,6 +176,7 @@ class BillingDashboardService
     private function resolveOneTimeOrderCatalogValue(Order $order): array
     {
         $planKey = (string) ($order->plan_key ?? '');
+
         if ($planKey === '') {
             return [null, null];
         }
@@ -160,9 +195,10 @@ class BillingDashboardService
         );
 
         $price = $priceKey !== '' ? $plan->getPrice($priceKey) : null;
+
         if (! $price) {
             foreach ($plan->prices as $candidate) {
-                if ($candidate->mode() === \App\Enums\PaymentMode::OneTime) {
+                if ($candidate->mode() === PaymentMode::OneTime) {
                     $price = $candidate;
                     break;
                 }
@@ -174,6 +210,7 @@ class BillingDashboardService
         }
 
         $amount = (float) $price->amount;
+
         if ($amount <= 0) {
             return [null, null];
         }
@@ -183,5 +220,35 @@ class BillingDashboardService
             : (int) round($amount * 100);
 
         return [$minorAmount, strtoupper((string) $price->currency)];
+    }
+
+    private function resolveSubscriptionPrice(Plan $plan, Subscription $subscription): ?BillingPrice
+    {
+        $activeProvider = $subscription->provider?->value;
+        $activeProviderPriceId = data_get($subscription->metadata, 'stripe_price_id')
+            ?? data_get($subscription->metadata, 'paddle_price_id')
+            ?? data_get($subscription->metadata, 'items.data.0.price.id')
+            ?? data_get($subscription->metadata, 'items.0.price.id')
+            ?? data_get($subscription->metadata, 'items.0.price_id');
+        $activePriceKey = data_get($subscription->metadata, 'price_key')
+            ?? data_get($subscription->metadata, 'custom_data.price_key');
+
+        $matchingPrice = collect($plan->prices)->first(function (BillingPrice $price) use ($activePriceKey, $activeProvider, $activeProviderPriceId): bool {
+            if ($activePriceKey && $price->key === $activePriceKey) {
+                return true;
+            }
+
+            if ($activeProvider && $activeProviderPriceId) {
+                return ($price->providerIds[$activeProvider] ?? null) === $activeProviderPriceId;
+            }
+
+            return false;
+        });
+
+        if ($matchingPrice instanceof BillingPrice) {
+            return $matchingPrice;
+        }
+
+        return $plan->firstPrice();
     }
 }

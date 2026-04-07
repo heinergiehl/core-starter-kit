@@ -22,6 +22,7 @@ readonly class CheckoutRequest
      * @param  string  $successUrl  URL to redirect on successful payment
      * @param  string  $cancelUrl  URL to redirect if user cancels
      * @param  Discount|null  $discount  Optional discount to apply
+     * @param  int|null  $customAmountMinor  Optional custom one-time amount in minor units
      */
     public function __construct(
         public User $user,
@@ -31,6 +32,7 @@ readonly class CheckoutRequest
         public string $successUrl,
         public string $cancelUrl,
         public ?Discount $discount = null,
+        public ?int $customAmountMinor = null,
     ) {}
 
     /**
@@ -49,6 +51,10 @@ readonly class CheckoutRequest
         if ($this->discount) {
             $metadata['discount_id'] = (string) $this->discount->id;
             $metadata['discount_code'] = $this->discount->code;
+        }
+
+        if ($this->customAmountMinor !== null) {
+            $metadata['custom_amount_minor'] = (string) $this->customAmountMinor;
         }
 
         return $metadata;

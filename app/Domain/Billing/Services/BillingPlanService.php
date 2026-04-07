@@ -7,6 +7,7 @@ use App\Domain\Billing\Data\Price;
 use App\Domain\Billing\Models\PriceProviderMapping;
 use App\Domain\Billing\Models\Product as CatalogProduct;
 use App\Enums\BillingProvider;
+use App\Enums\UsageLimitBehavior;
 use Illuminate\Support\Collection;
 use RuntimeException;
 
@@ -63,6 +64,20 @@ class BillingPlanService
                     currency: $this->resolveProviderValue($price, $provider, 'currencies', 'currency'),
                     interval: $price->interval,
                     intervalCount: $price->intervalCount,
+                    allowCustomAmount: $price->allowCustomAmount,
+                    isMetered: $price->isMetered,
+                    usageMeterName: $price->usageMeterName,
+                    usageMeterKey: $price->usageMeterKey,
+                    usageUnitLabel: $price->usageUnitLabel,
+                    usageIncludedUnits: $price->usageIncludedUnits,
+                    usagePackageSize: $price->usagePackageSize,
+                    usageOverageAmount: $price->usageOverageAmount,
+                    usageRoundingMode: $price->usageRoundingMode,
+                    usageLimitBehavior: $price->usageLimitBehavior,
+                    customAmountMinimum: $price->customAmountMinimum,
+                    customAmountMaximum: $price->customAmountMaximum,
+                    customAmountDefault: $price->customAmountDefault,
+                    suggestedAmounts: $price->suggestedAmounts,
                     type: $price->type,
                     hasTrial: $price->hasTrial,
                     trialInterval: $price->trialInterval,
@@ -226,6 +241,20 @@ class BillingPlanService
                 currency: $priceModel->currency,
                 interval: $priceModel->interval ?? 'month',
                 intervalCount: $priceModel->interval_count ?? 1,
+                allowCustomAmount: (bool) $priceModel->allow_custom_amount,
+                isMetered: (bool) $priceModel->is_metered,
+                usageMeterName: $priceModel->usage_meter_name,
+                usageMeterKey: $priceModel->usage_meter_key,
+                usageUnitLabel: $priceModel->usage_unit_label,
+                usageIncludedUnits: $priceModel->usage_included_units,
+                usagePackageSize: $priceModel->usage_package_size,
+                usageOverageAmount: $priceModel->usage_overage_amount,
+                usageRoundingMode: $priceModel->usage_rounding_mode,
+                usageLimitBehavior: $priceModel->usage_limit_behavior ?? UsageLimitBehavior::BillOverage,
+                customAmountMinimum: $priceModel->custom_amount_minimum,
+                customAmountMaximum: $priceModel->custom_amount_maximum,
+                customAmountDefault: $priceModel->custom_amount_default,
+                suggestedAmounts: is_array($priceModel->suggested_amounts) ? $priceModel->suggested_amounts : [],
                 type: $priceModel->type instanceof \BackedEnum ? $priceModel->type : ($priceModel->type ?? \App\Enums\PriceType::Recurring),
                 hasTrial: (bool) $priceModel->has_trial,
                 trialInterval: $priceModel->trial_interval,

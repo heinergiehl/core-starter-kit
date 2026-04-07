@@ -4,14 +4,13 @@ namespace App\Http\Controllers\Feedback;
 
 use App\Domain\Feedback\Models\FeatureRequest;
 use App\Domain\Feedback\Models\FeatureVote;
-use App\Enums\FeatureCategory;
 use App\Enums\FeatureStatus;
+use App\Http\Requests\Feedback\RoadmapStoreRequest;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 use Throwable;
 
@@ -49,20 +48,11 @@ class RoadmapController
         ]);
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(RoadmapStoreRequest $request): RedirectResponse
     {
-        $data = $request->validate([
-            'title' => ['required', 'string', 'max:120'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'category' => ['required', Rule::enum(FeatureCategory::class)],
-            'idempotency_key' => ['required', 'uuid'],
-        ]);
+        $data = $request->validated();
 
         $user = $request->user();
-
-        if (! $user) {
-            abort(403);
-        }
 
         $idempotencyCacheKey = sprintf('roadmap:store:%d:%s', $user->id, $data['idempotency_key']);
 

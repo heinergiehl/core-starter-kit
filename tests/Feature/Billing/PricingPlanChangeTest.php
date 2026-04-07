@@ -522,4 +522,128 @@ class PricingPlanChangeTest extends TestCase
             ->assertSeeText('Monthly')
             ->assertSeeText('Weekly');
     }
+
+    public function test_one_time_pay_what_you_want_offer_stays_visible_alongside_subscription_intervals(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['starter', 'supporter']]);
+
+        $starter = Product::factory()->create([
+            'key' => 'starter',
+            'name' => 'Starter',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+        $supporter = Product::factory()->create([
+            'key' => 'supporter',
+            'name' => 'Supporter',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+
+        Price::factory()->create([
+            'product_id' => $starter->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 2900,
+            'currency' => 'USD',
+        ]);
+        Price::factory()->create([
+            'product_id' => $starter->id,
+            'key' => 'yearly',
+            'interval' => 'year',
+            'type' => PriceType::Recurring,
+            'amount' => 29000,
+            'currency' => 'USD',
+        ]);
+        Price::factory()->create([
+            'product_id' => $supporter->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 1500,
+            'currency' => 'USD',
+            'allow_custom_amount' => true,
+            'custom_amount_default' => 1500,
+            'custom_amount_minimum' => 500,
+        ]);
+
+        $response = $this->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('One-time and supporter offers stay visible below.')
+            ->assertSeeText('Pay what you want')
+            ->assertSeeText('Starts at USD 5.00.');
+    }
+
+    public function test_usage_based_offer_shows_included_usage_and_overage_copy(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['scale']]);
+
+        $scale = Product::factory()->create([
+            'key' => 'scale',
+            'name' => 'Scale',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+
+        Price::factory()->metered()->create([
+            'product_id' => $scale->id,
+            'key' => 'metered_monthly',
+            'label' => 'Metered Monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'usage_meter_name' => 'API requests',
+            'usage_unit_label' => 'request',
+            'usage_included_units' => 10000,
+            'usage_package_size' => 1000,
+            'usage_overage_amount' => 500,
+        ]);
+
+        $response = $this->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('Usage-based')
+            ->assertSeeText('Includes 10,000 requests per month, then USD 5.00 per 1,000 requests.');
+    }
+
+    public function test_usage_based_offer_can_show_blocked_limit_copy(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['scale']]);
+
+        $scale = Product::factory()->create([
+            'key' => 'scale',
+            'name' => 'Scale',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+
+        Price::factory()->metered()->create([
+            'product_id' => $scale->id,
+            'key' => 'metered_monthly',
+            'label' => 'Metered Monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'usage_meter_name' => 'Tracked seats',
+            'usage_meter_key' => 'tracked_seats',
+            'usage_unit_label' => 'seat',
+            'usage_included_units' => 25,
+            'usage_limit_behavior' => 'block',
+            'usage_package_size' => 5,
+            'usage_overage_amount' => 1900,
+        ]);
+
+        $response = $this->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeText('Blocks at limit')
+            ->assertSeeText('Includes 25 seats per month. New usage is blocked until renewal or upgrade.');
+    }
 }
