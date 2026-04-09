@@ -2,9 +2,7 @@
 
 namespace App\Http\Middleware;
 
-use App\Domain\Billing\Models\CheckoutSession;
 use App\Domain\Billing\Services\CheckoutService;
-use App\Enums\CheckoutStatus;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,10 +33,7 @@ class RestoreCheckoutSession
             return $next($request);
         }
 
-        $checkoutSession = CheckoutSession::query()
-            ->valid()
-            ->where('uuid', $sessionUuid)
-            ->first();
+        $checkoutSession = $this->checkoutService->findCheckoutSession($sessionUuid);
 
         if (! $checkoutSession) {
             return $next($request);
@@ -72,23 +67,15 @@ class RestoreCheckoutSession
             return redirect()->route('billing.processing');
         }
 
-        // ATOMIC UPDATE: Prevents race condition if same URL is opened in multiple tabs
-        // Only ONE request will successfully update the status from 'pending' to 'completed'
-        $affected = CheckoutSession::query()
-            ->where('id', $checkoutSession->id)
-            ->where('status', CheckoutStatus::Pending->value)
-            ->where('expires_at', '>', now())
-            ->update([
-                'status' => CheckoutStatus::Completed->value,
-                'completed_at' => now(),
-            ]);
+        if (! $this->checkoutService->resolveSuccessfulCheckoutOutcome($checkoutSession)) {
+            return $next($request);
+        }
 
-        if ($affected === 0) {
+        if (! $this->checkoutService->markCheckoutSessionCompleted($checkoutSession)) {
             return $next($request);
         }
 
         if (! Auth::check()) {
-            // Log in the guest user and clear session fixation.
             Auth::login($user);
             $request->session()->regenerate();
         }

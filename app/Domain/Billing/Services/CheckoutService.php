@@ -16,6 +16,7 @@ use App\Domain\Billing\Models\Discount;
 use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Enums\BillingProvider;
+use App\Enums\CheckoutStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMode;
 use App\Enums\SubscriptionStatus;
@@ -45,8 +46,7 @@ class CheckoutService
      * Resolve or create a user for checkout.
      *
      * For guest checkouts:
-     * - If user exists with no purchase → reuse (abandoned checkout retry)
-     * - If user exists with purchase → error (prevent duplicate purchase)
+     * - If user exists → error (require an authenticated login)
      * - If user doesn't exist → create new
      *
      *
@@ -67,17 +67,10 @@ class CheckoutService
             ]);
         }
 
-        // Check if user already exists
         $existingUser = User::where('email', $email)->first();
 
         if ($existingUser) {
-            // If user has any completed purchase, block retry
-            if ($this->hasAnyPurchase($existingUser)) {
-                throw BillingException::userAlreadyExists($email);
-            }
-
-            // Reuse incomplete user (abandoned checkout retry)
-            return new CheckoutUserDTO($existingUser, false);
+            throw BillingException::userAlreadyExists($email);
         }
 
         // Create new user
@@ -416,6 +409,57 @@ class CheckoutService
         return ['success' => $successUrl, 'cancel' => $cancelUrl];
     }
 
+    public function findCheckoutSession(string $uuid): ?CheckoutSession
+    {
+        return CheckoutSession::query()
+            ->where('uuid', $uuid)
+            ->where('expires_at', '>', now())
+            ->first();
+    }
+
+    public function resolveSuccessfulCheckoutOutcome(CheckoutSession $checkoutSession): Subscription|Order|null
+    {
+        $subscription = Subscription::query()
+            ->where('user_id', $checkoutSession->user_id)
+            ->where('provider', $checkoutSession->provider)
+            ->where('plan_key', $checkoutSession->plan_key)
+            ->whereIn('status', [
+                SubscriptionStatus::Active->value,
+                SubscriptionStatus::Trialing->value,
+            ])
+            ->latest('id')
+            ->get()
+            ->first(fn (Subscription $subscription): bool => $this->subscriptionMatchesCheckoutSession($subscription, $checkoutSession));
+
+        if ($subscription) {
+            return $subscription;
+        }
+
+        return Order::query()
+            ->where('user_id', $checkoutSession->user_id)
+            ->where('provider', $checkoutSession->provider)
+            ->where('plan_key', $checkoutSession->plan_key)
+            ->whereIn('status', [
+                OrderStatus::Paid->value,
+                OrderStatus::Completed->value,
+            ])
+            ->latest('id')
+            ->get()
+            ->first(fn (Order $order): bool => $this->orderMatchesCheckoutSession($order, $checkoutSession));
+    }
+
+    public function markCheckoutSessionCompleted(CheckoutSession $checkoutSession): bool
+    {
+        return CheckoutSession::query()
+            ->whereKey($checkoutSession->id)
+            ->where('status', CheckoutStatus::Pending->value)
+            ->where('expires_at', '>', now())
+            ->update([
+                'status' => CheckoutStatus::Completed->value,
+                'completed_at' => now(),
+            ]) === 1;
+    }
+
     public function verifyUserAfterPayment(int $userId): void
     {
         $user = User::find($userId);
@@ -458,6 +502,55 @@ class CheckoutService
         ]);
 
         return hash_hmac('sha256', $payload, $key);
+    }
+
+    private function subscriptionMatchesCheckoutSession(Subscription $subscription, CheckoutSession $checkoutSession): bool
+    {
+        $providerSessionId = trim((string) ($checkoutSession->provider_session_id ?? ''));
+
+        if ($providerSessionId !== '') {
+            $metadataSessionId = (string) (
+                data_get($subscription->metadata, 'session_id')
+                ?? data_get($subscription->metadata, 'metadata.session_id')
+                ?? ''
+            );
+
+            return $metadataSessionId !== '' && hash_equals($providerSessionId, $metadataSessionId);
+        }
+
+        return (bool) $subscription->created_at?->greaterThanOrEqualTo(
+            $this->checkoutSessionWindowStart($checkoutSession)
+        );
+    }
+
+    private function orderMatchesCheckoutSession(Order $order, CheckoutSession $checkoutSession): bool
+    {
+        $providerSessionId = trim((string) ($checkoutSession->provider_session_id ?? ''));
+
+        if ($providerSessionId !== '') {
+            if ($checkoutSession->provider === BillingProvider::Paddle->value
+                && hash_equals($providerSessionId, (string) $order->provider_id)
+            ) {
+                return true;
+            }
+
+            $metadataSessionId = (string) (
+                data_get($order->metadata, 'session_id')
+                ?? data_get($order->metadata, 'metadata.session_id')
+                ?? ''
+            );
+
+            return $metadataSessionId !== '' && hash_equals($providerSessionId, $metadataSessionId);
+        }
+
+        return (bool) $order->created_at?->greaterThanOrEqualTo(
+            $this->checkoutSessionWindowStart($checkoutSession)
+        );
+    }
+
+    private function checkoutSessionWindowStart(CheckoutSession $checkoutSession): \Illuminate\Support\Carbon
+    {
+        return $checkoutSession->created_at->copy()->subMinutes(5);
     }
 
     /**

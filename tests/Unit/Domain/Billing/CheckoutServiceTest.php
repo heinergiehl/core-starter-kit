@@ -49,17 +49,14 @@ class CheckoutServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_reuses_existing_user_without_purchase()
+    public function it_throws_exception_for_existing_user_without_purchase()
     {
-        // Create user with NO purchases (abandoned checkout scenario)
-        $user = User::factory()->create(['email' => 'abandoned@example.com']);
+        User::factory()->create(['email' => 'abandoned@example.com']);
         $request = new Request;
 
-        $result = $this->service->resolveOrCreateUser($request, 'abandoned@example.com', 'Abandoned User');
+        $this->expectException(BillingException::class);
 
-        // Should reuse existing user
-        $this->assertFalse($result->created);
-        $this->assertEquals($user->id, $result->user->id);
+        $this->service->resolveOrCreateUser($request, 'abandoned@example.com', 'Abandoned User');
     }
 
     #[Test]

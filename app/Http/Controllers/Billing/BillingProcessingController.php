@@ -15,6 +15,7 @@ class BillingProcessingController
     public function __invoke(Request $request): View
     {
         $sessionUuid = trim((string) $request->query('session', ''));
+        $sessionSignature = trim((string) $request->query('sig', ''));
 
         if ($sessionUuid === '') {
             $sessionUuid = trim((string) $request->session()->pull('checkout_session_uuid', ''));
@@ -22,6 +23,7 @@ class BillingProcessingController
 
         return view('billing.processing', [
             'session_uuid' => $sessionUuid !== '' ? $sessionUuid : null,
+            'session_signature' => $sessionSignature !== '' ? $sessionSignature : null,
         ]);
     }
 }

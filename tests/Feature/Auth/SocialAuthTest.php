@@ -7,6 +7,7 @@ use App\Enums\OAuthProvider;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Socialite\Facades\Socialite;
+use Laravel\Socialite\Two\User as SocialiteUser;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -50,6 +51,45 @@ class SocialAuthTest extends TestCase
         $user = User::where('email', 'test@example.com')->first();
         $this->assertNotNull($user->password);
         $this->assertNotEmpty($user->password);
+    }
+
+    public function test_google_callback_requires_verified_email(): void
+    {
+        $socialUser = (new SocialiteUser)->setRaw([
+            'sub' => 'google-123',
+            'email' => 'unverified@example.com',
+            'email_verified' => false,
+            'name' => 'Unverified User',
+            'picture' => 'https://example.com/avatar.jpg',
+        ])->map([
+            'id' => 'google-123',
+            'name' => 'Unverified User',
+            'email' => 'unverified@example.com',
+            'avatar' => 'https://example.com/avatar.jpg',
+            'email_verified' => false,
+            'verified_email' => false,
+        ]);
+        $socialUser->token = 'test-token';
+        $socialUser->refreshToken = 'test-refresh-token';
+        $socialUser->expiresIn = 3600;
+
+        $provider = Mockery::mock(\Laravel\Socialite\Contracts\Provider::class);
+        $provider->shouldReceive('with')
+            ->once()
+            ->with(['prompt' => 'select_account'])
+            ->andReturnSelf();
+        $provider->shouldReceive('user')->andReturn($socialUser);
+
+        Socialite::shouldReceive('driver')->with('google')->andReturn($provider);
+
+        $response = $this->get('/auth/google/callback');
+
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors(['email']);
+        $this->assertGuest();
+        $this->assertDatabaseMissing('users', [
+            'email' => 'unverified@example.com',
+        ]);
     }
 
     public function test_social_auth_callback_gracefully_handles_provider_configuration_errors(): void

@@ -201,10 +201,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/onboarding/skip', [\App\Http\Controllers\OnboardingController::class, 'skip'])->name('onboarding.skip');
 });
 
-Route::middleware(['auth'])->group(function () {
-    Route::get('/billing/status', BillingStatusController::class)->name('billing.status');
-});
-
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/billing', [\App\Http\Controllers\Billing\BillingController::class, 'index'])
         ->name('billing.index');
@@ -225,6 +221,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/app/invoices/{invoice}/pdf', [\App\Http\Controllers\Billing\InvoiceController::class, 'downloadInvoice'])
         ->name('invoices.download_invoice');
 });
+
+Route::get('/billing/status', BillingStatusController::class)->name('billing.status');
 
 Route::middleware('auth')->group(function () {
     Route::post('/roadmap', [RoadmapController::class, 'store'])->name('roadmap.store');

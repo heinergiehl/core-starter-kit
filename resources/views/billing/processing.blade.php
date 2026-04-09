@@ -8,9 +8,7 @@
     @php
         $portalUrl = route('billing.portal');
         $isLoggedIn = auth()->check();
-        $successRedirect = $isLoggedIn
-            ? route('billing.index', ['checkout_success' => 1, 'repo_access' => 1])
-            : route('login');
+        $successRedirect = route('billing.index', ['checkout_success' => 1, 'repo_access' => 1]);
     @endphp
 
     <section class="py-16">
@@ -61,11 +59,14 @@
             const detailsEl = document.getElementById('billing-details');
             const retryEl = document.getElementById('billing-retry');
             const sessionUuid = @json($session_uuid ?? null);
+            const sessionSignature = @json($session_signature ?? null);
             const successRedirect = @json($successRedirect);
-            const isLoggedIn = @json($isLoggedIn);
             const statusUrl = new URL(@json(route('billing.status')));
             if (sessionUuid) {
                 statusUrl.searchParams.set('session', sessionUuid);
+            }
+            if (sessionUuid && sessionSignature) {
+                statusUrl.searchParams.set('sig', sessionSignature);
             }
             // Add timestamp to prevent caching
             statusUrl.searchParams.set('_t', Date.now());

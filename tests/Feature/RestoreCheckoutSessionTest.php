@@ -3,8 +3,11 @@
 namespace Tests\Feature;
 
 use App\Domain\Billing\Models\CheckoutSession;
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Services\CheckoutService;
+use App\Enums\BillingProvider;
 use App\Enums\CheckoutStatus;
+use App\Enums\OrderStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -20,8 +23,23 @@ class RestoreCheckoutSessionTest extends TestCase
         $checkoutSession = CheckoutSession::create([
             'user_id' => $user->id,
             'provider' => 'stripe',
+            'provider_session_id' => 'cs_restore_success',
             'plan_key' => 'starter',
             'price_key' => 'starter-monthly',
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_restore_success',
+            'plan_key' => 'starter',
+            'status' => OrderStatus::Paid,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'session_id' => 'cs_restore_success',
+            ],
         ]);
 
         $urls = app(CheckoutService::class)->buildCheckoutUrls('stripe', $checkoutSession);
@@ -37,6 +55,30 @@ class RestoreCheckoutSessionTest extends TestCase
 
         $follow = $this->get(route('billing.processing'));
         $follow->assertViewHas('session_uuid', $checkoutSession->uuid);
+    }
+
+    public function test_it_does_not_restore_without_successful_billing_record(): void
+    {
+        $user = User::factory()->create();
+
+        $checkoutSession = CheckoutSession::create([
+            'user_id' => $user->id,
+            'provider' => 'stripe',
+            'provider_session_id' => 'cs_restore_pending',
+            'plan_key' => 'starter',
+            'price_key' => 'starter-monthly',
+        ]);
+
+        $urls = app(CheckoutService::class)->buildCheckoutUrls('stripe', $checkoutSession);
+
+        $response = $this->get($urls['success']);
+
+        $response->assertOk();
+        $this->assertGuest();
+        $this->assertDatabaseHas('checkout_sessions', [
+            'id' => $checkoutSession->id,
+            'status' => CheckoutStatus::Pending->value,
+        ]);
     }
 
     public function test_it_does_not_restore_with_invalid_signature(): void
@@ -71,8 +113,23 @@ class RestoreCheckoutSessionTest extends TestCase
         $checkoutSession = CheckoutSession::create([
             'user_id' => $owner->id,
             'provider' => 'stripe',
+            'provider_session_id' => 'cs_restore_mismatch',
             'plan_key' => 'starter',
             'price_key' => 'starter-monthly',
+        ]);
+
+        Order::query()->create([
+            'user_id' => $owner->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_restore_mismatch',
+            'plan_key' => 'starter',
+            'status' => OrderStatus::Paid,
+            'amount' => 4900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'session_id' => 'cs_restore_mismatch',
+            ],
         ]);
 
         $urls = app(CheckoutService::class)->buildCheckoutUrls('stripe', $checkoutSession);

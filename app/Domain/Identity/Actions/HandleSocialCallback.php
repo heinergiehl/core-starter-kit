@@ -3,6 +3,7 @@
 namespace App\Domain\Identity\Actions;
 
 use App\Domain\Identity\Models\SocialAccount;
+use App\Enums\OAuthProvider;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -16,7 +17,8 @@ class HandleSocialCallback
      */
     public function execute(string $provider, SocialiteUser $socialUser): User
     {
-        $providerEnum = \App\Enums\OAuthProvider::from($provider);
+        $providerEnum = OAuthProvider::from($provider);
+        $email = $this->validatedVerifiedEmail($providerEnum, $socialUser);
 
         $account = SocialAccount::query()
             ->where('provider', $providerEnum)
@@ -26,7 +28,7 @@ class HandleSocialCallback
         if ($account) {
             $user = $account->user;
             $account->update([
-                'provider_email' => $socialUser->getEmail(),
+                'provider_email' => $email,
                 'provider_name' => $this->resolveProviderName($socialUser),
                 'token' => $socialUser->token ?? $account->token,
                 'refresh_token' => $socialUser->refreshToken ?? $account->refresh_token,
@@ -36,7 +38,6 @@ class HandleSocialCallback
             return $user;
         }
 
-        $email = $socialUser->getEmail();
         $user = User::query()->where('email', $email)->first();
 
         if (! $user) {
@@ -45,6 +46,9 @@ class HandleSocialCallback
                 'email' => $email,
                 'password' => Hash::make(Str::random(32)), // Generate random secure password
             ]);
+        }
+
+        if (! $user->email_verified_at) {
             $user->forceFill(['email_verified_at' => now()])->save();
         }
 
@@ -52,7 +56,7 @@ class HandleSocialCallback
             'user_id' => $user->id,
             'provider' => $providerEnum,
             'provider_id' => $socialUser->getId(),
-            'provider_email' => $socialUser->getEmail(),
+            'provider_email' => $email,
             'provider_name' => $this->resolveProviderName($socialUser),
             'token' => $socialUser->token ?? null,
             'refresh_token' => $socialUser->refreshToken ?? null,
@@ -121,6 +125,29 @@ class HandleSocialCallback
         return $user;
     }
 
+    private function validatedVerifiedEmail(OAuthProvider $provider, SocialiteUser $socialUser): string
+    {
+        $email = trim((string) $socialUser->getEmail());
+
+        if ($email === '') {
+            throw ValidationException::withMessages([
+                'email' => __('Your :provider account does not provide an email address.', [
+                    'provider' => $provider->getLabel(),
+                ]),
+            ]);
+        }
+
+        if (! $this->hasVerifiedProviderEmail($provider, $socialUser)) {
+            throw ValidationException::withMessages([
+                'email' => __('Your :provider account must provide a verified email address.', [
+                    'provider' => $provider->getLabel(),
+                ]),
+            ]);
+        }
+
+        return $email;
+    }
+
     private function resolveProviderName(SocialiteUser $socialUser): ?string
     {
         $nickname = trim((string) $socialUser->getNickname());
@@ -143,5 +170,36 @@ class HandleSocialCallback
         }
 
         return now()->addSeconds((int) $expiresIn);
+    }
+
+    private function hasVerifiedProviderEmail(OAuthProvider $provider, SocialiteUser $socialUser): bool
+    {
+        return match ($provider) {
+            OAuthProvider::GitHub => true,
+            OAuthProvider::Google => $this->providerBooleanFlag($socialUser, ['email_verified', 'verified_email']),
+            OAuthProvider::LinkedIn => $this->providerBooleanFlag($socialUser, ['email_verified']),
+            default => false,
+        };
+    }
+
+    private function providerBooleanFlag(SocialiteUser $socialUser, array $keys): bool
+    {
+        foreach ($keys as $key) {
+            $value = method_exists($socialUser, 'getRaw')
+                ? data_get($socialUser->getRaw(), $key)
+                : null;
+
+            if ($value === null) {
+                $value = data_get($socialUser, $key);
+            }
+
+            if ($value === null) {
+                continue;
+            }
+
+            return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? false;
+        }
+
+        return false;
     }
 }

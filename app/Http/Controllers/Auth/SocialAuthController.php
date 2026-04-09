@@ -31,6 +31,7 @@ class SocialAuthController extends Controller
     }
 
     public function callback(
+        Request $request,
         string $provider,
         \App\Domain\Identity\Actions\HandleSocialCallback $handler,
         RepoAccessService $repoAccessService
@@ -85,6 +86,7 @@ class SocialAuthController extends Controller
             }
 
             Auth::login($user, true);
+            $request->session()->regenerate();
 
             if ($repoAccessService->isEnabled() && $repoAccessService->hasEligiblePurchase($user)) {
                 $repoAccessService->queueGrant($user, 'github_connected');
@@ -105,9 +107,16 @@ class SocialAuthController extends Controller
                 ->withErrors(['email' => 'Your social account does not provide an email address.']);
         }
 
-        $user = $handler->execute($provider, $socialUser);
+        try {
+            $user = $handler->execute($provider, $socialUser);
+        } catch (ValidationException $exception) {
+            return redirect()
+                ->route('login')
+                ->withErrors($exception->errors());
+        }
 
         Auth::login($user, true);
+        $request->session()->regenerate();
 
         return redirect()->intended(route('dashboard', absolute: false));
     }

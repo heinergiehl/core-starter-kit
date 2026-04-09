@@ -3,8 +3,12 @@
 namespace Tests\Feature\Billing;
 
 use App\Domain\Billing\Models\CheckoutSession;
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
+use App\Domain\Billing\Services\CheckoutService;
 use App\Enums\BillingProvider;
+use App\Enums\CheckoutStatus;
+use App\Enums\OrderStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -83,5 +87,56 @@ class BillingStatusControllerTest extends TestCase
                 'status' => SubscriptionStatus::Active->value,
                 'plan_key' => 'pro',
             ]);
+    }
+
+    public function test_guest_can_poll_signed_checkout_status_after_successful_payment(): void
+    {
+        $user = User::factory()->create();
+
+        $checkoutSession = CheckoutSession::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe->value,
+            'provider_session_id' => 'cs_guest_status',
+            'plan_key' => 'pro',
+            'price_key' => 'monthly',
+            'quantity' => 1,
+            'expires_at' => now()->addHour(),
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_guest_status',
+            'plan_key' => 'pro',
+            'status' => OrderStatus::Paid,
+            'amount' => 9900,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [
+                'session_id' => 'cs_guest_status',
+            ],
+        ]);
+
+        $urls = app(CheckoutService::class)->buildCheckoutUrls('stripe', $checkoutSession);
+        parse_str((string) parse_url($urls['success'], PHP_URL_QUERY), $query);
+
+        $response = $this->getJson(route('billing.status', [
+            'session' => $checkoutSession->uuid,
+            'sig' => $query['sig'] ?? null,
+        ]));
+
+        $response
+            ->assertOk()
+            ->assertJson([
+                'type' => 'order',
+                'status' => OrderStatus::Paid->value,
+                'plan_key' => 'pro',
+            ]);
+
+        $this->assertAuthenticatedAs($user);
+        $this->assertDatabaseHas('checkout_sessions', [
+            'id' => $checkoutSession->id,
+            'status' => CheckoutStatus::Completed->value,
+        ]);
     }
 }
