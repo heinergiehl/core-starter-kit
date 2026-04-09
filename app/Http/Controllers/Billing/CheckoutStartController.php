@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Billing;
 
+use App\Domain\Billing\Data\Price as PriceDto;
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\CheckoutService;
-use App\Domain\Billing\Data\Price as PriceDto;
 use App\Support\Money\CurrencyAmount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
