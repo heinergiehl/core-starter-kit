@@ -3,6 +3,7 @@
 namespace App\Domain\RepoAccess\Services;
 
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 class GitHubUserLookupService
@@ -18,43 +19,49 @@ class GitHubUserLookupService
         }
 
         $perPage = max(1, min($limit, 20));
-        $response = $this->githubClient()->get('/search/users', [
-            'q' => "{$term} in:login type:user",
-            'per_page' => $perPage,
-            'page' => 1,
-        ]);
 
-        if (! $response->ok()) {
-            return [];
-        }
+        return $this->rememberLookup(
+            sprintf('repo-access:github:search:%s:%d', sha1(strtolower($term)), $perPage),
+            function () use ($perPage, $term): array {
+                $response = $this->githubClient()->get('/search/users', [
+                    'q' => "{$term} in:login type:user",
+                    'per_page' => $perPage,
+                    'page' => 1,
+                ]);
 
-        $items = $response->json('items');
-        if (! is_array($items)) {
-            return [];
-        }
-
-        return collect($items)
-            ->map(function ($item): ?array {
-                if (! is_array($item)) {
-                    return null;
+                if (! $response->ok()) {
+                    return [];
                 }
 
-                $login = trim((string) ($item['login'] ?? ''));
-                $id = (int) ($item['id'] ?? 0);
-                if ($login === '' || $id <= 0) {
-                    return null;
+                $items = $response->json('items');
+                if (! is_array($items)) {
+                    return [];
                 }
 
-                return [
-                    'login' => $login,
-                    'id' => $id,
-                    'avatar_url' => $item['avatar_url'] ?? null,
-                    'html_url' => $item['html_url'] ?? null,
-                ];
-            })
-            ->filter()
-            ->values()
-            ->all();
+                return collect($items)
+                    ->map(function ($item): ?array {
+                        if (! is_array($item)) {
+                            return null;
+                        }
+
+                        $login = trim((string) ($item['login'] ?? ''));
+                        $id = (int) ($item['id'] ?? 0);
+                        if ($login === '' || $id <= 0) {
+                            return null;
+                        }
+
+                        return [
+                            'login' => $login,
+                            'id' => $id,
+                            'avatar_url' => $item['avatar_url'] ?? null,
+                            'html_url' => $item['html_url'] ?? null,
+                        ];
+                    })
+                    ->filter()
+                    ->values()
+                    ->all();
+            }
+        );
     }
 
     /**
@@ -67,23 +74,33 @@ class GitHubUserLookupService
             return null;
         }
 
-        $response = $this->githubClient()->get('/users/'.rawurlencode($normalized));
-        if (! $response->ok()) {
-            return null;
-        }
+        $result = $this->rememberLookup(
+            'repo-access:github:login:'.strtolower($normalized),
+            function () use ($normalized): array {
+                $response = $this->githubClient()->get('/users/'.rawurlencode($normalized));
+                if (! $response->ok()) {
+                    return ['found' => false];
+                }
 
-        $resolvedLogin = trim((string) $response->json('login', ''));
-        $id = (int) $response->json('id', 0);
-        if ($resolvedLogin === '' || $id <= 0) {
-            return null;
-        }
+                $resolvedLogin = trim((string) $response->json('login', ''));
+                $id = (int) $response->json('id', 0);
+                if ($resolvedLogin === '' || $id <= 0) {
+                    return ['found' => false];
+                }
 
-        return [
-            'login' => $resolvedLogin,
-            'id' => $id,
-            'avatar_url' => $response->json('avatar_url'),
-            'html_url' => $response->json('html_url'),
-        ];
+                return [
+                    'found' => true,
+                    'user' => [
+                        'login' => $resolvedLogin,
+                        'id' => $id,
+                        'avatar_url' => $response->json('avatar_url'),
+                        'html_url' => $response->json('html_url'),
+                    ],
+                ];
+            }
+        );
+
+        return ($result['found'] ?? false) ? $result['user'] : null;
     }
 
     /**
@@ -95,23 +112,33 @@ class GitHubUserLookupService
             return null;
         }
 
-        $response = $this->githubClient()->get('/user/'.rawurlencode((string) $id));
-        if (! $response->ok()) {
-            return null;
-        }
+        $result = $this->rememberLookup(
+            'repo-access:github:id:'.$id,
+            function () use ($id): array {
+                $response = $this->githubClient()->get('/user/'.rawurlencode((string) $id));
+                if (! $response->ok()) {
+                    return ['found' => false];
+                }
 
-        $resolvedLogin = trim((string) $response->json('login', ''));
-        $resolvedId = (int) $response->json('id', 0);
-        if ($resolvedLogin === '' || $resolvedId <= 0) {
-            return null;
-        }
+                $resolvedLogin = trim((string) $response->json('login', ''));
+                $resolvedId = (int) $response->json('id', 0);
+                if ($resolvedLogin === '' || $resolvedId <= 0) {
+                    return ['found' => false];
+                }
 
-        return [
-            'login' => $resolvedLogin,
-            'id' => $resolvedId,
-            'avatar_url' => $response->json('avatar_url'),
-            'html_url' => $response->json('html_url'),
-        ];
+                return [
+                    'found' => true,
+                    'user' => [
+                        'login' => $resolvedLogin,
+                        'id' => $resolvedId,
+                        'avatar_url' => $response->json('avatar_url'),
+                        'html_url' => $response->json('html_url'),
+                    ],
+                ];
+            }
+        );
+
+        return ($result['found'] ?? false) ? $result['user'] : null;
     }
 
     private function githubClient(): PendingRequest
@@ -138,5 +165,16 @@ class GitHubUserLookupService
         }
 
         return $request;
+    }
+
+    private function rememberLookup(string $key, callable $callback): mixed
+    {
+        $ttl = max(0, (int) config('repo_access.github.lookup_cache_seconds', 600));
+
+        if ($ttl === 0) {
+            return $callback();
+        }
+
+        return Cache::remember($key, now()->addSeconds($ttl), $callback);
     }
 }

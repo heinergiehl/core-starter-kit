@@ -234,9 +234,15 @@ Route::middleware('auth')->group(function () {
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/repo-access/status', [RepoAccessController::class, 'status'])->name('repo-access.status');
-    Route::get('/repo-access/github/search', [RepoAccessController::class, 'searchGithubUsers'])->name('repo-access.github.search');
-    Route::post('/repo-access/github/select', [RepoAccessController::class, 'selectGithubUsername'])->name('repo-access.github.select');
-    Route::post('/repo-access/sync', [RepoAccessController::class, 'sync'])->name('repo-access.sync');
+    Route::get('/repo-access/github/search', [RepoAccessController::class, 'searchGithubUsers'])
+        ->middleware('throttle:repo-access-lookup')
+        ->name('repo-access.github.search');
+    Route::post('/repo-access/github/select', [RepoAccessController::class, 'selectGithubUsername'])
+        ->middleware('throttle:repo-access-lookup')
+        ->name('repo-access.github.select');
+    Route::post('/repo-access/sync', [RepoAccessController::class, 'sync'])
+        ->middleware('throttle:repo-access-sync')
+        ->name('repo-access.sync');
     Route::delete('/repo-access/github', [RepoAccessController::class, 'disconnectGithub'])->name('repo-access.github.disconnect');
     Route::post('/two-factor/enable', [TwoFactorController::class, 'enable'])->name('two-factor.enable');
     Route::delete('/two-factor/disable', [TwoFactorController::class, 'disable'])->name('two-factor.disable');

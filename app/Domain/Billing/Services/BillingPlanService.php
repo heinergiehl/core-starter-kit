@@ -169,7 +169,12 @@ class BillingPlanService
      */
     private function plansFromDatabase(): Collection
     {
-        $shownPlans = config('saas.billing.pricing.shown_plans', []);
+        $shownPlans = collect(config('saas.billing.pricing.shown_plans', []))
+            ->map(fn ($value): string => strtolower(trim((string) $value)))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
 
         $query = CatalogProduct::query()
             ->with(['prices.mappings'])
@@ -184,6 +189,18 @@ class BillingPlanService
 
         $plans = $query->get()
             ->map(fn (CatalogProduct $plan): Plan => $this->normalizeDatabasePlan($plan));
+
+        if ($shownPlans !== [] && $plans->isEmpty()) {
+            $shownPlans = [];
+            $plans = CatalogProduct::query()
+                ->with(['prices.mappings'])
+                ->where('is_active', true)
+                ->whereHas('prices', function ($query) {
+                    $query->where('is_active', true);
+                })
+                ->get()
+                ->map(fn (CatalogProduct $plan): Plan => $this->normalizeDatabasePlan($plan));
+        }
 
         if (! empty($shownPlans)) {
             // Sort according to the config order

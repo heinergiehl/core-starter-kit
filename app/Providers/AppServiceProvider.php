@@ -9,8 +9,11 @@ use App\Domain\Settings\Services\MailSettingsService;
 use App\Enums\OrderStatus;
 use App\Support\Authorization\PermissionGuardrails;
 use App\Support\Localization\LocalizedRouteService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
@@ -38,6 +41,18 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \Illuminate\Database\Eloquent\Model::shouldBeStrict(! $this->app->isProduction());
+
+        RateLimiter::for('repo-access-lookup', function (Request $request) {
+            return Limit::perMinute(
+                max(1, (int) config('repo_access.github.lookup_rate_limit_per_minute', 15))
+            )->by((string) ($request->user()?->id ?? $request->ip()));
+        });
+
+        RateLimiter::for('repo-access-sync', function (Request $request) {
+            return Limit::perMinute(
+                max(1, (int) config('repo_access.github.sync_rate_limit_per_minute', 5))
+            )->by((string) ($request->user()?->id ?? $request->ip()));
+        });
 
         app(AppSettingsService::class)->applyToConfig();
         app(MailSettingsService::class)->applyConfig();

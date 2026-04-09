@@ -12,6 +12,7 @@ use App\Enums\OrderStatus;
 use App\Enums\SubscriptionStatus;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -28,6 +29,8 @@ class RepoAccessActionsTest extends TestCase
         config()->set('repo_access.provider', 'github');
         config()->set('repo_access.github.owner', 'acme');
         config()->set('repo_access.github.repository', 'saas-kit-private');
+
+        Cache::flush();
     }
 
     public function test_manual_repo_access_sync_requires_successful_purchase(): void
@@ -232,6 +235,60 @@ class RepoAccessActionsTest extends TestCase
             ]);
     }
 
+    public function test_github_search_endpoint_caches_lookup_results(): void
+    {
+        $user = User::factory()->create();
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        $requestCount = 0;
+
+        Http::fake(function () use (&$requestCount) {
+            $requestCount++;
+
+            return Http::response([
+                'items' => [
+                    [
+                        'login' => 'octocat',
+                        'id' => 1,
+                        'avatar_url' => 'https://avatars.githubusercontent.com/u/1',
+                        'html_url' => 'https://github.com/octocat',
+                    ],
+                ],
+            ], 200);
+        });
+
+        $this->actingAs($user)->getJson('/repo-access/github/search?q=octo-cache')->assertOk();
+        $this->actingAs($user)->getJson('/repo-access/github/search?q=octo-cache')->assertOk();
+
+        $this->assertSame(1, $requestCount);
+    }
+
+    public function test_github_search_endpoint_is_throttled_per_user(): void
+    {
+        config()->set('repo_access.github.lookup_rate_limit_per_minute', 2);
+
+        $user = User::factory()->create();
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        Http::fake([
+            'https://api.github.com/search/users*' => Http::response([
+                'items' => [],
+            ], 200),
+        ]);
+
+        $this->actingAs($user)->getJson('/repo-access/github/search?q=octo')->assertOk();
+        $this->actingAs($user)->getJson('/repo-access/github/search?q=octo')->assertOk();
+        $this->actingAs($user)->getJson('/repo-access/github/search?q=octo')->assertStatus(429);
+    }
+
     public function test_selecting_username_allows_sync_without_social_oauth_link(): void
     {
         Queue::fake();
@@ -278,5 +335,30 @@ class RepoAccessActionsTest extends TestCase
         Queue::assertPushed(GrantGitHubRepositoryAccessJob::class, function ($job) use ($user) {
             return $job->userId === $user->id;
         });
+    }
+
+    public function test_manual_repo_access_sync_endpoint_is_throttled_per_user(): void
+    {
+        Queue::fake();
+
+        config()->set('repo_access.github.sync_rate_limit_per_minute', 1);
+
+        $user = User::factory()->create();
+
+        SocialAccount::query()->create([
+            'user_id' => $user->id,
+            'provider' => OAuthProvider::GitHub,
+            'provider_id' => '11111',
+            'provider_email' => $user->email,
+            'provider_name' => 'octocat',
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'status' => SubscriptionStatus::Active,
+        ]);
+
+        $this->actingAs($user)->postJson('/repo-access/sync')->assertStatus(202);
+        $this->actingAs($user)->postJson('/repo-access/sync')->assertStatus(429);
     }
 }

@@ -82,6 +82,31 @@ class BillingPlanServiceTest extends TestCase
         $this->service->plan('nonexistent');
     }
 
+    public function test_plans_fall_back_to_active_database_plans_when_configured_keys_are_stale(): void
+    {
+        $product = \App\Domain\Billing\Models\Product::factory()->create([
+            'key' => 'starter',
+            'name' => 'Starter',
+            'is_active' => true,
+        ]);
+
+        \App\Domain\Billing\Models\Price::factory()->create([
+            'product_id' => $product->id,
+            'key' => 'monthly',
+            'amount' => 1000,
+            'currency' => 'USD',
+            'interval' => 'month',
+            'is_active' => true,
+        ]);
+
+        config(['saas.billing.pricing.shown_plans' => ['supporter']]);
+
+        $plans = $this->service->plans();
+
+        $this->assertCount(1, $plans);
+        $this->assertSame('starter', $plans->first()->key);
+    }
+
     public function test_price_throws_exception_for_unknown_price(): void
     {
         $product = \App\Domain\Billing\Models\Product::factory()->create([

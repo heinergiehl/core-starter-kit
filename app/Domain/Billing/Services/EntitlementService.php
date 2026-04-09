@@ -45,36 +45,17 @@ class EntitlementService
             ->latest('id')
             ->first();
 
-        if (! $subscription) {
-            $order = Order::query()
-                ->where('user_id', $user->id)
-                ->whereIn('status', [
-                    OrderStatus::Paid->value,
-                    OrderStatus::Completed->value,
-                ])
-                ->latest('id')
-                ->first();
-
-            if ($order) {
-                $planKey = $order->plan_key;
-
-                return new Entitlements($this->entitlementsForPlanKey($planKey));
-            }
-
-            return $this->resolveDefaultEntitlements();
+        if ($subscription && ($subscription->status !== SubscriptionStatus::PastDue || $this->withinGracePeriod($subscription))) {
+            return new Entitlements($this->entitlementsForPlanKey($subscription->plan_key));
         }
 
-        // Handle grace period for past_due subscriptions
-        if ($subscription->status === SubscriptionStatus::PastDue && ! $this->withinGracePeriod($subscription)) {
-            // Treat as no subscription / free plan if outside grace period
-            // For now, let's fallback to default plan logic via recursion or just copy logic.
-            // Simplest is to check default plan.
-            return $this->resolveDefaultEntitlements();
+        $order = $this->latestPaidOneTimeOrder($user);
+
+        if ($order) {
+            return new Entitlements($this->entitlementsForPlanKey($order->plan_key));
         }
 
-        $planKey = $subscription->plan_key;
-
-        return new Entitlements($this->entitlementsForPlanKey($planKey));
+        return $this->resolveDefaultEntitlements();
     }
 
     protected function withinGracePeriod(Subscription $subscription): bool
@@ -132,5 +113,29 @@ class EntitlementService
         $legacyEntitlements = config("saas.billing.plans.{$planKey}.entitlements", []);
 
         return is_array($legacyEntitlements) ? $legacyEntitlements : [];
+    }
+
+    private function latestPaidOneTimeOrder(User $user): ?Order
+    {
+        return Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [
+                OrderStatus::Paid->value,
+                OrderStatus::Completed->value,
+            ])
+            ->latest('id')
+            ->get()
+            ->first(fn (Order $order): bool => $this->isOneTimeOrder($order));
+    }
+
+    private function isOneTimeOrder(Order $order): bool
+    {
+        $metadata = $order->metadata ?? [];
+        $subscriptionId = data_get($metadata, 'subscription_id')
+            ?? data_get($metadata, 'provider_subscription_id')
+            ?? data_get($metadata, 'metadata.subscription_id')
+            ?? data_get($metadata, 'metadata.provider_subscription_id');
+
+        return empty($subscriptionId);
     }
 }

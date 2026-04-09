@@ -47,7 +47,7 @@ return [
             'currency' => env('SAAS_CURRENCY', 'USD'),
             // Product keys shown on /pricing in the given order. Any number of plans is supported.
             // Set to a single PWYW plan key (e.g. 'supporter') to show a pay-what-you-want page.
-            'shown_plans' => ['supporter'],
+            'shown_plans' => ['hobbyist', 'indie', 'agency'],
             // Plan key that should be seeded with pay-what-you-want pricing.
             'pwyw_plan' => env('BILLING_PWYW_PLAN', 'supporter'),
             'provider_choice_enabled' => env('BILLING_PROVIDER_CHOICE_ENABLED', true),

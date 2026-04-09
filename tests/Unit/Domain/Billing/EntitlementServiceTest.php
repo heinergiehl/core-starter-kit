@@ -2,8 +2,11 @@
 
 namespace Tests\Unit\Domain\Billing;
 
+use App\Domain\Billing\Models\Order;
 use App\Domain\Billing\Models\Subscription;
 use App\Domain\Billing\Services\EntitlementService;
+use App\Enums\BillingProvider;
+use App\Enums\OrderStatus;
 use App\Enums\PriceType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -135,5 +138,84 @@ class EntitlementServiceTest extends TestCase
         $entitlements = $this->service->forUser($user);
 
         $this->assertSame(8192, $entitlements->storage_limit_mb);
+    }
+
+    #[Test]
+    public function it_prefers_latest_paid_one_time_order_when_subscription_grace_period_has_expired(): void
+    {
+        $user = User::factory()->create();
+
+        Config::set('saas.billing.grace_period_days', 5);
+        Config::set('saas.billing.plans.pro', [
+            'name' => 'Pro',
+            'entitlements' => ['storage_limit_mb' => 2048],
+        ]);
+        Config::set('saas.billing.plans.lifetime', [
+            'name' => 'Lifetime',
+            'entitlements' => ['storage_limit_mb' => 8192],
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_one_time_order',
+            'plan_key' => 'lifetime',
+            'status' => OrderStatus::Paid,
+            'amount' => 14999,
+            'currency' => 'USD',
+            'paid_at' => now()->subDays(7),
+            'metadata' => [],
+        ]);
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_subscription_invoice',
+            'plan_key' => 'pro',
+            'status' => OrderStatus::Paid,
+            'amount' => 9900,
+            'currency' => 'USD',
+            'paid_at' => now()->subDay(),
+            'metadata' => [
+                'subscription_id' => 'sub_123',
+            ],
+        ]);
+
+        Subscription::factory()->create([
+            'user_id' => $user->id,
+            'plan_key' => 'pro',
+            'status' => 'past_due',
+            'updated_at' => now()->subDays(6),
+        ]);
+
+        Cache::shouldReceive('remember')
+            ->andReturnUsing(fn ($key, $ttl, $callback) => $callback());
+
+        $entitlements = $this->service->forUser($user);
+
+        $this->assertSame(8192, $entitlements->storage_limit_mb);
+    }
+
+    #[Test]
+    public function it_clears_cached_entitlements_when_a_paid_order_changes(): void
+    {
+        $user = User::factory()->create();
+        $cacheKey = EntitlementService::CACHE_KEY_PREFIX.$user->id;
+
+        Cache::put($cacheKey, ['stale' => true], now()->addMinutes(30));
+
+        Order::query()->create([
+            'user_id' => $user->id,
+            'provider' => BillingProvider::Stripe,
+            'provider_id' => 'pi_cache_clear',
+            'plan_key' => 'lifetime',
+            'status' => OrderStatus::Paid,
+            'amount' => 14999,
+            'currency' => 'USD',
+            'paid_at' => now(),
+            'metadata' => [],
+        ]);
+
+        $this->assertNull(Cache::get($cacheKey));
     }
 }
