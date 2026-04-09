@@ -9,6 +9,7 @@ use App\Domain\Billing\Models\Product;
 use App\Enums\PriceType;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class SeedSubscriptionPlans extends Command
 {
@@ -16,7 +17,7 @@ class SeedSubscriptionPlans extends Command
         {--publish : Publish generated plans to active providers after seeding}
         {--force : Run without confirmation in non-local environments}';
 
-    protected $description = 'Seed three recurring subscription plans (monthly/yearly) for staging subscription testing.';
+    protected $description = 'Seed configurable pricing plans for staging and checkout testing.';
 
     public function handle(): int
     {
@@ -35,7 +36,7 @@ class SeedSubscriptionPlans extends Command
 
         [$planKeys, $planDefinitions, $priceDefinitions] = $this->subscriptionCatalogBlueprint();
 
-        $this->info('Seeding recurring subscription plans...');
+        $this->info('Seeding pricing plans...');
         $this->line('Target keys: '.implode(', ', $planKeys));
 
         $products = [];
@@ -100,6 +101,12 @@ class SeedSubscriptionPlans extends Command
                         'has_trial' => false,
                         'trial_interval' => null,
                         'trial_interval_count' => null,
+                        'allow_custom_amount' => $definition['allow_custom_amount'] ?? false,
+                        'custom_amount_minimum' => $definition['custom_amount_minimum'] ?? null,
+                        'custom_amount_default' => $definition['custom_amount_default'] ?? null,
+                        'suggested_amounts' => isset($definition['suggested_amounts'])
+                            ? json_encode($definition['suggested_amounts'])
+                            : null,
                         'is_active' => true,
                     ]
                 );
@@ -107,16 +114,16 @@ class SeedSubscriptionPlans extends Command
         });
 
         $this->table(
-            ['Plan Key', 'Name', 'Monthly', 'Yearly'],
+            ['Plan Key', 'Name', 'One-time'],
             collect($planDefinitions)->map(function (array $definition, string $planKey) use ($priceDefinitions): array {
-                $monthly = collect($priceDefinitions)->first(fn (array $price): bool => $price['plan'] === $planKey && $price['key'] === 'monthly');
-                $yearly = collect($priceDefinitions)->first(fn (array $price): bool => $price['plan'] === $planKey && $price['key'] === 'yearly');
+                $oneTime = collect($priceDefinitions)->first(
+                    fn (array $price): bool => $price['plan'] === $planKey && $price['key'] === 'once'
+                );
 
                 return [
                     $planKey,
                     $definition['name'],
-                    $this->formatUsd($monthly['amount'] ?? 0),
-                    $this->formatUsd($yearly['amount'] ?? 0),
+                    $this->formatUsd($oneTime['amount'] ?? 0),
                 ];
             })->values()->all()
         );
@@ -127,7 +134,7 @@ class SeedSubscriptionPlans extends Command
             $this->line('Tip: run `php artisan billing:publish-catalog stripe --apply --update` and `php artisan billing:publish-catalog paddle --apply --update` to sync provider IDs.');
         }
 
-        $this->info('Subscription plan seeding completed.');
+        $this->info('Pricing plan seeding completed.');
 
         return self::SUCCESS;
     }
@@ -144,19 +151,105 @@ class SeedSubscriptionPlans extends Command
         $configured = collect(config('saas.billing.pricing.shown_plans', []))
             ->map(fn ($value): string => strtolower(trim((string) $value)))
             ->filter()
+            ->unique()
             ->values()
             ->all();
 
-        $keys = count($configured) >= 3
-            ? array_slice($configured, 0, 3)
+        $keys = $configured !== []
+            ? $configured
             : ['starter', 'pro', 'growth'];
 
-        $planDefinitions = [
-            $keys[0] => [
-                'name' => 'Hobbyist',
+        $featuredIndex = count($keys) > 1
+            ? (int) floor((count($keys) - 1) / 2)
+            : 0;
+
+        $pwywPlanKey = strtolower(trim((string) config('saas.billing.pricing.pwyw_plan', 'supporter')));
+
+        $planDefinitions = [];
+        $priceDefinitions = [];
+
+        foreach ($keys as $index => $planKey) {
+            $isPwyw = $planKey === $pwywPlanKey;
+            $template = $isPwyw ? $this->pwywPlanTemplate() : $this->planTemplate($index);
+
+            $planDefinitions[$planKey] = [
+                'name' => Str::of($planKey)->replace(['-', '_'], ' ')->title()->value(),
+                'summary' => $template['summary'],
+                'description' => $template['description'],
+                'is_featured' => $index === $featuredIndex,
+                'features' => $template['features'],
+                'entitlements' => $template['entitlements'],
+            ];
+
+            if ($isPwyw) {
+                $priceDefinitions[] = [
+                    'plan' => $planKey,
+                    'key' => 'once',
+                    'label' => 'Pay what you want',
+                    'interval' => 'once',
+                    'amount' => 0,
+                    'allow_custom_amount' => true,
+                    'custom_amount_minimum' => 100,
+                    'custom_amount_default' => 1000,
+                    'suggested_amounts' => [500, 1000, 2000, 5000],
+                ];
+            } else {
+                $priceDefinitions[] = [
+                    'plan' => $planKey,
+                    'key' => 'once',
+                    'label' => 'One-time',
+                    'interval' => 'once',
+                    'amount' => $this->defaultAmountForTier($index),
+                    'allow_custom_amount' => false,
+                    'custom_amount_minimum' => null,
+                    'custom_amount_default' => null,
+                    'suggested_amounts' => null,
+                ];
+            }
+        }
+
+        return [$keys, $planDefinitions, $priceDefinitions];
+    }
+
+    /**
+     * @return array{summary:string,description:string,features:array<int,string>,entitlements:array<string,mixed>}
+     */
+    private function pwywPlanTemplate(): array
+    {
+        return [
+            'summary' => 'Support the project and pay what feels right to you.',
+            'description' => 'Full access to everything — choose your own price, no strings attached.',
+            'features' => [
+                '1 Commercial Project License',
+                'Complete Billing: Subscriptions & One-time',
+                'Payments via Stripe & Paddle',
+                'Beautiful, Conversion-Optimized Checkout',
+                'Fully Customizable Themes & UI Components',
+                'Secure Authentication & Social Login',
+                'SEO-Ready Blog & Content Engine',
+                'Full Admin Panel & User Dashboard',
+                'Developer-Friendly with Test Coverage',
+                'Analytics Dashboard (MRR, Churn, ARPU)',
+                'Email Provider Integrations (SES, Mailgun)',
+                'Discord Community & Email Support',
+                'Lifetime Updates Included',
+            ],
+            'entitlements' => [
+                'project_limit' => 1,
+                'support_sla' => 'email',
+            ],
+        ];
+    }
+
+    /**
+     * @return array{summary:string,description:string,features:array<int,string>,entitlements:array<string,mixed>}
+     */
+    private function planTemplate(int $index): array
+    {
+        $templates = [
+            [
                 'summary' => 'Perfect for solo developers shipping their first SaaS.',
                 'description' => 'One-time license with core billing and onboarding workflows.',
-                'is_featured' => false,
                 'features' => [
                     '1 Commercial Project License',
                     'Complete Billing: Subscriptions & One-time',
@@ -177,11 +270,9 @@ class SeedSubscriptionPlans extends Command
                     'support_sla' => 'email',
                 ],
             ],
-            $keys[1] => [
-                'name' => 'Indie',
+            [
                 'summary' => 'For serial shippers building an empire of apps.',
                 'description' => 'One-time license for unlimited commercial projects.',
-                'is_featured' => true,
                 'features' => [
                     'Unlimited Commercial Projects',
                     'Complete Billing: Subscriptions & One-time',
@@ -202,11 +293,9 @@ class SeedSubscriptionPlans extends Command
                     'support_sla' => 'priority',
                 ],
             ],
-            $keys[2] => [
-                'name' => 'Agency',
+            [
                 'summary' => 'The ultimate toolkit for agencies and teams.',
                 'description' => 'One-time license with multi-tenancy, team management, and priority support.',
-                'is_featured' => false,
                 'features' => [
                     'Unlimited Commercial Projects',
                     'Complete Billing: Subscriptions & One-time',
@@ -232,15 +321,48 @@ class SeedSubscriptionPlans extends Command
                     'coming_soon' => true,
                 ],
             ],
+            [
+                'summary' => 'Built for larger launches, advanced teams, and premium support needs.',
+                'description' => 'One-time license with launch support, advanced collaboration, and enterprise-ready tooling.',
+                'features' => [
+                    'Unlimited Commercial Projects',
+                    'Complete Billing: Subscriptions & One-time',
+                    'Payments via Stripe & Paddle',
+                    'Beautiful, Conversion-Optimized Checkout',
+                    'Fully Customizable Themes & UI Components',
+                    'Secure Authentication & Social Login',
+                    'SEO-Ready Blog & Content Engine',
+                    'Full Admin Panel & User Dashboard',
+                    'Developer-Friendly with Test Coverage',
+                    'Analytics Dashboard (MRR, Churn, ARPU)',
+                    'Email Provider Integrations (SES, Mailgun)',
+                    'Discord Community & Email Support',
+                    'Lifetime Updates Included',
+                    'Priority onboarding support',
+                    'Architecture review sessions',
+                    'Advanced team collaboration workflows',
+                ],
+                'entitlements' => [
+                    'project_limit' => -1,
+                    'support_sla' => 'white_glove',
+                ],
+            ],
         ];
 
-        $priceDefinitions = [
-            ['plan' => $keys[0], 'key' => 'once', 'label' => 'One-time', 'interval' => 'once', 'amount' => 4999],
-            ['plan' => $keys[1], 'key' => 'once', 'label' => 'One-time', 'interval' => 'once', 'amount' => 9999],
-            ['plan' => $keys[2], 'key' => 'once', 'label' => 'One-time', 'interval' => 'once', 'amount' => 14999],
-        ];
+        return $templates[min($index, count($templates) - 1)];
+    }
 
-        return [$keys, $planDefinitions, $priceDefinitions];
+    private function defaultAmountForTier(int $index): int
+    {
+        $amounts = [4999, 9999, 14999, 24999, 39999, 59999];
+
+        if (isset($amounts[$index])) {
+            return $amounts[$index];
+        }
+
+        $lastIndex = count($amounts) - 1;
+
+        return $amounts[$lastIndex] + (($index - $lastIndex) * 20000);
     }
 
     /**
