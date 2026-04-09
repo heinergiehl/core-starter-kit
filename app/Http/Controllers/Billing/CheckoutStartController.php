@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Billing;
 
 use App\Domain\Billing\Services\BillingPlanService;
 use App\Domain\Billing\Services\CheckoutService;
+use App\Domain\Billing\Data\Price as PriceDto;
+use App\Support\Money\CurrencyAmount;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -94,6 +96,24 @@ class CheckoutStartController
             'upgrade_credit_amount' => $upgradeCreditAmount,
             'upgrade_amount_due' => $upgradeAmountDue,
             'social_providers' => config('saas.auth.social_providers', ['google', 'github', 'linkedin']),
+            'initial_custom_amount_minor' => $this->resolveInitialCustomAmount($request, $price, $priceCurrency),
         ]);
+    }
+
+    private function resolveInitialCustomAmount(Request $request, PriceDto $price, string $currency): ?int
+    {
+        if (! $price->supportsCustomAmount()) {
+            return null;
+        }
+
+        $raw = (string) $request->query('amount', '');
+
+        if ($raw === '' || ! is_numeric($raw)) {
+            return null;
+        }
+
+        $minor = CurrencyAmount::parseMajorToMinor($raw, $currency);
+
+        return ($minor !== null && $minor > 0) ? $minor : null;
     }
 }

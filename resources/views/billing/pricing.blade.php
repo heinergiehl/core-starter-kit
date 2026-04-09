@@ -18,8 +18,13 @@
         $pendingPriceKeyLabel = (string) ($pendingPriceKey ?? '');
         $isPendingCancellation = (bool) ($isPendingCancellation ?? false);
         $pendingCancellationDate = $activeSubscription?->ends_at?->format('F j, Y');
+        $planCollection = collect($plans);
+        $subscriptionPlans = $planCollection->reject(fn ($plan) => $plan->isOneTime())->values();
+        $oneTimePlans = $planCollection->filter(fn ($plan) => $plan->isOneTime())->values();
+        $displayPlans = $subscriptionPlans->concat($oneTimePlans)->values();
+        $planCount = $displayPlans->count();
 
-        $allIntervals = collect($plans)
+        $allIntervals = $displayPlans
             ->pluck('prices')
             ->collapse()
             ->pluck('interval')
@@ -35,10 +40,18 @@
         $showAlwaysVisibleOneTimeNote = $recurringIntervals->isNotEmpty() && $allIntervals->contains('once');
         $intervalLabels = app(\App\Domain\Billing\Services\PricePresentationService::class)->intervalLabels();
 
-        $hasSubscription = collect($plans)->contains(fn ($p) => !$p->isOneTime());
-        $hasOneTime = collect($plans)->contains(fn ($p) => $p->isOneTime());
-        $hasUsageBased = collect($plans)->flatMap(fn ($p) => $p->prices)->contains(fn ($pr) => $pr->isMetered ?? false);
-        $hasPwyw = collect($plans)->flatMap(fn ($p) => $p->prices)->contains(fn ($pr) => $pr->allowCustomAmount ?? false);
+        $hasSubscription = $subscriptionPlans->isNotEmpty();
+        $hasOneTime = $oneTimePlans->isNotEmpty();
+        $hasUsageBased = $displayPlans->flatMap(fn ($p) => $p->prices)->contains(fn ($pr) => $pr->isMetered ?? false);
+        $hasPwyw = $displayPlans->flatMap(fn ($p) => $p->prices)->contains(fn ($pr) => $pr->allowCustomAmount ?? false);
+        $pricingGridClasses = match (true) {
+            $planCount <= 1 => 'mx-auto max-w-3xl',
+            $planCount === 2 => 'md:grid-cols-2 md:max-w-5xl mx-auto',
+            $planCount === 3 => 'md:grid-cols-2 xl:grid-cols-3',
+            $planCount === 4 => 'md:grid-cols-2 xl:grid-cols-4',
+            default => 'md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4',
+        };
+        $allowHighlightedScale = $planCount === 3;
 
         $pricingSubtitle = match (true) {
             $hasSubscription && $hasOneTime && $hasUsageBased => __('Subscriptions, one-time purchases, and usage-based plans — pick what fits your workflow.'),
@@ -139,8 +152,8 @@
         @endif
     </section>
 
-    <section class="grid gap-12 mt-16 lg:grid-cols-3">
-        @foreach ($plans as $plan)
+    <section class="mt-16 grid grid-cols-1 gap-8 {{ $pricingGridClasses }}">
+        @foreach ($displayPlans as $plan)
             @php
                 $isHighlighted = !empty($plan->highlight);
                 $isOneTime = $plan->isOneTime();
@@ -152,12 +165,15 @@
                 $showPlanExpression = $isOneTime
                     ? 'true'
                     : \Illuminate\Support\Js::from($planIntervals).'.includes(interval)';
+                $highlightedCardClasses = $isHighlighted && !$isComingSoon
+                    ? trim('border-primary shadow-[0_0_50px_-12px_rgba(var(--primary-500-rgb),0.3)] ring-1 ring-primary/50 z-10 bg-primary/5'.($allowHighlightedScale ? ' md:scale-105' : ''))
+                    : 'hover:border-primary/30 hover:shadow-lg';
             @endphp
             
             <!-- Plan Card -->
             <div 
                 x-show="{!! $showPlanExpression !!}"
-                class="glass-panel rounded-[32px] p-8 flex flex-col relative group transition-all duration-300 {{ $isComingSoon ? 'opacity-75' : '' }} {{ $isHighlighted && !$isComingSoon ? 'border-primary shadow-[0_0_50px_-12px_rgba(var(--primary-500-rgb),0.3)] ring-1 ring-primary/50 md:scale-110 z-10 bg-primary/5' : 'hover:border-primary/30 hover:shadow-lg' }}"
+                class="glass-panel rounded-[32px] p-8 flex flex-col relative group transition-all duration-300 {{ $isComingSoon ? 'opacity-75' : '' }} {{ $highlightedCardClasses }}"
             >
                 @if ($isComingSoon)
                     <div class="absolute -translate-x-1/2 -top-4 left-1/2">
@@ -209,13 +225,26 @@
                                 $customAmountMinFormatted = $pd['customAmountMinimumFormatted'] ?? null;
                                 $customAmountMaxFormatted = $pd['customAmountMaximumFormatted'] ?? null;
                                 $customAmountDefaultFormatted = $pd['customAmountDefaultFormatted'] ?? null;
+                                $customAmountDefaultInput = $pd['customAmountDefaultInput'] ?? null;
                                 $priceVisibilityExpression = $interval === 'once'
                                     ? 'true'
                                     : 'interval === '.\Illuminate\Support\Js::from($interval);
                             @endphp
                             
                             <!-- Price Option -->
-                            <div x-show="{!! $priceVisibilityExpression !!}" class="relative overflow-hidden transition border rounded-2xl border-ink/10 bg-surface/30 hover:border-primary/30 hover:shadow-md">
+                            <div
+                                x-show="{!! $priceVisibilityExpression !!}"
+                                @if ($supportsCustomAmount)
+                                    x-data="{
+                                        selectedAmount: @js($customAmountDefaultInput),
+                                        get checkoutUrl() {
+                                            const base = @js(route('checkout.start', ['plan' => $plan->key, 'price' => $price->key]));
+                                            return this.selectedAmount ? base + '&amount=' + encodeURIComponent(this.selectedAmount) : base;
+                                        }
+                                    }"
+                                @endif
+                                class="relative overflow-hidden transition border rounded-2xl border-ink/10 bg-surface/30 hover:border-primary/30 hover:shadow-md"
+                            >
                                 @if ($pricingModeBadge || $hasTrial)
                                     <div class="flex flex-wrap items-center gap-2 px-5 pt-4 pb-0">
                                         @if ($pricingModeBadge)
@@ -271,10 +300,32 @@
                                         <div class="mt-3 flex flex-wrap items-center gap-1.5 border-t border-ink/5 pt-3">
                                             <span class="text-[10px] font-semibold uppercase tracking-wider text-ink/40 mr-1">{{ __('Quick pick') }}</span>
                                             @foreach ($suggestedAmounts as $suggested)
-                                                <span class="inline-flex rounded-full border border-violet-500/20 bg-violet-500/5 px-2.5 py-0.5 text-xs font-semibold text-violet-600">
+                                                <button
+                                                    type="button"
+                                                    @click="selectedAmount = @js($suggested['input'])"
+                                                    :class="selectedAmount === @js($suggested['input']) ? 'border-primary bg-primary/10 text-primary' : 'border-violet-500/20 bg-violet-500/5 text-violet-600'"
+                                                    class="inline-flex rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors"
+                                                >
                                                     {{ $suggested['formatted'] }}
-                                                </span>
+                                                </button>
                                             @endforeach
+                                        </div>
+                                    @endif
+
+                                    @if ($supportsCustomAmount)
+                                        <div class="mt-3 border-t border-ink/5 pt-3">
+                                            <div class="relative">
+                                                <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-ink/40">{{ $currency }}</span>
+                                                <input
+                                                    type="number"
+                                                    x-model.lazy="selectedAmount"
+                                                    class="w-full rounded-lg border border-ink/10 bg-surface/50 pl-10 pr-3 py-2 text-sm font-bold text-ink placeholder:text-ink/30 focus:outline-none focus:border-primary transition-colors"
+                                                    placeholder="{{ $customAmountDefaultInput ?? $customAmountMinFormatted ?? '' }}"
+                                                    @if ($customAmountMinFormatted) min="{{ $customAmountMinFormatted }}" @endif
+                                                    @if ($customAmountMaxFormatted) max="{{ $customAmountMaxFormatted }}" @endif
+                                                    step="{{ \App\Support\Money\CurrencyAmount::inputStep($currency) }}"
+                                                >
+                                            </div>
                                         </div>
                                     @endif
 
@@ -362,7 +413,7 @@
                                         @if ($checkoutEligibility?->allowed)
                                             @php
                                                 $checkoutCta = $isOneTime
-                                                    ? ($supportsCustomAmount ? __('Contribute') : __('Buy Now'))
+                                                    ? ($supportsCustomAmount ? __('Choose amount') : __('Buy Now'))
                                                     : ($isMetered ? __('Start Metered Plan') : __('Subscribe'));
                                                 if ($checkoutEligibility->isUpgrade && $isOneTime) {
                                                     $checkoutCta = __('Upgrade One-time');
@@ -371,14 +422,26 @@
                                                 }
                                             @endphp
 
-                                            <form method="GET" action="{{ route('checkout.start') }}">
-                                                <input type="hidden" name="plan" value="{{ $plan->key }}">
-                                                <input type="hidden" name="price" value="{{ $price->key }}">
-                                                
-                                                <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
-                                                    {{ $checkoutCta }}
-                                                </button>
-                                            </form>
+                                            @if ($supportsCustomAmount)
+                                                <a
+                                                    :href="checkoutUrl"
+                                                    class="flex items-center justify-center w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5"
+                                                >
+                                                    <span x-text="selectedAmount ? '{{ __('Pay') }} ' + selectedAmount + ' {{ $currency }}' : '{{ $checkoutCta }}'">{{ $checkoutCta }}</span>
+                                                </a>
+                                                <p class="mt-2 text-center text-[11px] text-ink/45">
+                                                    {{ __('Review your payment on the next screen.') }}
+                                                </p>
+                                            @else
+                                                <form method="GET" action="{{ route('checkout.start') }}">
+                                                    <input type="hidden" name="plan" value="{{ $plan->key }}">
+                                                    <input type="hidden" name="price" value="{{ $price->key }}">
+                                                    
+                                                    <button class="w-full rounded-xl bg-ink text-surface font-bold py-2.5 text-sm transition hover:scale-[1.02] active:scale-[0.98] hover:bg-primary hover:text-white shadow-lg shadow-black/5">
+                                                        {{ $checkoutCta }}
+                                                    </button>
+                                                </form>
+                                            @endif
                                         @else
                                             <div class="space-y-2 text-center">
                                                 <p class="text-xs font-medium text-ink/60 bg-surface/40 px-3 py-1.5 rounded-lg">
@@ -400,12 +463,24 @@
                                         @endif
                                     @elseif (!$user)
                                         <div class="space-y-3">
-                                            <a
-                                                href="{{ route('checkout.start', ['plan' => $plan->key, 'price' => $price->key]) }}"
-                                                class="flex items-center justify-center px-4 py-2 text-xs font-bold text-white transition rounded-xl bg-primary hover:bg-primary/90"
-                                            >
-                                                {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
-                                            </a>
+                                            @if ($supportsCustomAmount)
+                                                <a
+                                                    :href="checkoutUrl"
+                                                    class="flex items-center justify-center px-4 py-2 text-xs font-bold text-white transition rounded-xl bg-primary hover:bg-primary/90"
+                                                >
+                                                    <span x-text="selectedAmount ? '{{ __('Pay') }} ' + selectedAmount + ' {{ $currency }}' : '{{ __('Choose amount') }}'">{{ __('Choose amount') }}</span>
+                                                </a>
+                                                <p class="text-center text-[11px] text-ink/45">
+                                                    {{ __('Review your payment on the next screen.') }}
+                                                </p>
+                                            @else
+                                                <a
+                                                    href="{{ route('checkout.start', ['plan' => $plan->key, 'price' => $price->key]) }}"
+                                                    class="flex items-center justify-center px-4 py-2 text-xs font-bold text-white transition rounded-xl bg-primary hover:bg-primary/90"
+                                                >
+                                                    {{ $isOneTime ? __('Buy Now') : __('Subscribe') }}
+                                                </a>
+                                            @endif
                                             <div class="text-center text-[11px] text-ink/50">
                                                 <a href="{{ route('login') }}" class="underline underline-offset-2 hover:text-ink">{{ __('Log In') }}</a>
                                             </div>

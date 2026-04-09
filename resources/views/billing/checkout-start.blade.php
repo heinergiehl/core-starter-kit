@@ -31,7 +31,7 @@
         $usageIntervalLabel = \Illuminate\Support\Str::of((string) ($price->interval ?? 'month'))->replace('_', ' ')->lower()->value();
         $customAmountMinimum = $price->customAmountMinimum ?? null;
         $customAmountMaximum = $price->customAmountMaximum ?? null;
-        $customAmountDefault = $price->customAmountDefault ?? ($priceAmountMinor > 0 ? $priceAmountMinor : null);
+        $customAmountDefault = ($initial_custom_amount_minor ?? null) ?? $price->customAmountDefault ?? ($priceAmountMinor > 0 ? $priceAmountMinor : null);
         $customAmountValue = old('custom_amount', $customAmountDefault !== null ? \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountDefault, $currencyCode) : '');
         $displayAmountMinor = $supportsCustomAmount
             ? (\App\Support\Money\CurrencyAmount::parseMajorToMinor($customAmountValue, $currencyCode) ?? $priceAmountMinor)
@@ -176,10 +176,31 @@
                             </div>
 
                             @if ($supportsCustomAmount)
-                                <div>
-                                    <label class="text-xs uppercase tracking-[0.2em] text-ink/40">{{ __('Your contribution') }}</label>
-                                    <div class="relative mt-2">
-                                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-ink/40">{{ $currencyCode }}</span>
+                                <div class="space-y-3">
+                                    <label class="block text-xs uppercase tracking-[0.2em] text-ink/40">{{ __('Your contribution') }}</label>
+
+                                    @if ($suggestedAmounts->isNotEmpty())
+                                        {{-- Preset amount tiles --}}
+                                        <div class="grid gap-2" style="grid-template-columns: repeat({{ min($suggestedAmounts->count(), 4) }}, 1fr)">
+                                            @foreach ($suggestedAmounts as $suggestedAmount)
+                                                @php
+                                                    $suggestedValue = \App\Support\Money\CurrencyAmount::formatMinorForInput($suggestedAmount, $currencyCode);
+                                                @endphp
+                                                <button
+                                                    type="button"
+                                                    class="pwyw-preset-tile rounded-xl border-2 border-ink/10 bg-surface/50 px-2 py-3 text-center transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                                                    data-suggested-amount="{{ $suggestedValue }}"
+                                                >
+                                                    <span class="block text-base font-bold leading-tight">{{ $formatMoney($suggestedAmount, true) }}</span>
+                                                    <span class="block mt-0.5 text-[9px] font-bold uppercase tracking-widest opacity-50">{{ $currencyCode }}</span>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @endif
+
+                                    {{-- Custom amount input --}}
+                                    <div class="relative">
+                                        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-ink/40">{{ $currencyCode }}</span>
                                         <input
                                             id="custom-amount-input"
                                             type="number"
@@ -190,12 +211,14 @@
                                                 max="{{ \App\Support\Money\CurrencyAmount::formatMinorForInput($customAmountMaximum, $currencyCode) }}"
                                             @endif
                                             step="{{ $currencyStep }}"
-                                            class="w-full rounded-xl border border-ink/10 bg-surface/50 pl-14 pr-4 py-3 text-lg font-semibold text-ink focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                            class="w-full rounded-xl border-2 border-ink/10 bg-surface/50 pl-16 pr-4 py-3 text-2xl font-bold text-ink placeholder:text-ink/20 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
+                                            placeholder="{{ $currencyStep }}"
                                             required
                                             data-pwyw-input
                                         >
                                     </div>
-                                    <p class="mt-2 text-xs text-ink/50">
+
+                                    <p class="text-xs text-ink/50">
                                         @if ($customAmountMinimum !== null && $customAmountMaximum !== null)
                                             {{ __('Choose any amount between :min and :max.', ['min' => $formatMoney($customAmountMinimum, true).' '.$currencyCode, 'max' => $formatMoney($customAmountMaximum, true).' '.$currencyCode]) }}
                                         @elseif ($customAmountMinimum !== null)
@@ -204,23 +227,6 @@
                                             {{ __('Choose the amount you want to pay.') }}
                                         @endif
                                     </p>
-
-                                    @if ($suggestedAmounts->isNotEmpty())
-                                        <div class="mt-4 flex flex-wrap gap-2">
-                                            @foreach ($suggestedAmounts as $suggestedAmount)
-                                                @php
-                                                    $suggestedValue = \App\Support\Money\CurrencyAmount::formatMinorForInput($suggestedAmount, $currencyCode);
-                                                @endphp
-                                                <button
-                                                    type="button"
-                                                    data-suggested-amount="{{ $suggestedValue }}"
-                                                    class="rounded-full border border-primary/20 bg-primary/5 px-4 py-2 text-sm font-bold text-primary transition-all duration-200 hover:bg-primary hover:text-white hover:shadow-md hover:shadow-primary/20 hover:scale-105 active:scale-95"
-                                                >
-                                                    {{ $formatMoney($suggestedAmount, true) }} {{ $currencyCode }}
-                                                </button>
-                                            @endforeach
-                                        </div>
-                                    @endif
                                 </div>
                             @endif
 
@@ -237,7 +243,10 @@
                                 </div>
                             @endif
 
-                            <button class="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90">
+                            <button
+                                class="w-full rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90"
+                                @if ($supportsCustomAmount) data-pwyw-submit @endif
+                            >
                                 {{ __('Continue to payment') }}
                             </button>
                         </form>
@@ -355,7 +364,8 @@
                 }
 
                 const dueOutput = root.querySelector('[data-summary-due]');
-                const suggestedButtons = root.querySelectorAll('[data-suggested-amount]');
+                const presetTiles = root.querySelectorAll('.pwyw-preset-tile');
+                const submitBtn = root.querySelector('[data-pwyw-submit]');
                 const currency = root.dataset.currency ?? 'USD';
                 const currencyScale = Number.parseInt(root.dataset.currencyScale ?? '2', 10);
                 const fallbackAmountMinor = Number.parseInt(root.dataset.fallbackAmountMinor ?? '0', 10);
@@ -378,7 +388,6 @@
                         return fallbackAmountMinor;
                     }
 
-                    const factor = 10 ** currencyScale;
                     const fractionPart = rawFractionPart.padEnd(currencyScale, '0');
                     const resolvedMinor = Number.parseInt(`${wholePart}${fractionPart}`, 10);
 
@@ -389,7 +398,20 @@
                     return resolvedMinor;
                 };
 
-                const formatAmount = (amountMinor) => `${formatter.format(amountMinor / (10 ** currencyScale))} ${currency}`;
+                const formatAmount = (amountMinor) =>
+                    `${formatter.format(amountMinor / (10 ** currencyScale))} ${currency}`;
+
+                const setActivePreset = (activeValue) => {
+                    presetTiles.forEach((tile) => {
+                        const isActive = tile.dataset.suggestedAmount === activeValue;
+                        tile.classList.toggle('border-primary', isActive);
+                        tile.classList.toggle('bg-primary/10', isActive);
+                        tile.classList.toggle('text-primary', isActive);
+                        tile.classList.toggle('shadow-sm', isActive);
+                        tile.classList.toggle('border-ink/10', !isActive);
+                        tile.classList.toggle('bg-surface/50', !isActive);
+                    });
+                };
 
                 const render = () => {
                     const selectedAmountMinor = resolveAmountMinor();
@@ -399,18 +421,37 @@
                     if (dueOutput) {
                         dueOutput.textContent = formatAmount(Math.max(selectedAmountMinor - upgradeCreditMinor, 0));
                     }
+
+                    if (submitBtn && selectedAmountMinor > 0) {
+                        submitBtn.textContent = `{{ __('Pay') }} ${formatAmount(selectedAmountMinor)}`;
+                    }
                 };
 
-                suggestedButtons.forEach((button) => {
-                    button.addEventListener('click', () => {
-                        amountInput.value = button.dataset.suggestedAmount ?? '';
+                presetTiles.forEach((tile) => {
+                    tile.addEventListener('click', () => {
+                        const val = tile.dataset.suggestedAmount ?? '';
+                        amountInput.value = val;
+                        setActivePreset(val);
                         render();
+                        amountInput.focus();
                     });
                 });
 
-                amountInput.addEventListener('input', render);
+                amountInput.addEventListener('input', () => {
+                    const currentVal = amountInput.value.trim();
+                    const matched = Array.from(presetTiles).find(
+                        (t) => t.dataset.suggestedAmount === currentVal
+                    );
+                    setActivePreset(matched ? currentVal : null);
+                    render();
+                });
+
                 amountInput.addEventListener('change', render);
 
+                // Set initial active preset state
+                const initVal = amountInput.value.trim();
+                const initPreset = Array.from(presetTiles).find((t) => t.dataset.suggestedAmount === initVal);
+                setActivePreset(initPreset ? initVal : null);
                 render();
             })();
         </script>

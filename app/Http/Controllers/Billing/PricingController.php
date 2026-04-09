@@ -83,7 +83,7 @@ class PricingController
                     );
 
                 $checkoutEligibility = null;
-                if ($canCheckout && ! $canChangeSubscription) {
+                if ($canCheckout && (! $canChangeSubscription || $price->supportsCustomAmount())) {
                     $checkoutEligibility = $checkoutService->evaluateCheckoutEligibility(
                         $user,
                         $plan,

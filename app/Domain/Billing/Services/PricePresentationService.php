@@ -156,6 +156,7 @@ class PricePresentationService
                     $suggestedAmountsFormatted[] = [
                         'minor' => (int) $suggestedMinor,
                         'formatted' => CurrencyAmount::formatMinor((int) $suggestedMinor, $currency, true, true),
+                        'input' => CurrencyAmount::formatMinorForInput((int) $suggestedMinor, $currency),
                     ];
                 }
             }
@@ -169,6 +170,9 @@ class PricePresentationService
             : null;
         $customAmountDefaultFormatted = $price->customAmountDefault !== null
             ? CurrencyAmount::formatMinor($price->customAmountDefault, $currency, true, true)
+            : null;
+        $customAmountDefaultInput = $price->customAmountDefault !== null
+            ? CurrencyAmount::formatMinorForInput($price->customAmountDefault, $currency)
             : null;
 
         return [
@@ -197,6 +201,7 @@ class PricePresentationService
             'customAmountMinimumFormatted' => $customAmountMinimumFormatted,
             'customAmountMaximumFormatted' => $customAmountMaximumFormatted,
             'customAmountDefaultFormatted' => $customAmountDefaultFormatted,
+            'customAmountDefaultInput' => $customAmountDefaultInput,
         ];
     }
 

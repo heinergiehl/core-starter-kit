@@ -577,6 +577,91 @@ class PricingPlanChangeTest extends TestCase
             ->assertSeeText('Starts at USD 5.00.');
     }
 
+    public function test_pricing_page_scales_beyond_three_plans_and_keeps_pay_what_you_want_below_subscriptions(): void
+    {
+        config(['saas.billing.pricing.shown_plans' => ['supporter', 'starter', 'pro', 'growth']]);
+
+        $starter = Product::factory()->create([
+            'key' => 'starter',
+            'name' => 'Starter',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+        $pro = Product::factory()->create([
+            'key' => 'pro',
+            'name' => 'Pro',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+        $growth = Product::factory()->create([
+            'key' => 'growth',
+            'name' => 'Growth',
+            'type' => PriceType::Recurring,
+            'is_active' => true,
+        ]);
+        $supporter = Product::factory()->create([
+            'key' => 'supporter',
+            'name' => 'Supporter',
+            'type' => PriceType::OneTime,
+            'is_active' => true,
+        ]);
+
+        $starterPrice = Price::factory()->create([
+            'product_id' => $starter->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 2900,
+            'currency' => 'USD',
+        ]);
+        $proPrice = Price::factory()->create([
+            'product_id' => $pro->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 4900,
+            'currency' => 'USD',
+        ]);
+        $growthPrice = Price::factory()->create([
+            'product_id' => $growth->id,
+            'key' => 'monthly',
+            'interval' => 'month',
+            'type' => PriceType::Recurring,
+            'amount' => 9900,
+            'currency' => 'USD',
+        ]);
+        Price::factory()->create([
+            'product_id' => $supporter->id,
+            'key' => 'once',
+            'interval' => 'once',
+            'type' => PriceType::OneTime,
+            'amount' => 1500,
+            'currency' => 'USD',
+            'allow_custom_amount' => true,
+            'custom_amount_default' => 1500,
+            'custom_amount_minimum' => 500,
+            'suggested_amounts' => [1000, 1500, 2500],
+        ]);
+
+        foreach ([$starterPrice, $proPrice, $growthPrice] as $price) {
+            PriceProviderMapping::query()->create([
+                'price_id' => $price->id,
+                'provider' => BillingProvider::Stripe->value,
+                'provider_id' => 'price_'.$price->id,
+            ]);
+        }
+
+        $response = $this->get(route('pricing'));
+
+        $response
+            ->assertOk()
+            ->assertSeeTextInOrder(['Starter', 'Pro', 'Growth', 'Supporter'])
+            ->assertSee('xl:grid-cols-4', false)
+            ->assertSeeText('Pay what you want')
+            ->assertSeeText('Choose amount')
+            ->assertSeeText('Review your payment on the next screen.');
+    }
+
     public function test_usage_based_offer_shows_included_usage_and_overage_copy(): void
     {
         config(['saas.billing.pricing.shown_plans' => ['scale']]);
